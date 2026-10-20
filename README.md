@@ -26,7 +26,13 @@ node src/totp.check.ts
 node src/generator.check.ts
 node src/model.check.ts
 cd src-tauri && cargo test --lib
+cargo test --lib browser_pipe_e2e -- --ignored   # browser protocol over a real pipe, tweetnacl client
 ```
+
+Browser integration: AnotherKeepass serves the same local socket as KeePassXC, so the
+KeePassXC-Browser extension works through an installed `keepassxc-proxy`. KeePassXC itself
+must not run at the same time. Without KeePassXC, enable "Update native messaging manifests"
+and the exe registers itself as proxy.
 
 KeePassXC compatibility (needs `keepassxc-cli`, run by hand):
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { backend, demoAttachment, type AutoTypePick, type Totp, type VaultData } from './backend';
+import { backend, demoAttachment, type AutoTypePick, type BrowserAsk, type Totp, type VaultData } from './backend';
 import { draftToInput, rawToItem, type Attachment, type Draft, type Field, type FieldKind, type Folder, type Item, type ItemType, type VaultInfo } from './model';
 import { DEMO_VAULTS } from './mock';
 import { openExternal } from './open';
@@ -50,6 +50,9 @@ const DESKTOP_KEYS = [
   'singleInstance', 'autostart', 'startMinimized', 'trayIcon', 'minimizeOnClose', 'hideToTray',
   'lockOnMinimize', 'lockOnSession', 'lockOnUserSwitch',
   'atShortcut', 'atStartDelay', 'atCharDelay', 'atAlwaysAsk', 'atMatchTitle', 'atMatchUrl', 'atHideExpired',
+  'browserEnabled', 'bChrome', 'bFirefox', 'bChromium', 'bEdge', 'bBrave', 'bVivaldi', 'bTor', 'bUnlock', 'bMatchScheme',
+  'bBestMatch', 'bAllowExpired', 'bSearchAll', 'bNoAccessConfirm', 'bUpdateNoConfirm', 'bKph', 'bUpdateManifests',
+  'bCustomProxy', 'bProxyPath',
 ] as const;
 const KNOWN_KEY = 'anotherkeepass.vaults';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -120,6 +123,7 @@ export default function App() {
 
   // Rust locked everything (tray menu, screen lock, minimize): drop the UI state too
   useEffect(() => backend.on('akp-locked', () => { clearHistory(); setOpen({}); }), []);
+  useEffect(() => backend.on<VaultData>('akp-vault-updated', d => setOpen(o => o[d.id] ? { ...o, [d.id]: d } : o)), []);
 
   if (!settings) return <Setup onDone={s => update({ ...DEFAULTS, ...s })} />;
   return (
@@ -158,6 +162,8 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const dragItem = useRef<Item | null>(null);
   const [showKeys, setShowKeys] = useState(false);
   const [pick, setPick] = useState<AutoTypePick | null>(null);
+  const [ask, setAsk] = useState<BrowserAsk | null>(null);
+  useEffect(() => backend.on<BrowserAsk>('akp-browser-ask', a => setAsk(a)), []);
   const searchRef = useRef<HTMLInputElement>(null);
   const [snack, setSnack] = useState('');
   const [snackError, setSnackError] = useState(false);
@@ -232,6 +238,9 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   useEffect(() => {
     if (desktopProblems.length) notify(`${t.desktopProblem}: ${desktopProblems.join(', ')}`, true);
   }, [desktopProblems, t.desktopProblem]);
+
+  // the extension's "database" is the selected vault (or the first open one)
+  useEffect(() => { backend.browserSetActive(open[vault] ? vault : Object.keys(open)[0] ?? null); }, [vault, open]);
 
   // once per unlock: tell about entries that expire soon
   const expiringShown = useRef(false);
@@ -635,6 +644,8 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
 
       {showGen && <Generator t={t} onClose={() => setShowGen(false)} onCopy={copyText} />}
       {showKeys && <ShortcutsDialog t={t} onClose={() => setShowKeys(false)} />}
+      {ask && <BrowserAskDialog t={t} ask={ask} vaultName={id => vaultList.find(v => v.id === id)?.name ?? ''}
+        onAnswer={answer => { backend.browserAnswer(ask.id, answer); setAsk(null); }} />}
       {pick && (
         <AutoTypePicker t={t} pick={pick} items={items.filter(i => !i.trashed)}
           vaultName={id => vaultList.find(v => v.id === id)?.name ?? ''}
@@ -748,6 +759,65 @@ function ShortcutsDialog({ t, onClose }: { t: Strings; onClose: () => void }) {
         </dl>
         <small className="label">{t.dragHint}</small>
         <div className="row"><button className="btn filled" onClick={onClose}>{t.close}</button></div>
+      </div>
+    </div>, document.body);
+}
+
+/** Confirmations the browser extension needs: new connection, access to logins, updating a login. */
+function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
+  t: Strings; ask: BrowserAsk; vaultName: (id: string) => string; onAnswer: (answer: unknown) => void;
+}) {
+  const [name, setName] = useState('browser-' + new Date().toISOString().slice(0, 10));
+  const [allow, setAllow] = useState<string[]>(ask.kind === 'access' ? ask.entries.map(e => e.uuid) : []);
+  const [remember, setRemember] = useState(true);
+  const deny = () => onAnswer(null);
+  return createPortal(
+    <div className="scrim">
+      <div className="dialog browser-ask" role="alertdialog" aria-label={t.brAccessTitle}
+        onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); deny(); } }}>
+        {ask.kind === 'associate' && (
+          <form onSubmit={e => { e.preventDefault(); if (name.trim()) onAnswer({ name: name.trim() }); }} className="browser-ask-form">
+            <h3><Icon n="extension" />{t.brAssocTitle}</h3>
+            <p className="dialog-body">{t.brAssocBody}</p>
+            <label className="textfield"><Icon n="badge" />
+              <input autoFocus value={name} onChange={e => setName(e.target.value)} aria-label={t.brAssocName} placeholder={t.brAssocName} />
+            </label>
+            <div className="row">
+              <button type="button" className="btn text" onClick={deny}>{t.brDeny}</button>
+              <button type="submit" className="btn filled" disabled={!name.trim()}><Icon n="link" />{t.brAllowSave}</button>
+            </div>
+          </form>
+        )}
+        {ask.kind === 'access' && (
+          <>
+            <h3><Icon n="travel_explore" />{t.brAccessTitle}</h3>
+            <p className="dialog-body">{t.brAccessBody} <b>{ask.host}</b></p>
+            <div className="browser-ask-list">
+              {ask.entries.map(e => (
+                <label key={e.uuid} className="opt">
+                  <span className="browser-ask-entry"><b>{e.title || t.untitled}</b><small>{[e.username, vaultName(e.vault)].filter(Boolean).join(' · ')}</small></span>
+                  <input className="switch" type="checkbox" checked={allow.includes(e.uuid)}
+                    onChange={ev => setAllow(a => ev.target.checked ? [...a, e.uuid] : a.filter(x => x !== e.uuid))} />
+                </label>
+              ))}
+            </div>
+            <label className="opt">{t.brRemember}<input className="switch" type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /></label>
+            <div className="row">
+              <button className="btn text" onClick={() => onAnswer({ allow: [], remember })}>{t.brDeny}</button>
+              <button className="btn filled" autoFocus onClick={() => onAnswer({ allow, remember })}><Icon n="check" />{t.brAllow}</button>
+            </div>
+          </>
+        )}
+        {ask.kind === 'update' && (
+          <>
+            <h3><Icon n="sync_lock" />{t.brUpdateTitle}</h3>
+            <p className="dialog-body">{t.brUpdateBody}: <b>{ask.title || t.untitled}</b>{ask.username && <> ({ask.username})</>}</p>
+            <div className="row">
+              <button className="btn text" onClick={deny}>{t.cancel}</button>
+              <button className="btn filled" autoFocus onClick={() => onAnswer({ ok: true })}><Icon n="check" />{t.brUpdate}</button>
+            </div>
+          </>
+        )}
       </div>
     </div>, document.body);
 }

@@ -226,6 +226,16 @@ pub fn register_shortcut<R: Runtime>(app: &AppHandle<R>, shortcut: &str) -> Resu
 
 fn on_hotkey<R: Runtime>(app: &AppHandle<R>) {
     let (hwnd, title) = foreground();
+    trigger(app, hwnd, &title);
+}
+
+/// Browser extension asked for Auto-Type ("request-autotype"): match by its domain instead of the window title.
+pub fn request<R: Runtime>(app: &AppHandle<R>, search: &str) {
+    let (hwnd, _) = foreground();
+    trigger(app, hwnd, search);
+}
+
+fn trigger<R: Runtime>(app: &AppHandle<R>, hwnd: Option<isize>, title: &str) {
     if let Ok(mut t) = app.state::<Target>().0.lock() {
         *t = hwnd;
     }
@@ -233,7 +243,7 @@ fn on_hotkey<R: Runtime>(app: &AppHandle<R>) {
         desktop::show_main(app); // locked: user unlocks first, then presses the shortcut again
         return;
     }
-    let found = candidates(app, &title);
+    let found = candidates(app, title);
     let p = desktop::prefs(app);
     if found.len() == 1 && !p.at_always_ask {
         let c = found[0].clone();
@@ -245,7 +255,7 @@ fn on_hotkey<R: Runtime>(app: &AppHandle<R>) {
         });
         return;
     }
-    let _ = app.emit("akp-autotype-pick", Pick { window_title: title, candidates: found });
+    let _ = app.emit("akp-autotype-pick", Pick { window_title: title.to_string(), candidates: found });
     desktop::show_main(app);
 }
 

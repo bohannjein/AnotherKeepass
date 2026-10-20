@@ -1,4 +1,9 @@
 mod autotype;
+mod browser;
+mod browser_server;
+pub mod proxy;
+
+use tauri::Manager;
 mod clipboard;
 mod desktop;
 mod vault;
@@ -50,6 +55,8 @@ pub fn run() {
       desktop::window_minimize,
       autotype::autotype_perform,
       autotype::autotype_entry,
+      browser_server::browser_answer,
+      browser_server::browser_set_active,
     ])
     .setup(move |app| {
       if cfg!(debug_assertions) {
@@ -60,6 +67,13 @@ pub fn run() {
         )?;
       }
       let handle = app.handle();
+      let host = std::sync::Arc::new(browser_server::AppHost::new(handle.clone()));
+      app.manage(host.clone());
+      if prefs.browser_enabled {
+        if let Err(e) = browser_server::start(host) {
+          log::warn!("{e}");
+        }
+      }
       desktop::create_tray(handle, &prefs)?;
       if let Err(e) = autotype::register_shortcut(handle, &prefs.at_shortcut) {
         log::warn!("auto-type shortcut: {e}");

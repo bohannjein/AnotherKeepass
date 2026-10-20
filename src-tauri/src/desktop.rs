@@ -38,6 +38,26 @@ pub struct DesktopPrefs {
     pub at_hide_expired: bool,
     /// tray menu texts in the UI language: show, lock, quit
     pub tray_labels: [String; 3],
+    // browser integration (KeePassXC-Browser protocol)
+    pub browser_enabled: bool,
+    pub b_chrome: bool,
+    pub b_firefox: bool,
+    pub b_chromium: bool,
+    pub b_edge: bool,
+    pub b_brave: bool,
+    pub b_vivaldi: bool,
+    pub b_tor: bool,
+    pub b_unlock: bool,
+    pub b_match_scheme: bool,
+    pub b_best_match: bool,
+    pub b_allow_expired: bool,
+    pub b_search_all: bool,
+    pub b_no_access_confirm: bool,
+    pub b_update_no_confirm: bool,
+    pub b_kph: bool,
+    pub b_update_manifests: bool,
+    pub b_custom_proxy: bool,
+    pub b_proxy_path: String,
 }
 
 impl Default for DesktopPrefs {
@@ -60,6 +80,25 @@ impl Default for DesktopPrefs {
             at_match_url: true,
             at_hide_expired: false,
             tray_labels: ["Show".into(), "Lock all".into(), "Quit".into()],
+            browser_enabled: false,
+            b_chrome: false,
+            b_firefox: false,
+            b_chromium: false,
+            b_edge: false,
+            b_brave: false,
+            b_vivaldi: false,
+            b_tor: false,
+            b_unlock: true,
+            b_match_scheme: true,
+            b_best_match: false,
+            b_allow_expired: false,
+            b_search_all: false,
+            b_no_access_confirm: false,
+            b_update_no_confirm: false,
+            b_kph: false,
+            b_update_manifests: true,
+            b_custom_proxy: false,
+            b_proxy_path: String::new(),
         }
     }
 }
@@ -119,6 +158,7 @@ pub fn lock_all<R: Runtime>(app: &AppHandle<R>) {
     if let Ok(mut v) = app.state::<Vaults>().0.lock() {
         v.clear();
     }
+    crate::browser_server::notify("database-locked");
     let _ = app.emit("akp-locked", ());
 }
 
@@ -220,6 +260,12 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
             problems.push(format!("autostart:{e}"));
         }
     }
+    if prefs.browser_enabled {
+        if let Err(e) = crate::browser_server::start(app.state::<std::sync::Arc<crate::browser_server::AppHost>>().inner().clone()) {
+            problems.push(e);
+        }
+    }
+    problems.extend(crate::browser_server::sync_manifests(&prefs));
     if old.at_shortcut != prefs.at_shortcut {
         if let Err(e) = crate::autotype::register_shortcut(&app, &prefs.at_shortcut) {
             problems.push(format!("shortcut:{e}"));

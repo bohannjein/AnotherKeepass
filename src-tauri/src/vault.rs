@@ -33,6 +33,28 @@ impl OpenVault {
     pub fn db(&self) -> &Database {
         &self.db
     }
+    pub fn db_mut(&mut self) -> &mut Database {
+        &mut self.db
+    }
+    /// write to disk (temp file + rename, KDBX 4)
+    pub fn persist(&mut self) -> R<()> {
+        write_db(self)
+    }
+    /// fresh listing for the UI
+    pub fn listing(&self, id: &str) -> VaultDto {
+        dto(id, self)
+    }
+    pub fn trash_entry(&mut self, id: EntryId) -> R<()> {
+        let bin = ensure_recycle_bin(&mut self.db);
+        let mut e = self.db.entry_mut(id).ok_or("not_found")?;
+        e.move_to(bin).map_err(|_| "not_found")?;
+        e.times.location_changed = Some(Times::now());
+        Ok(())
+    }
+    #[cfg(test)]
+    pub fn new_for_test(path: PathBuf, db: Database) -> Self {
+        Self { path, db, key: make_key(Some("pw"), None).unwrap() }
+    }
 }
 
 /// Current TOTP code of a field (used by Auto-Type's {TOTP}).
@@ -45,7 +67,7 @@ pub struct Vaults(pub Mutex<HashMap<String, OpenVault>>);
 
 // ---------------------------------------------------------------- DTOs
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultDto {
     id: String,
@@ -59,7 +81,7 @@ pub struct VaultDto {
     items: Vec<ItemDto>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct FolderDto {
     id: String,
@@ -76,7 +98,7 @@ pub struct FieldDto {
     protected: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemDto {
     id: String,
@@ -91,7 +113,7 @@ pub struct ItemDto {
     history: Vec<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct AttachmentDto {
     name: String,
     size: usize,
@@ -388,6 +410,7 @@ pub async fn vault_open(
     let v = OpenVault { path: PathBuf::from(&path), db, key };
     let d = dto(&path, &v);
     state.0.lock().map_err(|_| "lock")?.insert(path, v);
+    crate::browser_server::notify("database-unlocked");
     Ok(d)
 }
 

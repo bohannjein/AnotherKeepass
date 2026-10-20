@@ -40,6 +40,10 @@ export interface ItemInput {
 export interface Totp { code: string; remaining: number; period: number }
 export interface AutoTypeCandidate { vault: string; id: string; title: string; username: string; sequence: string }
 export interface AutoTypePick { windowTitle: string; candidates: AutoTypeCandidate[] }
+export type BrowserAsk =
+  | { id: number; kind: 'associate' }
+  | { id: number; kind: 'access'; host: string; entries: { vault: string; uuid: string; title: string; username: string }[] }
+  | { id: number; kind: 'update'; title: string; username: string };
 
 export interface Backend {
   desktop: boolean;
@@ -65,6 +69,10 @@ export interface Backend {
   autotypeEntry(vault: string, id: string): Promise<void>;
   /** desktop events from Rust (lock, auto-type); no-op in the browser demo */
   on<T>(event: string, cb: (payload: T) => void): () => void;
+  /** answer a browser-extension question (null = deny) */
+  browserAnswer(id: number, answer: unknown): Promise<void>;
+  /** vault the browser extension talks to */
+  browserSetActive(vault: string | null): Promise<void>;
   trash(vault: string, id: string): Promise<VaultData>;
   restore(vault: string, id: string): Promise<VaultData>;
   remove(vault: string, id: string): Promise<VaultData>;
@@ -97,6 +105,8 @@ const desktop: Backend = {
   windowMinimize: () => invoke('window_minimize'),
   autotypePerform: (vault, id, sequence) => invoke('autotype_perform', { vault, id, sequence }),
   autotypeEntry: (vault, id) => invoke('autotype_entry', { vault, id }),
+  browserAnswer: (id, answer) => invoke('browser_answer', { id, answer }),
+  browserSetActive: vault => invoke('browser_set_active', { vault }),
   on: (event, cb) => { const p = listen(event, e => cb(e.payload as never)); return () => { p.then(f => f()); }; },
   trash: (vault, id) => invoke('entry_trash', { vault, id }),
   restore: (vault, id) => invoke('entry_restore', { vault, id }),
@@ -205,6 +215,8 @@ const demo: Backend = {
   autotypePerform: async () => {},
   autotypeEntry: async () => {},
   on: () => () => {},
+  browserAnswer: async () => {},
+  browserSetActive: async () => {},
   async trash(vault, id) { const v = get(vault); item(v, id).trashed = true; return out(v); },
   async restore(vault, id) { const v = get(vault); item(v, id).trashed = false; return out(v); },
   async remove(vault, id) { const v = get(vault); v.data.items = v.data.items.filter(i => i.id !== id); return out(v); },
