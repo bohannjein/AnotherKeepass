@@ -93,6 +93,7 @@ const en = {
   },
   hints: {
     bwConnect: 'Planned: use a Bitwarden or self-hosted Vaultwarden account as a vault next to your local .kdbx files, with offline cache and sharing.',
+    singleInstance: 'Takes effect after restarting the app.',
     altSaveMode: 'Direct write is risky: a crash while saving can corrupt the database.',
     browserEnabled: 'Works with the KeePassXC-Browser extension for Chrome, Firefox, Edge and others.',
     bChrome: 'On Windows, Chrome, Vivaldi and Brave share one setting.',
@@ -196,6 +197,7 @@ const de: SettingsStrings = {
   },
   hints: {
     bwConnect: 'Geplant: Bitwarden- oder selbst gehostetes Vaultwarden-Konto als Tresor neben lokalen .kdbx-Dateien, mit Offline-Kopie und Teilen.',
+    singleInstance: 'Wirkt nach einem Neustart der App.',
     altSaveMode: 'Direktes Schreiben ist riskant: Ein Absturz beim Speichern kann die Datenbank beschädigen.',
     browserEnabled: 'Funktioniert mit der KeePassXC-Browser-Erweiterung für Chrome, Firefox, Edge und andere.',
     bChrome: 'Unter Windows teilen sich Chrome, Vivaldi und Brave eine Einstellung.',
@@ -297,6 +299,7 @@ const fr: SettingsStrings = {
   },
   hints: {
     bwConnect: 'Prévu : utiliser un compte Bitwarden ou Vaultwarden comme coffre à côté des fichiers .kdbx, avec cache hors ligne et partage.',
+    singleInstance: 'Prend effet après le redémarrage de l’application.',
     altSaveMode: 'L’écriture directe est risquée : un plantage pendant l’enregistrement peut corrompre la base.',
     browserEnabled: 'Fonctionne avec l’extension KeePassXC-Browser pour Chrome, Firefox, Edge, etc.',
     bChrome: 'Sous Windows, Chrome, Vivaldi et Brave partagent un réglage.',
@@ -398,6 +401,7 @@ const es: SettingsStrings = {
   },
   hints: {
     bwConnect: 'Previsto: usar una cuenta de Bitwarden o Vaultwarden como bóveda junto a tus archivos .kdbx, con caché sin conexión y uso compartido.',
+    singleInstance: 'Se aplica tras reiniciar la aplicación.',
     altSaveMode: 'Escribir directamente es arriesgado: un fallo al guardar puede dañar la base.',
     browserEnabled: 'Funciona con la extensión KeePassXC-Browser para Chrome, Firefox, Edge y otros.',
     bChrome: 'En Windows, Chrome, Vivaldi y Brave comparten un ajuste.',

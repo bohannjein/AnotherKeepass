@@ -1,0 +1,316 @@
+//! Desktop integration: tray, single instance, autostart, window behaviour, locking on
+//! session events. Options mirror the settings page; the UI pushes them via `desktop_apply`
+//! and they are kept in `<config>/desktop.json` so they apply before the UI has loaded.
+
+use std::{fs, path::PathBuf, sync::Mutex};
+
+use serde::{Deserialize, Serialize};
+use tauri::{
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, Manager, Runtime, WebviewWindow, WindowEvent,
+};
+use tauri_plugin_autostart::ManagerExt as _;
+
+use crate::vault::Vaults;
+
+pub const IDENTIFIER: &str = "app.anotherkeepass.desktop";
+const TRAY_ID: &str = "main";
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DesktopPrefs {
+    pub single_instance: bool,
+    pub autostart: bool,
+    pub start_minimized: bool,
+    pub tray_icon: bool,
+    pub minimize_on_close: bool,
+    pub hide_to_tray: bool,
+    pub lock_on_minimize: bool,
+    pub lock_on_session: bool,
+    pub lock_on_user_switch: bool,
+    pub at_shortcut: String,
+    pub at_start_delay: u64,
+    pub at_char_delay: u64,
+    pub at_always_ask: bool,
+    pub at_match_title: bool,
+    pub at_match_url: bool,
+    pub at_hide_expired: bool,
+    /// tray menu texts in the UI language: show, lock, quit
+    pub tray_labels: [String; 3],
+}
+
+impl Default for DesktopPrefs {
+    fn default() -> Self {
+        Self {
+            single_instance: true,
+            autostart: false,
+            start_minimized: false,
+            tray_icon: true,
+            minimize_on_close: false,
+            hide_to_tray: false,
+            lock_on_minimize: false,
+            lock_on_session: true,
+            lock_on_user_switch: true,
+            at_shortcut: String::new(),
+            at_start_delay: 500,
+            at_char_delay: 25,
+            at_always_ask: true,
+            at_match_title: true,
+            at_match_url: true,
+            at_hide_expired: false,
+            tray_labels: ["Show".into(), "Lock all".into(), "Quit".into()],
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Desktop {
+    pub prefs: Mutex<DesktopPrefs>,
+}
+
+/// Same folder Tauri uses for app config, resolved without an AppHandle so it works
+/// before the builder runs (needed for the single-instance decision).
+fn config_file() -> Option<PathBuf> {
+    #[cfg(windows)]
+    let base = std::env::var_os("APPDATA").map(PathBuf::from);
+    #[cfg(target_os = "macos")]
+    let base = std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support"));
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")));
+    base.map(|b| b.join(IDENTIFIER).join("desktop.json"))
+}
+
+pub fn load_prefs() -> DesktopPrefs {
+    config_file()
+        .and_then(|p| fs::read(p).ok())
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default()
+}
+
+fn save_prefs(p: &DesktopPrefs) -> Result<(), String> {
+    let path = config_file().ok_or("no config dir")?;
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    fs::write(path, serde_json::to_vec_pretty(p).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+}
+
+pub fn prefs<R: Runtime>(app: &AppHandle<R>) -> DesktopPrefs {
+    app.state::<Desktop>().prefs.lock().map(|p| p.clone()).unwrap_or_default()
+}
+
+pub fn main_window<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
+    app.get_webview_window("main")
+}
+
+pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(w) = main_window(app) {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
+/// Drop every open vault (zeroizes keys and protected values) and tell the UI.
+pub fn lock_all<R: Runtime>(app: &AppHandle<R>) {
+    if let Ok(mut v) = app.state::<Vaults>().0.lock() {
+        v.clear();
+    }
+    let _ = app.emit("akp-locked", ());
+}
+
+// ---------------------------------------------------------------- tray
+
+fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, labels: &[String; 3]) -> tauri::Result<Menu<R>> {
+    Menu::with_items(app, &[
+        &MenuItem::with_id(app, "show", &labels[0], true, None::<&str>)?,
+        &MenuItem::with_id(app, "lock", &labels[1], true, None::<&str>)?,
+        &PredefinedMenuItem::separator(app)?,
+        &MenuItem::with_id(app, "quit", &labels[2], true, None::<&str>)?,
+    ])
+}
+
+pub fn create_tray<R: Runtime>(app: &AppHandle<R>, p: &DesktopPrefs) -> tauri::Result<()> {
+    let tray = TrayIconBuilder::with_id(TRAY_ID)
+        .icon(app.default_window_icon().cloned().ok_or(tauri::Error::InvalidIcon(std::io::Error::other("no icon")))?)
+        .tooltip("AnotherKeepass")
+        .menu(&build_tray_menu(app, &p.tray_labels)?)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, e| match e.id().as_ref() {
+            "show" => show_main(app),
+            "lock" => lock_all(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, e| {
+            // left click toggles the window
+            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
+                let app = tray.app_handle();
+                match main_window(app) {
+                    Some(w) if w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false) => { let _ = w.hide(); }
+                    _ => show_main(app),
+                }
+            }
+        })
+        .build(app)?;
+    tray.set_visible(p.tray_icon)?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------- window behaviour
+
+pub fn on_window_event<R: Runtime>(window: &tauri::Window<R>, event: &WindowEvent) {
+    let app = window.app_handle();
+    let p = prefs(app);
+    match event {
+        WindowEvent::CloseRequested { api, .. } if p.minimize_on_close => {
+            api.prevent_close();
+            if p.tray_icon { let _ = window.hide(); } else { let _ = window.minimize(); }
+        }
+        WindowEvent::Resized(_) if window.is_minimized().unwrap_or(false) => {
+            if p.lock_on_minimize {
+                lock_all(app);
+            }
+            if p.hide_to_tray && p.tray_icon {
+                let _ = window.hide();
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Window starts hidden (tauri.conf.json) so "start minimized" doesn't flash.
+pub fn initial_show<R: Runtime>(app: &AppHandle<R>, p: &DesktopPrefs) {
+    let Some(w) = main_window(app) else { return };
+    if !p.start_minimized {
+        show_main(app);
+    } else if !p.tray_icon {
+        let _ = w.show();
+        let _ = w.minimize();
+    } // with tray: stay hidden, the tray icon brings it back
+}
+
+// ---------------------------------------------------------------- apply from UI
+
+#[tauri::command]
+pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>, String> {
+    let old = {
+        let state = app.state::<Desktop>();
+        let mut cur = state.prefs.lock().map_err(|_| "lock")?;
+        std::mem::replace(&mut *cur, prefs.clone())
+    };
+    save_prefs(&prefs)?;
+    let mut problems = Vec::new();
+
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let _ = tray.set_visible(prefs.tray_icon);
+        if old.tray_labels != prefs.tray_labels {
+            if let Ok(menu) = build_tray_menu(&app, &prefs.tray_labels) {
+                let _ = tray.set_menu(Some(menu));
+            }
+        }
+    }
+    let autolaunch = app.autolaunch();
+    if autolaunch.is_enabled().unwrap_or(false) != prefs.autostart {
+        let r = if prefs.autostart { autolaunch.enable() } else { autolaunch.disable() };
+        if let Err(e) = r {
+            problems.push(format!("autostart:{e}"));
+        }
+    }
+    if old.at_shortcut != prefs.at_shortcut {
+        if let Err(e) = crate::autotype::register_shortcut(&app, &prefs.at_shortcut) {
+            problems.push(format!("shortcut:{e}"));
+        }
+    }
+    Ok(problems)
+}
+
+#[tauri::command]
+pub fn window_minimize(app: AppHandle) {
+    if let Some(w) = main_window(&app) {
+        let _ = w.minimize();
+    }
+}
+
+// ---------------------------------------------------------------- session lock (Windows)
+
+pub fn on_session_event<R: Runtime>(app: &AppHandle<R>, code: u32) {
+    const WTS_CONSOLE_DISCONNECT: u32 = 0x2;
+    const WTS_REMOTE_DISCONNECT: u32 = 0x4;
+    const WTS_SESSION_LOCK: u32 = 0x7;
+    let p = prefs(app);
+    let lock = (code == WTS_SESSION_LOCK && p.lock_on_session)
+        || ((code == WTS_CONSOLE_DISCONNECT || code == WTS_REMOTE_DISCONNECT) && p.lock_on_user_switch);
+    if lock {
+        lock_all(app);
+    }
+}
+
+#[cfg(windows)]
+pub fn watch_session(app: AppHandle) {
+    use std::sync::OnceLock;
+    use windows_sys::Win32::{
+        Foundation::{HWND, LPARAM, LRESULT, WPARAM},
+        System::{LibraryLoader::GetModuleHandleW, RemoteDesktop::WTSRegisterSessionNotification},
+        UI::WindowsAndMessaging::{
+            CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW, TranslateMessage, HWND_MESSAGE,
+            MSG, WNDCLASSW,
+        },
+    };
+    const WM_WTSSESSION_CHANGE: u32 = 0x02B1;
+    const NOTIFY_FOR_THIS_SESSION: u32 = 0;
+    static APP: OnceLock<AppHandle> = OnceLock::new();
+
+    unsafe extern "system" fn proc(h: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+        if msg == WM_WTSSESSION_CHANGE {
+            if let Some(app) = APP.get() {
+                on_session_event(app, w as u32);
+            }
+        }
+        unsafe { DefWindowProcW(h, msg, w, l) }
+    }
+
+    let _ = APP.set(app);
+    // a hidden message-only window receives the session notifications
+    std::thread::spawn(|| unsafe {
+        let class: Vec<u16> = "AnotherKeepassSession\0".encode_utf16().collect();
+        let hinst = GetModuleHandleW(std::ptr::null());
+        let wc = WNDCLASSW { lpfnWndProc: Some(proc), hInstance: hinst, lpszClassName: class.as_ptr(), ..std::mem::zeroed() };
+        RegisterClassW(&wc);
+        let hwnd = CreateWindowExW(0, class.as_ptr(), class.as_ptr(), 0, 0, 0, 0, 0, HWND_MESSAGE, std::ptr::null_mut(), hinst, std::ptr::null());
+        if hwnd.is_null() || WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION) == 0 {
+            log::warn!("session lock notifications unavailable");
+            return;
+        }
+        let mut msg: MSG = std::mem::zeroed();
+        while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    });
+}
+
+// ponytail: Linux/macOS screen-lock signals (logind D-Bus / NSWorkspace) not wired yet
+#[cfg(not(windows))]
+pub fn watch_session(_app: AppHandle) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prefs_roundtrip_and_defaults() {
+        // unknown/missing keys fall back to defaults (UI may send a subset)
+        let p: DesktopPrefs = serde_json::from_str(r#"{"trayIcon":false,"atShortcut":"Ctrl+Alt+A"}"#).unwrap();
+        assert!(!p.tray_icon);
+        assert_eq!(p.at_shortcut, "Ctrl+Alt+A");
+        assert!(p.lock_on_session);
+        assert_eq!(p.at_start_delay, 500);
+        let back: DesktopPrefs = serde_json::from_slice(&serde_json::to_vec(&p).unwrap()).unwrap();
+        assert_eq!(back, p);
+        assert!(config_file().unwrap().ends_with(PathBuf::from(IDENTIFIER).join("desktop.json")));
+    }
+}

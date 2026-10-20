@@ -1,12 +1,26 @@
+mod autotype;
 mod clipboard;
+mod desktop;
 mod vault;
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
+  let prefs = desktop::load_prefs();
+  let mut builder = tauri::Builder::default();
+  // must be the first plugin: a second start only focuses the running window
+  if prefs.single_instance {
+    builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| desktop::show_main(app)));
+  }
+  builder
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+    .plugin(tauri_plugin_global_shortcut::Builder::new().build())
     .manage(vault::Vaults::default())
+    .manage(desktop::Desktop { prefs: std::sync::Mutex::new(prefs.clone()) })
+    .manage(autotype::Target::default())
+    .on_window_event(desktop::on_window_event)
     .invoke_handler(tauri::generate_handler![
       vault::vault_create,
       vault::vault_open,
@@ -32,8 +46,12 @@ pub fn run() {
       vault::folder_trash,
       clipboard::clipboard_copy_text,
       clipboard::clipboard_read_text,
+      desktop::desktop_apply,
+      desktop::window_minimize,
+      autotype::autotype_perform,
+      autotype::autotype_entry,
     ])
-    .setup(|app| {
+    .setup(move |app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()
@@ -41,6 +59,13 @@ pub fn run() {
             .build(),
         )?;
       }
+      let handle = app.handle();
+      desktop::create_tray(handle, &prefs)?;
+      if let Err(e) = autotype::register_shortcut(handle, &prefs.at_shortcut) {
+        log::warn!("auto-type shortcut: {e}");
+      }
+      desktop::watch_session(handle.clone());
+      desktop::initial_show(handle, &prefs);
       Ok(())
     })
     .run(tauri::generate_context!())

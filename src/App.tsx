@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { backend, demoAttachment, type Totp, type VaultData } from './backend';
+import { backend, demoAttachment, type AutoTypePick, type Totp, type VaultData } from './backend';
 import { draftToInput, rawToItem, type Attachment, type Draft, type Field, type FieldKind, type Folder, type Item, type ItemType, type VaultInfo } from './model';
 import { DEMO_VAULTS } from './mock';
 import { openExternal } from './open';
@@ -45,6 +45,12 @@ const NEW_TYPES: ItemType[] = ['login', 'card', 'note', 'identity', 'other'];
 const ALL = 'all';
 const TRASH = 'trash';
 const SETTINGS_KEY = 'anotherkeepass.settings';
+// options Rust needs before/without the UI (tray, autostart, window behaviour, auto-type)
+const DESKTOP_KEYS = [
+  'singleInstance', 'autostart', 'startMinimized', 'trayIcon', 'minimizeOnClose', 'hideToTray',
+  'lockOnMinimize', 'lockOnSession', 'lockOnUserSwitch',
+  'atShortcut', 'atStartDelay', 'atCharDelay', 'atAlwaysAsk', 'atMatchTitle', 'atMatchUrl', 'atHideExpired',
+] as const;
 const KNOWN_KEY = 'anotherkeepass.vaults';
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -99,6 +105,12 @@ export default function App() {
     }
   };
   const onUpdate = useCallback((d: VaultData) => setOpen(o => ({ ...o, [d.id]: d })), []);
+  const [desktopProblems, setDesktopProblems] = useState<string[]>([]);
+  useEffect(() => {
+    if (!settings || !backend.desktop) return;
+    const prefs = { ...Object.fromEntries(DESKTOP_KEYS.map(k => [k, settings[k]])), trayLabels: [t.trayShow, t.trayLockAll, t.trayQuit] };
+    backend.desktopApply(prefs).then(setDesktopProblems).catch(e => setDesktopProblems([String(e)]));
+  }, [settings, t]);
   const onClosed = useCallback((id: string) => setOpen(o => { const n = { ...o }; delete n[id]; return n; }), []);
   const lock = useCallback(async () => {
     await backend.lockAll().catch(() => { /* nothing open */ });
@@ -106,23 +118,27 @@ export default function App() {
     setOpen({});
   }, []);
 
+  // Rust locked everything (tray menu, screen lock, minimize): drop the UI state too
+  useEffect(() => backend.on('akp-locked', () => { clearHistory(); setOpen({}); }), []);
+
   if (!settings) return <Setup onDone={s => update({ ...DEFAULTS, ...s })} />;
   return (
     <ContextMenuProvider t={t}>
       {!Object.keys(open).length
-        ? <VaultDialog t={t} known={known} onOpened={opened} />
+        ? <VaultDialog t={t} known={known} onOpened={(d, meta) => { opened(d, meta); if (settings.minimizeAfterUnlock) backend.windowMinimize(); }} />
         : <Vaults t={t} settings={settings} onSettings={update} open={open} known={known}
-          onOpened={opened} onUpdate={onUpdate} onClosed={onClosed} onLock={lock} />}
+          onOpened={opened} onUpdate={onUpdate} onClosed={onClosed} onLock={lock} desktopProblems={desktopProblems} />}
     </ContextMenuProvider>
   );
 }
 
 type Confirm = { title: string; body: string; label: string; icon: string; action: () => void };
 
-function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onClosed, onLock }: {
+function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onClosed, onLock, desktopProblems }: {
   t: Strings; settings: Settings; onSettings: (s: Settings) => void;
   open: Record<string, VaultData>; known: Known[];
   onOpened: (d: VaultData, meta: Known) => void; onUpdate: (d: VaultData) => void; onClosed: (id: string) => void; onLock: () => void;
+  desktopProblems: string[];
 }) {
   const [vault, setVault] = useState(ALL);
   const [folder, setFolder] = useState<string | null>(null);
@@ -141,6 +157,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const [dragOver, setDragOver] = useState<string | null>(null);
   const dragItem = useRef<Item | null>(null);
   const [showKeys, setShowKeys] = useState(false);
+  const [pick, setPick] = useState<AutoTypePick | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [snack, setSnack] = useState('');
   const [snackError, setSnackError] = useState(false);
@@ -205,6 +222,16 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
       }
     }
   }, [open, t.kdbx3Notice]);
+
+  // auto-type: picker request and errors come from Rust
+  useEffect(() => {
+    const a = backend.on<AutoTypePick>('akp-autotype-pick', p => setPick(p));
+    const b = backend.on<string>('akp-autotype-error', e => notify(`${t.autoTypeError}: ${e}`, true));
+    return () => { a(); b(); };
+  }, [t.autoTypeError]);
+  useEffect(() => {
+    if (desktopProblems.length) notify(`${t.desktopProblem}: ${desktopProblems.join(', ')}`, true);
+  }, [desktopProblems, t.desktopProblem]);
 
   // once per unlock: tell about entries that expire soon
   const expiringShown = useRef(false);
@@ -354,6 +381,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
     if (mod && e.key.toLowerCase() === 't' && totpField) return run1(() => copyField(current, totpField, t.totp));
     if (mod && e.key.toLowerCase() === 'u' && field('URL')?.value) return run1(() => openExternal(field('URL')!.value));
     if (mod && e.key.toLowerCase() === 'd') return run1(() => duplicate(current));
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'v' && backend.desktop) return run1(() => run(backend.autotypeEntry(current.vault, current.id)));
     if (e.key === 'Delete' && !current.trashed) return run1(() => requestTrash(current));
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       const list = [...pinned, ...rest];
@@ -380,6 +408,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
       ...(f('Password') ? [{ icon: 'key', label: t.scCopyPw, kbd: 'Ctrl+C', action: () => copyField(it, f('Password')!, t.password) }] : []),
       ...(totpF ? [{ icon: 'timer', label: t.scCopyTotp, kbd: 'Ctrl+T', action: () => copyField(it, totpF, t.totp) }] : []),
       ...(f('URL')?.value ? [{ icon: 'open_in_new', label: t.scOpenUrl, kbd: 'Ctrl+U', action: () => openExternal(f('URL')!.value) }] : []),
+      ...(backend.desktop ? [{ icon: 'keyboard', label: t.autoType, kbd: 'Ctrl+Shift+V', action: () => run(backend.autotypeEntry(it.vault, it.id)) }] : []),
       'sep',
       { icon: 'edit', label: t.edit, kbd: 'Ctrl+E', action: edit },
       { icon: 'content_copy', label: t.duplicate, kbd: 'Ctrl+D', action: () => duplicate(it) },
@@ -606,6 +635,12 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
 
       {showGen && <Generator t={t} onClose={() => setShowGen(false)} onCopy={copyText} />}
       {showKeys && <ShortcutsDialog t={t} onClose={() => setShowKeys(false)} />}
+      {pick && (
+        <AutoTypePicker t={t} pick={pick} items={items.filter(i => !i.trashed)}
+          vaultName={id => vaultList.find(v => v.id === id)?.name ?? ''}
+          onClose={() => setPick(null)}
+          onPick={(vault, id, sequence) => { setPick(null); run(backend.autotypePerform(vault, id, sequence)); }} />
+      )}
       {folderDialog && (
         <FolderDialog t={t} mode={folderDialog.mode} name={folderDialog.name ?? ''} vault={folderDialog.vault ?? targetVault}
           folders={folders} parent={folderDialog.parent ?? (folderDialog.mode === 'create' && folder && folders.some(f => f.id === folder && f.vault === (folderDialog.vault ?? targetVault)) ? folder : '')}
@@ -697,7 +732,7 @@ function FolderDialog({ t, mode, name: initialName, vault: initialVault, vaults,
 
 const SHORTCUTS: [string, keyof Strings][] = [
   ['Ctrl+F', 'scSearch'], ['Ctrl+N', 'scNew'], ['Ctrl+E', 'scEdit'], ['Ctrl+B', 'scCopyUser'], ['Ctrl+C', 'scCopyPw'],
-  ['Ctrl+T', 'scCopyTotp'], ['Ctrl+U', 'scOpenUrl'], ['Ctrl+D', 'scDuplicate'], ['Entf / Del', 'scTrash'],
+  ['Ctrl+T', 'scCopyTotp'], ['Ctrl+U', 'scOpenUrl'], ['Ctrl+D', 'scDuplicate'], ['Ctrl+Shift+V', 'autoType'], ['Entf / Del', 'scTrash'],
   ['↑ ↓', 'scNavigate'], ['Esc', 'scCancel'], ['Ctrl+L', 'scLock'], ['F1', 'scHelp'],
 ];
 
@@ -713,6 +748,42 @@ function ShortcutsDialog({ t, onClose }: { t: Strings; onClose: () => void }) {
         </dl>
         <small className="label">{t.dragHint}</small>
         <div className="row"><button className="btn filled" onClick={onClose}>{t.close}</button></div>
+      </div>
+    </div>, document.body);
+}
+
+/** Entry choice for a global Auto-Type: matches first, otherwise search all entries. */
+function AutoTypePicker({ t, pick, items, vaultName, onPick, onClose }: {
+  t: Strings; pick: AutoTypePick; items: Item[]; vaultName: (id: string) => string;
+  onPick: (vault: string, id: string, sequence: string | null) => void; onClose: () => void;
+}) {
+  const [q, setQ] = useState('');
+  const query = q.trim().toLowerCase();
+  const rows = pick.candidates.length && !query
+    ? pick.candidates.map(c => ({ vault: c.vault, id: c.id, title: c.title, sub: c.username, sequence: c.sequence as string | null }))
+    : items.filter(i => !query || (i.title + ' ' + i.subtitle).toLowerCase().includes(query)).slice(0, 50)
+      .map(i => ({ vault: i.vault, id: i.id, title: i.title, sub: i.subtitle, sequence: null }));
+  return createPortal(
+    <div className="scrim" onClick={onClose}>
+      <div className="dialog autotype-dialog" role="dialog" aria-label={t.autoType} onClick={e => e.stopPropagation()}>
+        <h3><Icon n="keyboard" />{t.autoTypePick}</h3>
+        <p className="dialog-body autotype-window" title={pick.windowTitle}>{pick.windowTitle || '—'}</p>
+        {!pick.candidates.length && <small className="label">{t.autoTypeNone}</small>}
+        <label className="textfield">
+          <Icon n="search" />
+          <input autoFocus placeholder={t.search} aria-label={t.search} value={q} onChange={e => setQ(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && rows[0]) onPick(rows[0].vault, rows[0].id, rows[0].sequence); }} />
+        </label>
+        <div className="autotype-list">
+          {rows.map(r => (
+            <button key={r.vault + r.id} className="item" onClick={() => onPick(r.vault, r.id, r.sequence)}>
+              <span className="avatar login"><Icon n="person" /></span>
+              <span><b>{r.title || t.untitled}</b><span>{[r.sub, vaultName(r.vault)].filter(Boolean).join(' · ')}</span></span>
+            </button>
+          ))}
+          {!rows.length && <div className="empty"><Icon n="eco" />{t.noItems}</div>}
+        </div>
+        <div className="row"><button className="btn text" onClick={onClose}>{t.cancel}</button></div>
       </div>
     </div>, document.body);
 }

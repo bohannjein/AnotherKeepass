@@ -141,10 +141,10 @@ export const SECTIONS: Section[] = [
     id: 'general', icon: 'tune', groups: [
       {
         id: 'startup', items: [
-          { key: 'singleInstance', type: 'toggle', desktop: d },
-          { key: 'autostart', type: 'toggle', desktop: d },
-          { key: 'startMinimized', type: 'toggle', desktop: d },
-          { key: 'minimizeAfterUnlock', type: 'toggle', desktop: d },
+          { key: 'singleInstance', type: 'toggle' },
+          { key: 'autostart', type: 'toggle' },
+          { key: 'startMinimized', type: 'toggle' },
+          { key: 'minimizeAfterUnlock', type: 'toggle' },
           { key: 'rememberRecent', type: 'toggle', desktop: d },
           { key: 'recentCount', type: 'number', min: 1, max: 25, unit: '', dependsOn: 'rememberRecent', desktop: d },
           { key: 'reopenLast', type: 'toggle', dependsOn: 'rememberRecent', desktop: d },
@@ -190,10 +190,10 @@ export const SECTIONS: Section[] = [
           { key: 'toolbarMovable', type: 'toggle', desktop: d },
           { key: 'showToolbar', type: 'toggle', desktop: d },
           { key: 'showMenubar', type: 'toggle', desktop: d },
-          { key: 'minimizeOnClose', type: 'toggle', desktop: d },
-          { key: 'trayIcon', type: 'toggle', desktop: d },
+          { key: 'minimizeOnClose', type: 'toggle' },
+          { key: 'trayIcon', type: 'toggle' },
           { key: 'trayStyle', type: 'select', options: ['colorful', 'monoLight', 'monoDark'], dependsOn: 'trayIcon', desktop: d },
-          { key: 'hideToTray', type: 'toggle', dependsOn: 'trayIcon', desktop: d },
+          { key: 'hideToTray', type: 'toggle', dependsOn: 'trayIcon' },
         ],
       },
       {
@@ -209,16 +209,16 @@ export const SECTIONS: Section[] = [
     id: 'autotype', icon: 'keyboard', groups: [
       {
         id: 'autotype', items: [
-          { key: 'atMatchTitle', type: 'toggle', desktop: d },
-          { key: 'atMatchUrl', type: 'toggle', desktop: d },
-          { key: 'atAlwaysAsk', type: 'toggle', desktop: d },
+          { key: 'atMatchTitle', type: 'toggle' },
+          { key: 'atMatchUrl', type: 'toggle' },
+          { key: 'atAlwaysAsk', type: 'toggle' },
           { key: 'atSkipConfirmMain', type: 'toggle', desktop: d },
-          { key: 'atHideExpired', type: 'toggle', desktop: d },
+          { key: 'atHideExpired', type: 'toggle' },
           { key: 'atRelock', type: 'toggle', desktop: d },
-          { key: 'atShortcut', type: 'shortcut', desktop: d },
+          { key: 'atShortcut', type: 'shortcut' },
           { key: 'atRemember', type: 'number', min: 0, max: 60, unit: 's', desktop: d },
-          { key: 'atStartDelay', type: 'number', min: 100, max: 10000, step: 100, unit: 'ms', desktop: d },
-          { key: 'atCharDelay', type: 'number', min: 0, max: 1000, unit: 'ms', desktop: d },
+          { key: 'atStartDelay', type: 'number', min: 100, max: 10000, step: 100, unit: 'ms' },
+          { key: 'atCharDelay', type: 'number', min: 0, max: 1000, unit: 'ms' },
         ],
       },
     ],
@@ -238,9 +238,9 @@ export const SECTIONS: Section[] = [
       {
         id: 'lock', items: [
           { key: 'quickUnlock', type: 'toggle', desktop: d },
-          { key: 'lockOnSession', type: 'toggle', desktop: d },
-          { key: 'lockOnUserSwitch', type: 'toggle', desktop: d },
-          { key: 'lockOnMinimize', type: 'toggle', desktop: d },
+          { key: 'lockOnSession', type: 'toggle' },
+          { key: 'lockOnUserSwitch', type: 'toggle' },
+          { key: 'lockOnMinimize', type: 'toggle' },
         ],
       },
       {

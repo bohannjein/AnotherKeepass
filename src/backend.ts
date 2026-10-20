@@ -1,6 +1,7 @@
 // Vault backend: real .kdbx files through Tauri in the desktop app, an in-memory
 // demo (seeded from mock.ts) in the browser preview. Same API for both.
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { totp } from './totp';
 
 export interface RawField { name: string; value: string | null; protected: boolean }
@@ -37,6 +38,8 @@ export interface ItemInput {
   addAttachments: { name: string; base64: string }[];
 }
 export interface Totp { code: string; remaining: number; period: number }
+export interface AutoTypeCandidate { vault: string; id: string; title: string; username: string; sequence: string }
+export interface AutoTypePick { windowTitle: string; candidates: AutoTypeCandidate[] }
 
 export interface Backend {
   desktop: boolean;
@@ -55,6 +58,13 @@ export interface Backend {
   duplicate(vault: string, id: string, suffix: string): Promise<[string, VaultData]>;
   copyText(text: string, clearAfter: number | null): Promise<void>;
   readText(): Promise<string>;
+  /** desktop options mirrored to Rust; returns problems (e.g. invalid shortcut) */
+  desktopApply(prefs: Record<string, unknown>): Promise<string[]>;
+  windowMinimize(): Promise<void>;
+  autotypePerform(vault: string, id: string, sequence: string | null): Promise<void>;
+  autotypeEntry(vault: string, id: string): Promise<void>;
+  /** desktop events from Rust (lock, auto-type); no-op in the browser demo */
+  on<T>(event: string, cb: (payload: T) => void): () => void;
   trash(vault: string, id: string): Promise<VaultData>;
   restore(vault: string, id: string): Promise<VaultData>;
   remove(vault: string, id: string): Promise<VaultData>;
@@ -83,6 +93,11 @@ const desktop: Backend = {
   duplicate: (vault, id, suffix) => invoke('entry_duplicate', { vault, id, suffix }),
   copyText: (text, clearAfter) => invoke('clipboard_copy_text', { text, clearAfter }),
   readText: () => invoke('clipboard_read_text'),
+  desktopApply: prefs => invoke('desktop_apply', { prefs }),
+  windowMinimize: () => invoke('window_minimize'),
+  autotypePerform: (vault, id, sequence) => invoke('autotype_perform', { vault, id, sequence }),
+  autotypeEntry: (vault, id) => invoke('autotype_entry', { vault, id }),
+  on: (event, cb) => { const p = listen(event, e => cb(e.payload as never)); return () => { p.then(f => f()); }; },
   trash: (vault, id) => invoke('entry_trash', { vault, id }),
   restore: (vault, id) => invoke('entry_restore', { vault, id }),
   remove: (vault, id) => invoke('entry_delete', { vault, id }),
@@ -185,6 +200,11 @@ const demo: Backend = {
     if (clearAfter) clipTimer = setTimeout(() => navigator.clipboard.writeText('').catch(() => {}), clearAfter * 1000);
   },
   readText: () => navigator.clipboard.readText(),
+  desktopApply: async () => [],
+  windowMinimize: async () => {},
+  autotypePerform: async () => {},
+  autotypeEntry: async () => {},
+  on: () => () => {},
   async trash(vault, id) { const v = get(vault); item(v, id).trashed = true; return out(v); },
   async restore(vault, id) { const v = get(vault); item(v, id).trashed = false; return out(v); },
   async remove(vault, id) { const v = get(vault); v.data.items = v.data.items.filter(i => i.id !== id); return out(v); },

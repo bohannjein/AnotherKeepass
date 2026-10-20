@@ -29,6 +29,17 @@ pub struct OpenVault {
     key: DatabaseKey,
 }
 
+impl OpenVault {
+    pub fn db(&self) -> &Database {
+        &self.db
+    }
+}
+
+/// Current TOTP code of a field (used by Auto-Type's {TOTP}).
+pub fn totp_code(e: &keepass::db::Entry, field: &str) -> R<String> {
+    Ok(totp_of(e, field)?.value_now().map_err(|_| "totp")?.code)
+}
+
 #[derive(Default)]
 pub struct Vaults(pub Mutex<HashMap<String, OpenVault>>);
 
