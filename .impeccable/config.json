@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "bounce-easing",
+        "value": "var(--spring)",
+        "createdAt": "2026-10-20T13:16:07.107Z",
+        "reason": "Material 3 Expressive spring motion; user asked for the M3 Expressive style"
+      }
+    ]
+  }
+}

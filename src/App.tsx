@@ -1,0 +1,1162 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { save as saveDialog } from '@tauri-apps/plugin-dialog';
+import { backend, demoAttachment, type Totp, type VaultData } from './backend';
+import { draftToInput, rawToItem, type Attachment, type Draft, type Field, type FieldKind, type Folder, type Item, type ItemType, type VaultInfo } from './model';
+import { DEMO_VAULTS } from './mock';
+import { openExternal } from './open';
+import { clearHistory, generate, history, passphrase, phraseBits, randomBits, remember, strengthOf, type GenOpts, type PhraseOpts, type Strength } from './generator';
+import { LANGS, strings, type Lang, type Strings } from './i18n';
+import { DEFAULTS, mergePrefs, type Prefs } from './settings';
+import { settingsStrings } from './i18n-settings';
+import SettingsPage from './SettingsPage';
+import VaultDialog, { fileName, type Known } from './VaultDialog';
+import { Icon } from './Icon';
+
+type Theme = 'dark' | 'light';
+type Settings = Prefs;
+
+const TYPE_ICON: Record<ItemType, string> = {
+  login: 'person', card: 'credit_card', note: 'sticky_note_2', pin: 'pin', identity: 'badge', other: 'category',
+};
+const FIELD_ICON: Partial<Record<keyof Strings, string>> = {
+  username: 'person', password: 'key', website: 'language', cardholder: 'badge', number: 'credit_card',
+  expires: 'event', cvc: 'password', pin: 'pin', totp: 'timer', noteBody: 'notes',
+  fullName: 'person', email: 'mail', phone: 'call', address: 'home', birthdate: 'cake',
+};
+const MULTILINE = new Set<keyof Strings>(['noteBody', 'address']);
+
+// Field templates per new-item type. KeePass has no item types; type is stored in entry custom data.
+const TEMPLATES: Partial<Record<ItemType, Field[]>> = {
+  login: [{ key: 'username', value: '' }, { key: 'password', value: '', kind: 'hidden' }, { key: 'website', value: '', kind: 'url' }],
+  card: [
+    { key: 'cardholder', value: '' }, { key: 'number', value: '', kind: 'hidden' }, { key: 'expires', value: '' },
+    { key: 'cvc', value: '', kind: 'hidden' }, { key: 'pin', value: '', kind: 'hidden' },
+  ],
+  identity: [
+    { key: 'fullName', value: '' }, { key: 'email', value: '' }, { key: 'phone', value: '' },
+    { key: 'address', value: '' }, { key: 'birthdate', value: '', kind: 'date' },
+  ],
+};
+const NEW_TYPES: ItemType[] = ['login', 'card', 'note', 'identity', 'other'];
+
+const ALL = 'all';
+const TRASH = 'trash';
+const SETTINGS_KEY = 'anotherkeepass.settings';
+const KNOWN_KEY = 'anotherkeepass.vaults';
+const today = () => new Date().toISOString().slice(0, 10);
+
+// ponytail: localStorage (WebView storage); a Tauri store plugin is only needed if settings must be shared across profiles
+// null = first run → setup wizard
+function loadSettings(): Settings | null {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null');
+    return raw ? mergePrefs(raw) : null;
+  } catch { return null; }
+}
+function saveSettings(s: Settings) {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch { /* private mode: settings live for this session only */ }
+}
+/** Remembered vault files (paths + look only, never keys). The browser demo starts with its demo files. */
+function loadKnown(): Known[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(KNOWN_KEY) ?? 'null');
+    if (Array.isArray(raw)) return raw;
+  } catch { /* fall through */ }
+  return backend.desktop ? [] : DEMO_VAULTS;
+}
+function saveKnown(k: Known[]) {
+  try { localStorage.setItem(KNOWN_KEY, JSON.stringify(k)); } catch { /* not persisted */ }
+}
+
+export default function App() {
+  const [settings, setSettings] = useState<Settings | null>(loadSettings);
+  const [open, setOpen] = useState<Record<string, VaultData>>({});
+  const [known, setKnown] = useState<Known[]>(loadKnown);
+  const lang = settings?.lang ?? 'en';
+  const theme = settings?.theme ?? 'dark';
+  const t = strings[lang];
+
+  const zoom = (settings?.fontSize ?? 100) / 100;
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.lang = lang;
+    document.documentElement.style.setProperty('--zoom', String(zoom));
+  }, [theme, lang, zoom]);
+
+  const update = (s: Settings) => { setSettings(s); saveSettings(s); };
+
+  const opened = (data: VaultData, meta: Known) => {
+    setOpen(o => ({ ...o, [data.id]: data }));
+    if (settings?.rememberRecent ?? true) {
+      setKnown(list => {
+        const next = [meta, ...list.filter(k => k.path !== meta.path)].slice(0, settings?.recentCount ?? 5);
+        saveKnown(next);
+        return next;
+      });
+    }
+  };
+  const onUpdate = useCallback((d: VaultData) => setOpen(o => ({ ...o, [d.id]: d })), []);
+  const onClosed = useCallback((id: string) => setOpen(o => { const n = { ...o }; delete n[id]; return n; }), []);
+  const lock = useCallback(async () => {
+    await backend.lockAll().catch(() => { /* nothing open */ });
+    clearHistory();
+    setOpen({});
+  }, []);
+
+  if (!settings) return <Setup onDone={s => update({ ...DEFAULTS, ...s })} />;
+  if (!Object.keys(open).length) return <VaultDialog t={t} known={known} onOpened={opened} />;
+  return <Vaults t={t} settings={settings} onSettings={update} open={open} known={known}
+    onOpened={opened} onUpdate={onUpdate} onClosed={onClosed} onLock={lock} />;
+}
+
+type Confirm = { title: string; body: string; label: string; icon: string; action: () => void };
+
+function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onClosed, onLock }: {
+  t: Strings; settings: Settings; onSettings: (s: Settings) => void;
+  open: Record<string, VaultData>; known: Known[];
+  onOpened: (d: VaultData, meta: Known) => void; onUpdate: (d: VaultData) => void; onClosed: (id: string) => void; onLock: () => void;
+}) {
+  const [vault, setVault] = useState(ALL);
+  const [folder, setFolder] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [tab, setTab] = useState<'all' | 'recent'>('all');
+  const [selected, setSelected] = useState<string | null>(null);
+  const [pending, setPending] = useState<Item | null>(null); // new entry, not saved yet
+  const [newMenu, setNewMenu] = useState(false);
+  const [showGen, setShowGen] = useState(false);
+  const [folderDialog, setFolderDialog] = useState<{ mode: 'create' | 'rename'; vault?: string; id?: string; name?: string } | null>(null);
+  const [vaultDialog, setVaultDialog] = useState<{ path?: string } | null>(null);
+  const [keyDialog, setKeyDialog] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [snack, setSnack] = useState('');
+  const [snackError, setSnackError] = useState(false);
+  const notify = (msg: string, error = false) => { setSnack(msg); setSnackError(error); };
+  const [page, setPage] = useState<'vault' | 'settings'>('vault');
+  // drawer collapses to an icon rail: automatically on narrow windows, or via the toggle
+  const narrow = '(max-width: 1199px)';
+  const [isNarrow, setIsNarrow] = useState(() => window.matchMedia(narrow).matches);
+  const [rail, setRail] = useState(isNarrow);
+  useEffect(() => {
+    const mq = window.matchMedia(narrow);
+    const onChange = () => { setIsNarrow(mq.matches); setRail(mq.matches); };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const clipTimer = useRef<number>(undefined);
+  const ts = settingsStrings[settings.lang];
+
+  useEffect(() => {
+    if (!snack) return;
+    const id = setTimeout(() => setSnack(""), snackError ? 5000 : Math.max(2000, snack.length * 60)); // longer text stays longer
+    return () => clearTimeout(id);
+  }, [snack, snackError]);
+
+  // auto-lock after inactivity
+  useEffect(() => {
+    if (!settings.autoLock) return;
+    let id = setTimeout(onLock, settings.autoLockSeconds * 1000);
+    const reset = () => { clearTimeout(id); id = setTimeout(onLock, settings.autoLockSeconds * 1000); };
+    const events = ['pointermove', 'pointerdown', 'keydown', 'wheel'] as const;
+    events.forEach(e => window.addEventListener(e, reset));
+    return () => { clearTimeout(id); events.forEach(e => window.removeEventListener(e, reset)); };
+  }, [settings.autoLock, settings.autoLockSeconds, onLock]);
+
+  // clear search query after it sat untouched
+  useEffect(() => {
+    if (!settings.clearSearch || !query) return;
+    const id = setTimeout(() => setQuery(''), settings.clearSearchMinutes * 60_000);
+    return () => clearTimeout(id);
+  }, [query, settings.clearSearch, settings.clearSearchMinutes]);
+  useEffect(() => () => clearTimeout(clipTimer.current), []);
+
+  const items = useMemo(() => Object.values(open).flatMap(v => v.items.map(r => rawToItemCached(r, v))), [open]);
+  const allItems = pending ? [...items, pending] : items;
+  const folders: Folder[] = useMemo(() => Object.values(open).flatMap(v =>
+    v.folders.map(f => ({ id: f.id, vault: v.id, name: f.name, parent: f.parent }))), [open]);
+  const vaultList: VaultInfo[] = useMemo(() => {
+    const ids = [...known.map(k => k.path), ...Object.keys(open).filter(id => !known.some(k => k.path === id))];
+    return ids.map(id => {
+      const k = known.find(x => x.path === id);
+      return { id, name: open[id]?.name ?? k?.name ?? fileName(id), file: fileName(id), color: k?.color ?? '--v-clay', icon: k?.icon ?? 'shield_lock', locked: !open[id] };
+    });
+  }, [known, open]);
+
+  // KDBX 3.1 files: say once that saving upgrades them (a backup is written next to the file)
+  const formatNoticed = useRef(new Set<string>());
+  useEffect(() => {
+    for (const v of Object.values(open)) {
+      if (v.format.startsWith('KDBX 3') && !formatNoticed.current.has(v.id)) {
+        formatNoticed.current.add(v.id);
+        notify(`${v.name}: ${t.kdbx3Notice}`);
+      }
+    }
+  }, [open, t.kdbx3Notice]);
+
+  // once per unlock: tell about entries that expire soon
+  const expiringShown = useRef(false);
+  useEffect(() => {
+    if (expiringShown.current || !settings.showExpiring) return;
+    expiringShown.current = true;
+    const limit = new Date(Date.now() + settings.expiryDays * 86_400_000).toISOString().slice(0, 10);
+    const n = items.filter(i => !i.trashed && i.expires && i.expires <= limit).length;
+    if (n) notify(`${n} ${t.expiringSoon}`);
+  }, [items, settings.showExpiring, settings.expiryDays, t.expiringSoon]);
+
+  const run = async <T,>(p: Promise<T>): Promise<T | undefined> => {
+    try { return await p; } catch (e) { notify(`${t.saveError}: ${String(e)}`, true); return undefined; }
+  };
+  const apply = (d: VaultData | undefined) => { if (d) onUpdate(d); return !!d; };
+
+  const clearAfter = settings.clipboardClear ? settings.clipboardSeconds : null;
+  const copied = (what: string) => {
+    notify(`${what} ${t.copied}`);
+    clearTimeout(clipTimer.current);
+    if (clearAfter) clipTimer.current = setTimeout(() => notify(ts.ui.clipboardCleared), clearAfter * 1000);
+  };
+  const copyText = async (text: string, what: string) => {
+    if ((await run(backend.copyText(text, clearAfter))) !== undefined || !backend.desktop) copied(what);
+  };
+  // stored fields are copied by the backend, so secrets never pass through the UI
+  const copyField = async (item: Item, f: Field, what: string) => {
+    if (item.id.startsWith('new:') || !f.raw) return copyText(f.value, what);
+    try { await backend.copy(item.vault, item.id, f.raw, clearAfter); copied(what); }
+    catch (e) { notify(`${t.saveError}: ${String(e)}`, true); }
+  };
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let list = allItems.filter(i => vault === TRASH ? i.trashed
+      : !i.trashed && (vault === ALL || i.vault === vault) && (!folder || i.folder === folder));
+    if (q) list = list.filter(i => (i.title + ' ' + i.subtitle + ' ' + (i.tags ?? []).join(' ')).toLowerCase().includes(q));
+    return [...list].sort((a, b) =>
+      tab === 'recent' ? b.modified.localeCompare(a.modified) : a.title.localeCompare(b.title));
+  }, [allItems, vault, folder, query, tab]);
+
+  const openIds = Object.keys(open);
+  const targetVault = open[vault] ? vault : openIds[0];
+  const createItem = (type: ItemType) => {
+    const item: Item = {
+      id: 'new:' + crypto.randomUUID(), vault: targetVault, type, title: '', subtitle: '',
+      folder: folder && folders.some(f => f.id === folder && f.vault === targetVault) ? folder : undefined,
+      fields: (TEMPLATES[type] ?? []).map(f => f.key === 'password' && settings.generateForNew
+        ? { ...f, value: generate({ length: 20, upper: true, digits: true, symbols: true }) }
+        : { ...f }),
+      modified: today(), tags: [], attachments: [], history: [],
+    };
+    setPending(item);
+    setSelected(item.id);
+    setNewMenu(false);
+  };
+  const saveItem = async (item: Item, draft: Draft) => {
+    const input = await draftToInput(item, draft, open[item.vault].root);
+    const res = await run(backend.save(item.vault, input));
+    if (!res) return false;
+    onUpdate(res[1]);
+    setPending(null);
+    setSelected(res[0]);
+    return true;
+  };
+  const discardNew = () => { setPending(null); setSelected(null); };
+
+  const doTrash = async (item: Item) => {
+    if (apply(await run(backend.trash(item.vault, item.id)))) { setSelected(null); notify(ts.ui.movedToTrash); }
+  };
+  const requestTrash = (item: Item) => settings.confirmTrash
+    ? setConfirm({ title: ts.ui.trashTitle, body: ts.ui.trashBody, label: ts.ui.moveToTrash, icon: 'delete', action: () => doTrash(item) })
+    : doTrash(item);
+  const restoreItem = async (item: Item) => { if (apply(await run(backend.restore(item.vault, item.id)))) notify(t.restore); };
+  const deleteForever = (item: Item) => setConfirm({
+    title: t.deleteForever, body: t.deleteForeverBody, label: t.deleteForever, icon: 'delete_forever',
+    action: async () => { if (apply(await run(backend.remove(item.vault, item.id)))) setSelected(null); },
+  });
+  const emptyTrash = () => setConfirm({
+    title: t.emptyTrash, body: t.emptyTrashBody, label: t.emptyTrash, icon: 'delete_forever',
+    action: async () => {
+      for (const id of new Set(items.filter(i => i.trashed).map(i => i.vault))) apply(await run(backend.emptyTrash(id)));
+      setSelected(null);
+    },
+  });
+  const togglePin = async (item: Item) => {
+    const draft: Draft = { title: item.title, folder: item.folder ?? '', note: item.note ?? '', fields: item.fields, attachments: item.attachments ?? [], expires: item.expires ?? null };
+    const input = await draftToInput({ ...item, pinned: !item.pinned }, draft, open[item.vault].root);
+    const res = await run(backend.save(item.vault, input));
+    if (res) onUpdate(res[1]);
+  };
+  const historyRestore = async (item: Item, index: number) => apply(await run(backend.historyRestore(item.vault, item.id, index)));
+  const download = async (item: Item, a: Attachment) => {
+    if (backend.desktop && !a.file) {
+      const dest = await saveDialog({ defaultPath: a.name });
+      if (dest) await run(backend.attachmentSave(item.vault, item.id, a.name, dest));
+      return;
+    }
+    const bytes = a.file ? new Uint8Array(await a.file.arrayBuffer()) : demoAttachment(item.vault, item.id, a.name);
+    if (!bytes) return;
+    const url = URL.createObjectURL(new Blob([bytes.slice()])); // slice: plain ArrayBuffer copy
+    Object.assign(document.createElement('a'), { href: url, download: a.name }).click();
+    URL.revokeObjectURL(url);
+  };
+
+  const closeVault = async (id: string) => {
+    await run(backend.close(id));
+    if (vault === id) { setVault(ALL); setFolder(null); }
+    setSelected(null);
+    onClosed(id);
+  };
+  const selectVault = (id: string) => {
+    const v = vaultList.find(x => x.id === id);
+    if (v?.locked) { setVaultDialog({ path: id }); return; }
+    setVault(id); setFolder(null);
+    if (isNarrow) setRail(true);
+  };
+
+  const current = allItems.find(i => i.id === selected) ?? null;
+  const pinned = visible.filter(i => i.pinned);
+  const rest = visible.filter(i => !i.pinned);
+  const snackbar = snack && <div className={'snackbar' + (snackError ? ' error' : '')} role="status"><Icon n={snackError ? 'error' : 'check_circle'} />{snack}</div>;
+  const activeVault = vaultList.find(v => v.id === vault && !v.locked);
+  const depth = (f: Folder): number => f.parent ? 1 + depth(folders.find(x => x.id === f.parent) ?? { ...f, parent: null }) : 0;
+
+  if (page === 'settings') {
+    return (
+      <>
+        <SettingsPage t={t} prefs={settings} onChange={onSettings} onBack={() => setPage('vault')} onSnack={notify} />
+        {snackbar}
+      </>
+    );
+  }
+
+  return (
+    // narrow window: grid keeps the rail column, an opened drawer floats over the content
+    <div className={'app' + (rail ? ' rail' : '') + (isNarrow ? ' narrow' : '')}>
+      {isNarrow && !rail && <div className="drawer-scrim" onClick={() => setRail(true)} />}
+      <aside className="drawer">
+        <div className="brand">
+          <button className="logo" onClick={() => setRail(r => !r)} title={t.toggleMenu} aria-label={t.toggleMenu} aria-expanded={!rail}>
+            <Icon n={rail ? 'menu' : 'encrypted'} fill />
+          </button>
+          <h1>Another<span>Keepass</span><small>{t.kdbxCompat}</small></h1>
+        </div>
+        <div className="new-wrap">
+          <button className="fab" onClick={() => setNewMenu(m => !m)} aria-expanded={newMenu}><Icon n="add" /><span className="fab-label">{t.newItem}</span></button>
+          {newMenu && (
+            <>
+              <div className="menu-scrim" onClick={() => setNewMenu(false)} />
+              <div className="menu new-menu" role="menu">
+                {NEW_TYPES.map(type => (
+                  <button key={type} role="menuitem" onClick={() => createItem(type)}>
+                    <span className={'avatar sm ' + type}><Icon n={TYPE_ICON[type]} /></span>{t[type]}
+                  </button>
+                ))}
+                <hr />
+                <button role="menuitem" onClick={() => { setShowGen(true); setNewMenu(false); }}>
+                  <span className="avatar sm pin"><Icon n="password" /></span>{t.password}
+                </button>
+                <button role="menuitem" onClick={() => { setFolderDialog({ mode: 'create', vault: targetVault }); setNewMenu(false); }}>
+                  <span className="avatar sm other"><Icon n="create_new_folder" /></span>{t.folder}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+        <nav className="nav">
+          <span className="label">{t.vaults}</span>
+          <NavItem active={vault === ALL} onClick={() => selectVault(ALL)} icon="stacks" bg="--surface-highest"
+            name={t.allVaults} count={items.filter(i => !i.trashed).length} />
+          {vaultList.map(v => (
+            <div key={v.id}>
+              <NavItem active={vault === v.id && !folder} onClick={() => selectVault(v.id)} icon={v.locked ? 'lock' : v.icon} bg={v.color}
+                name={v.name} sub={v.locked ? `${t.locked} · ${v.file}` : v.file} locked={v.locked}
+                count={v.locked ? undefined : items.filter(i => i.vault === v.id && !i.trashed).length} />
+              {vault === v.id && folders.filter(f => f.vault === v.id).map(f => (
+                <div key={f.id} className={'folder-row' + (folder === f.id ? ' active' : '')} style={{ '--depth': depth(f) } as React.CSSProperties}>
+                  <button className={'nav-item folder' + (folder === f.id ? ' active' : '')} onClick={() => setFolder(f.id)} title={f.name}>
+                    <Icon n={folder === f.id ? 'folder_open' : 'folder'} fill={folder === f.id} />
+                    <span>{f.name}</span>
+                    <span className="count">{items.filter(i => i.folder === f.id && !i.trashed).length}</span>
+                  </button>
+                  {folder === f.id && (
+                    <span className="folder-tools">
+                      <button className="icon-btn" title={t.renameFolder} aria-label={t.renameFolder}
+                        onClick={() => setFolderDialog({ mode: 'rename', vault: f.vault, id: f.id, name: f.name })}><Icon n="edit" /></button>
+                      <button className="icon-btn" title={t.deleteFolder} aria-label={t.deleteFolder}
+                        onClick={() => setConfirm({ title: t.deleteFolder, body: ts.ui.trashBody, label: ts.ui.moveToTrash, icon: 'delete',
+                          action: async () => { if (apply(await run(backend.folderTrash(f.vault, f.id)))) setFolder(null); } })}><Icon n="delete" /></button>
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
+          <button className="nav-item add-vault" title={t.addVault} onClick={() => setVaultDialog({})}>
+            <span className="vi"><Icon n="add" /></span>
+            <span>{t.addVault}</span>
+          </button>
+          <hr />
+          <NavItem active={vault === TRASH} onClick={() => selectVault(TRASH)} icon="delete" bg="--surface-highest"
+            name={t.trash} count={items.filter(i => i.trashed).length} />
+        </nav>
+        <div className="drawer-foot">
+          <button className="icon-btn" title={ts.ui.settings} aria-label={ts.ui.settings} onClick={() => setPage('settings')}>
+            <Icon n="settings" />
+          </button>
+          <button className="icon-btn" title={t.theme} aria-label={t.theme}
+            onClick={() => onSettings({ ...settings, theme: settings.theme === 'dark' ? 'light' : 'dark' })}>
+            <Icon n={settings.theme === 'dark' ? 'light_mode' : 'dark_mode'} />
+          </button>
+          <button className="icon-btn" title={t.lock} aria-label={t.lock} onClick={onLock} style={{ marginLeft: 'auto' }}><Icon n="lock" /></button>
+        </div>
+      </aside>
+
+      <section className="pane">
+        <label className="searchbar">
+          <Icon n="search" />
+          <input placeholder={t.search} value={query} onChange={e => setQuery(e.target.value)} aria-label={t.search} />
+          {query && <button className="icon-btn" onClick={() => setQuery('')} aria-label={t.close}><Icon n="close" /></button>}
+        </label>
+        {activeVault && (
+          <div className="list-head">
+            <span title={activeVault.id}>{activeVault.name}</span>
+            <button className="icon-btn" title={t.changeMasterKey} aria-label={t.changeMasterKey} onClick={() => setKeyDialog(activeVault.id)}><Icon n="key" /></button>
+            <button className="icon-btn" title={t.closeVault} aria-label={t.closeVault} onClick={() => closeVault(activeVault.id)}><Icon n="lock" /></button>
+          </div>
+        )}
+        {vault === TRASH && items.some(i => i.trashed) && (
+          <div className="list-head">
+            <span>{t.trash}</span>
+            <button className="btn text" onClick={emptyTrash}><Icon n="delete_forever" />{t.emptyTrash}</button>
+          </div>
+        )}
+        <div className="seg">
+          <button className={'chip' + (tab === 'all' ? ' on' : '')} onClick={() => setTab('all')}>
+            {tab === 'all' && <Icon n="check" />}{t.all} · {visible.length}
+          </button>
+          <button className={'chip' + (tab === 'recent' ? ' on' : '')} onClick={() => setTab('recent')}>
+            {tab === 'recent' && <Icon n="check" />}{t.recent}
+          </button>
+        </div>
+        <div className="items">
+          {visible.length === 0 && <div className="empty"><Icon n="eco" />{t.noItems}</div>}
+          {pinned.length > 0 && <span className="label group-label">{t.pinned}</span>}
+          {pinned.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} />)}
+          {rest.length > 0 && pinned.length > 0 && <span className="label group-label">{t.others}</span>}
+          {rest.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} />)}
+        </div>
+      </section>
+
+      <main className="pane detail">
+        {current ? (
+          <Detail key={current.id} t={t} item={current} prefs={settings}
+            vault={vaultList.find(v => v.id === current.vault)!}
+            folders={folders.filter(f => f.vault === current.vault)}
+            isNew={current.id === pending?.id}
+            onCopyField={(f, what) => copyField(current, f, what)}
+            onCopyText={copyText}
+            loadSecrets={() => backend.secrets(current.vault, current.id)}
+            getTotp={() => backend.totp(current.vault, current.id)}
+            onSave={d => saveItem(current, d)}
+            onDiscard={discardNew}
+            onTrash={() => requestTrash(current)}
+            onRestore={() => restoreItem(current)}
+            onDeleteForever={() => deleteForever(current)}
+            onTogglePin={() => togglePin(current)}
+            onHistoryRestore={i => historyRestore(current, i)}
+            onDownload={a => download(current, a)} />
+        ) : (
+          <div className="placeholder"><div><div className="blob"><Icon n="eco" fill /></div>{t.selectItem}</div></div>
+        )}
+      </main>
+
+      {showGen && <Generator t={t} onClose={() => setShowGen(false)} onCopy={copyText} />}
+      {folderDialog && (
+        <FolderDialog t={t} mode={folderDialog.mode} name={folderDialog.name ?? ''} vault={folderDialog.vault ?? targetVault}
+          vaults={vaultList.filter(v => !v.locked)} onClose={() => setFolderDialog(null)}
+          onSubmit={async (vid, name) => {
+            const res = folderDialog.mode === 'rename'
+              ? await run(backend.folderRename(vid, folderDialog.id!, name))
+              : await run(backend.folderCreate(vid, null, name));
+            if (apply(res)) { setFolderDialog(null); if (folderDialog.mode === 'create') { setVault(vid); setFolder(null); } }
+          }} />
+      )}
+      {vaultDialog && (
+        <VaultDialog t={t} known={known} initialPath={vaultDialog.path} modal
+          onClose={() => setVaultDialog(null)}
+          onOpened={(d, meta) => { onOpened(d, meta); setVaultDialog(null); setVault(d.id); setFolder(null); }} />
+      )}
+      {keyDialog && <KeyDialog t={t} onClose={() => setKeyDialog(null)}
+        onSubmit={async pw => { if ((await run(backend.changeKey(keyDialog, pw))) !== undefined) { setKeyDialog(null); notify(t.masterKeyChanged); } }} />}
+      {confirm && (
+        <div className="scrim" onClick={() => setConfirm(null)}>
+          <div className="dialog" role="alertdialog" aria-label={confirm.title} onClick={e => e.stopPropagation()}>
+            <h3><Icon n={confirm.icon} />{confirm.title}</h3>
+            <p className="dialog-body">{confirm.body}</p>
+            <div className="row">
+              <button className="btn text" onClick={() => setConfirm(null)}>{t.cancel}</button>
+              <button className="btn filled" onClick={() => { confirm.action(); setConfirm(null); }}><Icon n={confirm.icon} />{confirm.label}</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {snackbar}
+    </div>
+  );
+}
+
+// rawToItem per raw object, so unchanged entries keep identity across vault refreshes
+const itemCache = new WeakMap<object, Item>();
+function rawToItemCached(r: VaultData['items'][number], v: VaultData): Item {
+  let i = itemCache.get(r);
+  if (!i) { i = rawToItem(r, v); itemCache.set(r, i); }
+  return i;
+}
+
+function FolderDialog({ t, mode, name: initialName, vault: initialVault, vaults, onClose, onSubmit }: {
+  t: Strings; mode: 'create' | 'rename'; name: string; vault: string; vaults: VaultInfo[];
+  onClose: () => void; onSubmit: (vault: string, name: string) => void;
+}) {
+  const [name, setName] = useState(initialName);
+  const [vault, setVault] = useState(initialVault);
+  return (
+    <div className="scrim" onClick={onClose}>
+      <form className="dialog" role="dialog" aria-label={mode === 'create' ? t.newFolder : t.renameFolder} onClick={e => e.stopPropagation()}
+        onSubmit={e => { e.preventDefault(); if (name.trim()) onSubmit(vault, name.trim()); }}>
+        <h3><Icon n={mode === 'create' ? 'create_new_folder' : 'drive_file_rename_outline'} />{mode === 'create' ? t.newFolder : t.renameFolder}</h3>
+        <label className="textfield">
+          <Icon n="folder" />
+          <input autoFocus placeholder={t.folderName} aria-label={t.folderName} value={name} onChange={e => setName(e.target.value)} />
+        </label>
+        {mode === 'create' && vaults.length > 1 && (
+          <>
+            <span className="label">{t.vault}</span>
+            <div className="choices">
+              {vaults.map(v => (
+                <button type="button" key={v.id} className={'choice' + (vault === v.id ? ' on' : '')} onClick={() => setVault(v.id)}>
+                  {v.name}{vault === v.id && <Icon n="check_circle" fill />}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        <div className="row">
+          <button type="button" className="btn text" onClick={onClose}>{t.cancel}</button>
+          <button type="submit" className="btn filled" disabled={!name.trim()}><Icon n="check" />{mode === 'create' ? t.create : t.rename}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function KeyDialog({ t, onClose, onSubmit }: { t: Strings; onClose: () => void; onSubmit: (pw: string) => void }) {
+  const [pw, setPw] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const mismatch = confirm.length > 0 && pw !== confirm;
+  return (
+    <div className="scrim" onClick={onClose}>
+      <form className="dialog" role="dialog" aria-label={t.changeMasterKey} onClick={e => e.stopPropagation()}
+        onSubmit={e => { e.preventDefault(); if (pw && pw === confirm) onSubmit(pw); }}>
+        <h3><Icon n="key" />{t.changeMasterKey}</h3>
+        <label className="textfield"><Icon n="key" />
+          <input type="password" autoFocus placeholder={t.masterPassword} aria-label={t.masterPassword} value={pw} onChange={e => setPw(e.target.value)} />
+        </label>
+        <label className="textfield"><Icon n="key" />
+          <input type="password" placeholder={t.confirmPassword} aria-label={t.confirmPassword} value={confirm} onChange={e => setConfirm(e.target.value)} />
+        </label>
+        {mismatch && <p className="form-error" role="alert"><Icon n="error" />{t.passwordsDontMatch}</p>}
+        <div className="row">
+          <button type="button" className="btn text" onClick={onClose}>{t.cancel}</button>
+          <button type="submit" className="btn filled" disabled={!pw || pw !== confirm}><Icon n="check" />{t.save}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function NavItem(p: { active: boolean; onClick: () => void; icon: string; bg: string; name: string; sub?: string; count?: number; locked?: boolean }) {
+  return (
+    <button className={'nav-item' + (p.active ? ' active' : '') + (p.locked ? ' locked' : '')} onClick={p.onClick} title={p.sub ? `${p.name} · ${p.sub}` : p.name}>
+      <span className="vi" style={{ background: `var(${p.bg})`, color: p.bg.startsWith('--v-') ? 'var(--v-on)' : 'inherit' }}>
+        <Icon n={p.icon} fill={p.active} />
+      </span>
+      <span>{p.name}{p.sub && <small>{p.sub}</small>}</span>
+      <span className="count">{p.count}</span>
+    </button>
+  );
+}
+
+const isExpired = (i: Item) => !!i.expires && i.expires < today();
+
+function Row({ t, item, active, onClick }: { t: Strings; item: Item; active: boolean; onClick: () => void }) {
+  return (
+    <button className={'item' + (active ? ' active' : '')} onClick={onClick}>
+      <span className={'avatar ' + item.type}><Icon n={TYPE_ICON[item.type]} /></span>
+      <span><b>{item.title || t.untitled}</b><span>{item.subtitle || t[item.type]}</span></span>
+      {isExpired(item) ? <span className="pin expired" title={t.expired}><Icon n="event_busy" /></span>
+        : item.pinned && <span className="pin"><Icon n="push_pin" fill /></span>}
+    </button>
+  );
+}
+
+const KIND_ICON: Record<FieldKind, string> = {
+  text: 'short_text', hidden: 'visibility_off', totp: 'lock_clock', date: 'calendar_month', url: 'language',
+};
+const ADDABLE: { kind: FieldKind; name: keyof Strings }[] = [
+  { kind: 'text', name: 'fieldText' },
+  { kind: 'totp', name: 'fieldTotp' },
+  { kind: 'hidden', name: 'fieldHidden' },
+  { kind: 'date', name: 'fieldDate' },
+];
+
+const fieldName = (t: Strings, f: Field) => (f.key ? t[f.key] : f.label) || t.fieldText;
+const fieldIcon = (f: Field) => (f.key && FIELD_ICON[f.key]) || KIND_ICON[f.kind ?? 'text'];
+const isSecret = (f: Field) => f.kind === 'hidden' || f.kind === 'totp';
+const fmtSize = (n: number) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`;
+const fmtDate = (iso: string) => new Date(iso.length > 10 ? iso : iso + 'T00:00').toLocaleDateString(document.documentElement.lang);
+
+/** Polls the backend for the current TOTP code while `enabled`. */
+function useTotp(get: (() => Promise<Totp>) | undefined, enabled: boolean) {
+  const [s, setS] = useState<Totp | null>(null);
+  const getRef = useRef(get);
+  getRef.current = get;
+  useEffect(() => {
+    if (!enabled || !getRef.current) return;
+    let live = true;
+    const tick = () => getRef.current?.().then(v => live && setS(v)).catch(() => live && setS(null));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => { live = false; clearInterval(id); };
+  }, [enabled]);
+  return s;
+}
+
+// digits and symbols get their own colour, like KeePassXC's "colorize passwords"
+const colorize = (s: string) => [...s].map((c, i) =>
+  /\d/.test(c) ? <span key={i} className="pw-d">{c}</span>
+  : /[^\p{L}\p{N}]/u.test(c) ? <span key={i} className="pw-s">{c}</span>
+  : c);
+
+function FieldRow({ t, f, prefs, onCopy, reveal, totp, onEdit }: {
+  t: Strings; f: Field; prefs: Prefs; onCopy: () => void; onEdit: () => void;
+  reveal?: () => Promise<string>; totp?: () => Promise<Totp>;
+}) {
+  const isPw = f.key === 'password';
+  const isNote = f.key === 'noteBody';
+  // which fields start masked in the preview (reveal via eye button)
+  const maskable = f.kind === 'hidden' || (f.kind === 'totp' && prefs.hideTotpPreview) || (isNote && prefs.hideNotesPreview);
+  const [shown, setShown] = useState(() => f.kind === 'hidden' ? isPw && !prefs.hidePwPreview : !maskable);
+  // protected values are fetched from the backend only when shown
+  const [secret, setSecret] = useState<string | null>(f.protected && !f.loaded && f.kind !== 'totp' ? null : f.value);
+  useEffect(() => {
+    if (shown && secret === null && reveal) reveal().then(setSecret).catch(() => setSecret(''));
+  }, [shown, secret, reveal]);
+  const otp = useTotp(totp, f.kind === 'totp' && !(maskable && !shown));
+  const name = fieldName(t, f);
+  const masked = maskable && !shown;
+  const value = secret ?? '';
+  const urlAction = () => {
+    if (prefs.urlDoubleClick === 'open') openExternal(f.value);
+    else if (prefs.urlDoubleClick === 'edit') onEdit();
+    else onCopy();
+  };
+  const code = otp?.code ?? '';
+  const val =
+    isPw && secret === '' ? (prefs.passwordPlaceholder ? '••••••••' : '')
+    : f.kind === 'url' ? <a href={f.value} target="_blank" rel="noreferrer" onClick={e => { e.stopPropagation(); e.preventDefault(); openExternal(f.value); }}>{f.value}</a>
+    : f.kind === 'totp' ? (
+      <span className="otp">
+        {masked ? '••• •••' : code ? `${code.slice(0, Math.ceil(code.length / 2))} ${code.slice(Math.ceil(code.length / 2))}` : '— — —'}
+        {otp && !masked && <i className="ring" style={{ '--p': otp.remaining / otp.period } as React.CSSProperties}>{otp.remaining}</i>}
+      </span>
+    )
+    : masked || secret === null ? '••••••••'
+    : f.kind === 'hidden' && prefs.colorizePasswords ? colorize(value)
+    : f.kind === 'date' && value ? fmtDate(value)
+    : value;
+  const mono = isSecret(f) || (isNote && prefs.monospaceNotes);
+  const multi = f.key && MULTILINE.has(f.key);
+  return (
+    // whole row copies (click or double-click per settings); inner controls stop propagation
+    <div className="field copyable" role="button" tabIndex={0} title={prefs.copyOnDoubleClick ? undefined : t.clickToCopy}
+      aria-label={`${t.copy}: ${name}`}
+      onClick={prefs.copyOnDoubleClick ? undefined : onCopy}
+      onDoubleClick={f.kind === 'url' ? urlAction : prefs.copyOnDoubleClick ? onCopy : undefined}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCopy(); } }}>
+      <Icon n={fieldIcon(f)} />
+      <div>
+        <span className="label">{name}</span>
+        <div className={'val' + (mono ? ' mono' : '') + (multi ? ' multi' : '')}
+          title={!multi && !isSecret(f) && typeof val === 'string' ? val : undefined}>{val}</div>
+      </div>
+      <div className="tools">
+        {maskable && (
+          <button className="icon-btn" title={shown ? t.hide : t.show} aria-label={shown ? t.hide : t.show}
+            onClick={e => { e.stopPropagation(); setShown(s => !s); }}
+            onDoubleClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+            <Icon n={shown ? 'visibility_off' : 'visibility'} />
+          </button>
+        )}
+        <span className="copy-hint" aria-hidden><Icon n="content_copy" /></span>
+      </div>
+    </div>
+  );
+}
+
+function EditRow({ t, f, prefs, onChange, onRemove, onCopy }: {
+  t: Strings; f: Field; prefs: Prefs; onChange: (f: Field) => void; onRemove?: () => void;
+  onCopy: (text: string, what: string) => void;
+}) {
+  const [shown, setShown] = useState(!prefs.hideInEdit);
+  const [gen, setGen] = useState(false);
+  const canGenerate = f.key === 'password' || (f.kind === 'hidden' && !f.key);
+  const type = f.kind === 'date' ? 'date' : f.kind === 'url' ? 'url' : isSecret(f) && !shown ? 'password' : 'text';
+  return (
+    <div className="field">
+      <Icon n={fieldIcon(f)} />
+      <div>
+        {f.key ? <span className="label">{t[f.key]}</span> : (
+          <input className="label-edit" value={f.label ?? ''} placeholder={t.fieldName} aria-label={t.fieldName}
+            onChange={e => onChange({ ...f, label: e.target.value, raw: undefined })} />
+        )}
+        {f.key && MULTILINE.has(f.key) ? (
+          // textarea keeps newlines; <input> would strip them on save
+          <textarea className="val edit" rows={4} value={f.value} aria-label={fieldName(t, f)}
+            onChange={e => onChange({ ...f, value: e.target.value })} />
+        ) : (
+          <input className={'val edit' + (isSecret(f) ? ' mono' : '')} type={type} value={f.value} aria-label={fieldName(t, f)}
+            autoComplete="off" spellCheck={false} onChange={e => onChange({ ...f, value: e.target.value })} />
+        )}
+      </div>
+      <div className="tools">
+        {canGenerate && (
+          <button type="button" className="icon-btn" title={t.genOpen} aria-label={t.genOpen} onClick={() => setGen(true)}>
+            <Icon n="password" />
+          </button>
+        )}
+        {gen && <Generator t={t} onClose={() => setGen(false)} onCopy={onCopy} onUse={pw => onChange({ ...f, value: pw })} />}
+        {isSecret(f) && !(f.key && MULTILINE.has(f.key)) && (
+          <button type="button" className="icon-btn" aria-label={shown ? t.hide : t.show} onClick={() => setShown(s => !s)}>
+            <Icon n={shown ? 'visibility_off' : 'visibility'} />
+          </button>
+        )}
+        {onRemove && (
+          <button type="button" className="icon-btn" title={t.remove} aria-label={t.remove} onClick={onRemove}>
+            <Icon n="delete" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyText, loadSecrets, getTotp, onSave, onDiscard,
+  onTrash, onRestore, onDeleteForever, onTogglePin, onHistoryRestore, onDownload }: {
+  t: Strings; item: Item; vault: VaultInfo; folders: Folder[]; isNew: boolean; prefs: Prefs;
+  onCopyField: (f: Field, what: string) => void; onCopyText: (text: string, what: string) => void;
+  loadSecrets: () => Promise<Record<string, string>>; getTotp: () => Promise<Totp>;
+  onSave: (d: Draft) => Promise<boolean>; onDiscard: () => void;
+  onTrash: () => void; onRestore: () => void; onDeleteForever: () => void; onTogglePin: () => void;
+  onHistoryRestore: (index: number) => void; onDownload: (a: Attachment) => void;
+}) {
+  const [moreMenu, setMoreMenu] = useState(false);
+  const fromItem = (): Draft => ({
+    title: item.title, folder: item.folder ?? '', note: item.note ?? '', expires: item.expires ?? null,
+    fields: item.fields.map(f => ({ ...f })), attachments: item.attachments ?? [],
+  });
+  const [draft, setDraft] = useState<Draft | null>(() => isNew ? fromItem() : null); // non-null = edit mode
+  const [busy, setBusy] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const d = draft ?? fromItem();
+  const folderName = folders.find(f => f.id === item.folder)?.name;
+  const ms = settingsStrings[prefs.lang].ui;
+
+  // reveal one protected field (cached per detail view)
+  const secrets = useRef<Promise<Record<string, string>> | null>(null);
+  const getSecrets = () => (secrets.current ??= loadSecrets());
+  const revealer = (raw: string) => () => getSecrets().then(s => s[raw] ?? '');
+
+  const startEdit = async () => {
+    const next = fromItem();
+    if (next.fields.some(f => f.protected)) {
+      const s = await getSecrets();
+      next.fields = next.fields.map(f => f.protected && f.raw ? { ...f, value: s[f.raw] ?? '', loaded: true } : f);
+    }
+    setDraft(next);
+  };
+  const save = async () => {
+    setBusy(true);
+    const ok = await onSave(draft!);
+    setBusy(false);
+    if (ok && !isNew) { secrets.current = null; setDraft(null); }
+  };
+  const cancel = () => { setMenu(false); if (isNew) onDiscard(); else setDraft(null); };
+  const patch = (p: Partial<Draft>) => setDraft(x => ({ ...x!, ...p }));
+  const setField = (idx: number, f: Field) => patch({ fields: d.fields.map((x, i) => i === idx ? f : x) });
+  const addField = (kind: FieldKind, name: keyof Strings) => {
+    patch({ fields: [...d.fields, { label: t[name], value: '', kind }] });
+    setMenu(false);
+  };
+  const addFiles = (files: FileList | null) => {
+    if (!files?.length) return;
+    patch({ attachments: [...d.attachments, ...[...files].map(f => ({ name: f.name, size: f.size, file: f }))] });
+  };
+  const viewFields = d.fields.filter(f => f.protected || f.value);
+  const expired = !!item.expires && item.expires < today();
+
+  return (
+    <>
+      <header>
+        <div className="hero">
+          <span className={'avatar ' + item.type}><Icon n={TYPE_ICON[item.type]} /></span>
+          <div>
+            {draft ? (
+              <input className="title-edit" value={draft.title} placeholder={t.title} aria-label={t.title} autoFocus={isNew}
+                onChange={e => patch({ title: e.target.value })} />
+            ) : <h2 title={item.title}>{item.title || t.untitled}</h2>}
+            <div className="meta">
+              <span className="badge" style={{ background: `var(${v.color})`, color: 'var(--v-on)' }}><Icon n={v.icon} />{v.name}</span>
+              {draft ? (
+                <label className="badge select">
+                  <Icon n="folder" />
+                  <select value={draft.folder} onChange={e => patch({ folder: e.target.value })} aria-label={t.folder}>
+                    <option value="">{t.noFolder}</option>
+                    {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                </label>
+              ) : folderName && <span className="badge"><Icon n="folder" />{folderName}</span>}
+              <span className="badge">{t[item.type]}</span>
+              {item.pinned && <span className="badge"><Icon n="push_pin" />{t.pinned}</span>}
+              {!draft && item.expires && (
+                <span className={'badge' + (expired ? ' danger' : '')}><Icon n={expired ? 'event_busy' : 'event'} />
+                  {expired ? t.expired : `${t.expiresOn} ${fmtDate(item.expires)}`}</span>
+              )}
+              {item.trashed && <span className="badge danger"><Icon n="delete" />{t.trash}</span>}
+            </div>
+          </div>
+        </div>
+        <div className="actions">
+          {draft ? (
+            <>
+              <button className="btn text" onClick={cancel}>{t.cancel}</button>
+              <button className="btn filled" onClick={save} disabled={busy}><Icon n={busy ? 'hourglass_top' : 'check'} />{t.save}</button>
+            </>
+          ) : (
+            <>
+              {item.trashed
+                ? <button className="btn filled" onClick={onRestore}><Icon n="restore_from_trash" />{t.restore}</button>
+                : <button className="btn filled" onClick={startEdit}><Icon n="edit" />{t.edit}</button>}
+              <span className="more-wrap">
+                <button className="icon-btn tonal" aria-label={t.more} aria-expanded={moreMenu} onClick={() => setMoreMenu(m => !m)}>
+                  <Icon n="more_vert" />
+                </button>
+                {moreMenu && (
+                  <>
+                    <div className="menu-scrim" onClick={() => setMoreMenu(false)} />
+                    <div className="menu more-menu" role="menu">
+                      {!item.trashed && (
+                        <button role="menuitem" onClick={() => { setMoreMenu(false); onTogglePin(); }}>
+                          <Icon n="push_pin" />{item.pinned ? t.unpinItem : t.pinItem}
+                        </button>
+                      )}
+                      {item.trashed ? (
+                        <button role="menuitem" onClick={() => { setMoreMenu(false); onDeleteForever(); }}>
+                          <Icon n="delete_forever" />{t.deleteForever}
+                        </button>
+                      ) : (
+                        <button role="menuitem" onClick={() => { setMoreMenu(false); onTrash(); }}>
+                          <Icon n="delete" />{ms.moveToTrash}
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </span>
+            </>
+          )}
+        </div>
+      </header>
+
+      {(draft ? d.fields : viewFields).length > 0 && (
+        <div className={'fields' + (draft ? ' editing' : '')}>
+          {draft
+            ? d.fields.map((f, idx) => (
+              <EditRow key={idx} t={t} f={f} prefs={prefs} onCopy={onCopyText} onChange={nf => setField(idx, nf)}
+                onRemove={f.key ? undefined : () => patch({ fields: d.fields.filter((_, i) => i !== idx) })} />
+            ))
+            : viewFields.map(f => (
+              <FieldRow key={f.raw ?? fieldName(t, f)} t={t} f={f} prefs={prefs} onEdit={startEdit}
+                onCopy={() => onCopyField(f, fieldName(t, f))}
+                reveal={f.protected && f.raw && !isNew ? revealer(f.raw) : undefined}
+                totp={f.kind === 'totp' && !isNew ? getTotp : undefined} />
+            ))}
+        </div>
+      )}
+
+      {draft && (
+        <div className="add-more">
+          <button className="btn text" onClick={() => setMenu(m => !m)} aria-expanded={menu}><Icon n="add" />{t.addMore}</button>
+          {menu && (
+            <div className="menu" role="menu">
+              {ADDABLE.map(a => (
+                <button key={a.kind} role="menuitem" onClick={() => addField(a.kind, a.name)}>
+                  <Icon n={KIND_ICON[a.kind]} />{t[a.name]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {draft ? (
+        <div className="fields editing section">
+          <div className="field">
+            <Icon n="sticky_note_2" />
+            <div>
+              <span className="label">{t.noteBody}</span>
+              <textarea className="val edit" rows={3} placeholder={t.addNote} value={d.note}
+                onChange={e => patch({ note: e.target.value })} aria-label={t.noteBody} />
+            </div>
+          </div>
+          <div className="field expiry-row">
+            <Icon n="event" />
+            <div>
+              <span className="label">{t.expiry}</span>
+              <input className="val edit" type="date" value={d.expires ?? ''} disabled={d.expires === null}
+                onChange={e => patch({ expires: e.target.value || null })} aria-label={t.expiresOn} />
+            </div>
+            <input className="switch" type="checkbox" checked={d.expires !== null} aria-label={t.expiry}
+              onChange={e => patch({ expires: e.target.checked ? new Date(Date.now() + 90 * 86_400_000).toISOString().slice(0, 10) : null })} />
+          </div>
+        </div>
+      ) : d.note && (
+        <div className="fields section">
+          <FieldRow t={t} f={{ key: 'noteBody', value: d.note, raw: 'Notes' }} prefs={prefs} onEdit={startEdit}
+            onCopy={() => onCopyField({ key: 'noteBody', value: d.note, raw: 'Notes' }, t.noteBody)} />
+        </div>
+      )}
+
+      {(draft || d.attachments.length > 0) && (
+        <div className="attach section">
+          <div className="attach-head">
+            <Icon n="attach_file" />
+            <div><b>{t.attachments}</b>{draft && <small>{t.attachmentsHint}</small>}</div>
+          </div>
+          {d.attachments.map((a, idx) => (
+            <div className="file-row" key={idx}>
+              <Icon n="description" />
+              <span><b>{a.name}</b><small>{fmtSize(a.size)}</small></span>
+              <button className="icon-btn" title={t.download} aria-label={t.download} onClick={() => onDownload(a)}><Icon n="download" /></button>
+              {draft && (
+                <button className="icon-btn" title={t.remove} aria-label={t.remove}
+                  onClick={() => patch({ attachments: d.attachments.filter((_, i) => i !== idx) })}>
+                  <Icon n="delete" />
+                </button>
+              )}
+            </div>
+          ))}
+          {draft && (
+            <label className={'dropzone' + (dragging ? ' over' : '')}
+              onDragOver={e => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={e => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}>
+              <Icon n="upload" />{t.dropFiles}
+              <input type="file" multiple hidden onChange={e => { addFiles(e.target.files); e.target.value = ''; }} />
+            </label>
+          )}
+        </div>
+      )}
+
+      {!isNew && (
+        <details className="more">
+          <summary><Icon n="info" />{t.moreInfo}<Icon n="expand_more" /></summary>
+          <dl>
+            <dt>{t.modified}</dt><dd>{item.modified ? fmtDate(item.modified) : '—'}</dd>
+            <dt>{t.file}</dt><dd title={v.id}>{v.file}</dd>
+            <dt>UUID</dt><dd className="mono">{item.id}</dd>
+          </dl>
+          <div className="history">
+            <span className="label">{t.history}</span>
+            {!item.history?.length && <small>{t.noHistory}</small>}
+            {item.history?.map((when, i) => (
+              <div className="history-row" key={i}>
+                <Icon n="history" />
+                <span>{when ? new Date(when).toLocaleString(document.documentElement.lang) : '—'}</span>
+                <button className="btn text" onClick={() => onHistoryRestore(i)}>{t.restoreVersion}</button>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </>
+  );
+}
+
+type GenState = { mode: 'memorable' | 'random'; phrase: PhraseOpts; random: GenOpts };
+// last used generator settings, kept for the session
+let lastGen: GenState = {
+  mode: 'memorable',
+  phrase: { words: 5, capitalize: true, numbers: true, separator: '-' },
+  random: { length: 20, upper: true, digits: true, symbols: true },
+};
+const SEPARATORS = ['-', '.', '_', ',', ' '];
+const STRENGTH_ICON: Record<Strength, string> = { weak: 'gpp_bad', medium: 'gpp_maybe', strong: 'verified_user' };
+
+/** Password generator dialog. With `onUse` it fills a field (entry editing), otherwise it copies. */
+function Generator({ t, onClose, onCopy, onUse }: {
+  t: Strings; onClose: () => void; onCopy: (text: string, what: string) => void; onUse?: (pw: string) => void;
+}) {
+  const [g, setG] = useState<GenState>(lastGen);
+  const make = (s: GenState) => s.mode === 'memorable' ? passphrase(s.phrase) : generate(s.random);
+  const [pw, setPw] = useState(() => make(g));
+  const [showHistory, setShowHistory] = useState(false);
+  const update = (s: GenState) => { lastGen = s; setG(s); setPw(make(s)); };
+  const bits = g.mode === 'memorable' ? phraseBits(g.phrase) : randomBits(g.random);
+  const strength = strengthOf(bits);
+  const strengthLabel = { weak: t.strengthWeak, medium: t.strengthMedium, strong: t.strengthStrong }[strength];
+  const use = () => { remember(pw); if (onUse) { onUse(pw); onClose(); } else onCopy(pw, t.password); };
+  const p = g.phrase, r = g.random;
+
+  // portal: the detail pane is a CSS container, which would trap a fixed dialog inside it
+  return createPortal(
+    <div className="scrim" onClick={onClose}>
+      <div className="dialog gen-dialog" role="dialog" aria-label={t.generator} onClick={e => e.stopPropagation()}>
+        <div className="gen-top">
+          <button className="icon-btn" onClick={onClose} aria-label={t.close}><Icon n="close" /></button>
+          <span className="gen-title">{t.generator}</span>
+          <button className="icon-btn tonal" onClick={() => setPw(make(g))} title={t.regenerate} aria-label={t.regenerate}><Icon n="refresh" /></button>
+          <button className="btn filled" onClick={use}>
+            <Icon n={onUse ? 'input' : 'content_copy'} />{onUse ? t.genUse : t.copy}
+          </button>
+        </div>
+
+        <output className="gen-output" aria-live="polite">
+          {g.mode === 'memorable' && p.separator
+            // allow line breaks only after a separator, never inside a word
+            ? pw.split(p.separator).map((w, i) => <span key={i}>{i > 0 && <><span className="pw-s">{p.separator}</span><wbr /></>}{colorize(w)}</span>)
+            : colorize(pw)}
+        </output>
+        <div className={'strength ' + strength} title={`≈ ${Math.round(bits)} bit`}>
+          <Icon n={STRENGTH_ICON[strength]} fill />{strengthLabel}
+          <span className="meter"><i style={{ width: `${Math.min(100, bits / 1.2)}%` }} /></span>
+        </div>
+
+        <div className="gen-opts">
+          <label className="opt">{t.genType}
+            <select className="set-select" value={g.mode} onChange={e => update({ ...g, mode: e.target.value as GenState['mode'] })}>
+              <option value="memorable">{t.genMemorable}</option>
+              <option value="random">{t.genRandom}</option>
+            </select>
+          </label>
+          {g.mode === 'memorable' ? (
+            <>
+              <label className="opt">{p.words} {t.genWords}
+                <input type="range" min={3} max={10} value={p.words} onChange={e => update({ ...g, phrase: { ...p, words: +e.target.value } })} />
+              </label>
+              <label className="opt">{t.genCapitalize}
+                <input className="switch" type="checkbox" checked={p.capitalize} onChange={e => update({ ...g, phrase: { ...p, capitalize: e.target.checked } })} />
+              </label>
+              <label className="opt">{t.genNumbers}
+                <input className="switch" type="checkbox" checked={p.numbers} onChange={e => update({ ...g, phrase: { ...p, numbers: e.target.checked } })} />
+              </label>
+              <div className="opt">{t.genSeparator}
+                <span className="sep-chips">
+                  {SEPARATORS.map(s => (
+                    <button key={s} className={'chip' + (p.separator === s ? ' on' : '')} title={s === ' ' ? t.genSpace : s}
+                      onClick={() => update({ ...g, phrase: { ...p, separator: s } })}>{s === ' ' ? '␣' : s}</button>
+                  ))}
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="opt">{t.length}: {r.length}
+                <input type="range" min={8} max={64} value={r.length} onChange={e => update({ ...g, random: { ...r, length: +e.target.value } })} />
+              </label>
+              <label className="opt">{t.uppercase}
+                <input className="switch" type="checkbox" checked={r.upper} onChange={e => update({ ...g, random: { ...r, upper: e.target.checked } })} />
+              </label>
+              <label className="opt">{t.digits}
+                <input className="switch" type="checkbox" checked={r.digits} onChange={e => update({ ...g, random: { ...r, digits: e.target.checked } })} />
+              </label>
+              <label className="opt">{t.symbols}
+                <input className="switch" type="checkbox" checked={r.symbols} onChange={e => update({ ...g, random: { ...r, symbols: e.target.checked } })} />
+              </label>
+            </>
+          )}
+        </div>
+
+        <button className="gen-history-toggle" onClick={() => setShowHistory(h => !h)} aria-expanded={showHistory}>
+          {t.genHistory}<Icon n={showHistory ? 'expand_less' : 'chevron_right'} />
+        </button>
+        {showHistory && (
+          <div className="gen-history">
+            {history.length === 0 && <span className="label">{t.genHistoryEmpty}</span>}
+            {history.map(h => (
+              <button key={h.at + h.value} className="gen-history-row" onClick={() => onCopy(h.value, t.password)} title={t.copy}>
+                <span className="mono">{h.value}</span>
+                <small>{new Date(h.at).toLocaleTimeString(document.documentElement.lang, { hour: '2-digit', minute: '2-digit' })}</small>
+                <Icon n="content_copy" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+    , document.body);
+}
+
+function Setup({ onDone }: { onDone: (s: { lang: Lang; theme: Theme }) => void }) {
+  const [step, setStep] = useState(0);
+  const [lang, setLang] = useState<Lang>('en');
+  const [theme, setTheme] = useState<Theme>('dark');
+  const t = strings[lang];
+
+  // live preview of the choices while in setup
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.lang = lang;
+  }, [theme, lang]);
+
+  return (
+    <div className="center">
+      <div className="sheet">
+        <div className="steps"><i className="on" /><i className={step === 1 ? 'on' : ''} /></div>
+        <div className="logo"><Icon n="encrypted" fill /></div>
+        <h1>{t.welcome} <span>✦</span></h1>
+        <p>{t.setupIntro}</p>
+
+        {step === 0 ? (
+          <>
+            <span className="label">{t.language}</span>
+            <div className="choices">
+              {LANGS.map(l => (
+                <button key={l.id} className={'choice' + (lang === l.id ? ' on' : '')} onClick={() => setLang(l.id)}>
+                  {l.name}{lang === l.id && <Icon n="check_circle" fill />}
+                </button>
+              ))}
+            </div>
+            <div className="row"><span /><button className="btn filled" onClick={() => setStep(1)}>{t.continue}<Icon n="arrow_forward" /></button></div>
+          </>
+        ) : (
+          <>
+            <span className="label">{t.appearance}</span>
+            <div className="choices">
+              {(['dark', 'light'] as const).map(th => (
+                <button key={th} className={'choice theme-tile' + (theme === th ? ' on' : '')} onClick={() => setTheme(th)}>
+                  <span className={'preview ' + th}><i /><i /></span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Icon n={th === 'dark' ? 'dark_mode' : 'light_mode'} />{t[th]}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="row">
+              <button className="btn text" onClick={() => setStep(0)}><Icon n="arrow_back" />{t.back}</button>
+              <button className="btn filled" onClick={() => onDone({ lang, theme })}>{t.finish}<Icon n="arrow_forward" /></button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+

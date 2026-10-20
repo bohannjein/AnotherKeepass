@@ -1,0 +1,218 @@
+// Vault backend: real .kdbx files through Tauri in the desktop app, an in-memory
+// demo (seeded from mock.ts) in the browser preview. Same API for both.
+import { invoke } from '@tauri-apps/api/core';
+import { totp } from './totp';
+
+export interface RawField { name: string; value: string | null; protected: boolean }
+export interface RawItem {
+  id: string;
+  folder: string;
+  trashed: boolean;
+  fields: RawField[];
+  tags: string[];
+  customData: Record<string, string>;
+  attachments: { name: string; size: number }[];
+  modified: string | null;
+  expires: string | null;
+  history: string[];
+}
+export interface VaultData {
+  id: string;
+  name: string;
+  path: string;
+  root: string;
+  recycleBin: string | null;
+  format: string; // "KDBX 3.1" is upgraded to KDBX 4 on the next save (backup kept)
+  folders: { id: string; name: string; parent: string | null }[];
+  items: RawItem[];
+}
+export interface ItemInput {
+  id: string | null;
+  folder: string;
+  fields: RawField[];
+  tags: string[];
+  customData: Record<string, string>;
+  expires: string | null;
+  keepAttachments: string[];
+  addAttachments: { name: string; base64: string }[];
+}
+export interface Totp { code: string; remaining: number; period: number }
+
+export interface Backend {
+  desktop: boolean;
+  create(path: string, name: string, password: string, keyfile?: string): Promise<VaultData>;
+  open(path: string, password: string, keyfile?: string): Promise<VaultData>;
+  close(id: string): Promise<void>;
+  lockAll(): Promise<void>;
+  changeKey(id: string, password: string, keyfile?: string): Promise<void>;
+  rename(id: string, name: string): Promise<VaultData>;
+  save(vault: string, item: ItemInput): Promise<[string, VaultData]>;
+  secrets(vault: string, id: string): Promise<Record<string, string>>;
+  totp(vault: string, id: string): Promise<Totp>;
+  copy(vault: string, id: string, field: string, clearAfter: number | null): Promise<void>;
+  copyText(text: string, clearAfter: number | null): Promise<void>;
+  trash(vault: string, id: string): Promise<VaultData>;
+  restore(vault: string, id: string): Promise<VaultData>;
+  remove(vault: string, id: string): Promise<VaultData>;
+  emptyTrash(vault: string): Promise<VaultData>;
+  historyRestore(vault: string, id: string, index: number): Promise<VaultData>;
+  attachmentSave(vault: string, id: string, name: string, dest: string): Promise<void>;
+  folderCreate(vault: string, parent: string | null, name: string): Promise<VaultData>;
+  folderRename(vault: string, id: string, name: string): Promise<VaultData>;
+  folderTrash(vault: string, id: string): Promise<VaultData>;
+}
+
+const desktop: Backend = {
+  desktop: true,
+  create: (path, name, password, keyfile) => invoke('vault_create', { path, name, password, keyfile }),
+  open: (path, password, keyfile) => invoke('vault_open', { path, password, keyfile }),
+  close: id => invoke('vault_close', { id }),
+  lockAll: () => invoke('vault_lock_all'),
+  changeKey: (id, password, keyfile) => invoke('vault_change_key', { id, password, keyfile }),
+  rename: (id, name) => invoke('vault_rename', { id, name }),
+  save: (vault, item) => invoke('entry_save', { vault, item }),
+  secrets: (vault, id) => invoke('entry_secrets', { vault, id }),
+  totp: (vault, id) => invoke('entry_totp', { vault, id }),
+  copy: (vault, id, field, clearAfter) => invoke('entry_copy', { vault, id, field, clearAfter }),
+  copyText: (text, clearAfter) => invoke('clipboard_copy_text', { text, clearAfter }),
+  trash: (vault, id) => invoke('entry_trash', { vault, id }),
+  restore: (vault, id) => invoke('entry_restore', { vault, id }),
+  remove: (vault, id) => invoke('entry_delete', { vault, id }),
+  emptyTrash: vault => invoke('trash_empty', { vault }),
+  historyRestore: (vault, id, index) => invoke('entry_history_restore', { vault, id, index }),
+  attachmentSave: (vault, id, name, dest) => invoke('attachment_save', { vault, id, name, dest }),
+  folderCreate: (vault, parent, name) => invoke('folder_create', { vault, parent, name }),
+  folderRename: (vault, id, name) => invoke('folder_rename', { vault, id, name }),
+  folderTrash: (vault, id) => invoke('folder_trash', { vault, id }),
+};
+
+// ---------------------------------------------------------------- browser demo
+
+type DemoVault = { data: VaultData; secrets: Map<string, Record<string, string>>; files: Map<string, Uint8Array>; snapshots: Map<string, RawItem[]> };
+const demoVaults = new Map<string, DemoVault>();
+let seed: ((path: string) => DemoVault | null) | null = null;
+/** mock.ts registers its demo files here, so this module stays free of demo data */
+export const registerDemoSeed = (fn: (path: string) => DemoVault | null) => { seed = fn; };
+export type { DemoVault };
+
+const clone = <T,>(x: T): T => structuredClone(x);
+const now = () => new Date().toISOString().slice(0, 19);
+const get = (id: string) => {
+  const v = demoVaults.get(id);
+  if (!v) throw new Error('vault_closed');
+  return v;
+};
+const item = (v: DemoVault, id: string) => {
+  const i = v.data.items.find(x => x.id === id);
+  if (!i) throw new Error('not_found');
+  return i;
+};
+const out = (v: DemoVault) => clone(v.data);
+let clipTimer: number | undefined;
+
+const demo: Backend = {
+  desktop: false,
+  async create(path, name) {
+    const root = crypto.randomUUID(), bin = crypto.randomUUID();
+    const v: DemoVault = {
+      data: { id: path, name, path, root, recycleBin: bin, format: 'KDBX 4.1', folders: [], items: [] },
+      secrets: new Map(), files: new Map(), snapshots: new Map(),
+    };
+    demoVaults.set(path, v);
+    return out(v);
+  },
+  async open(path, password) {
+    if (!password) throw new Error('empty_key');
+    const v = demoVaults.get(path) ?? seed?.(path);
+    if (!v) throw new Error('io:not found');
+    demoVaults.set(path, v);
+    return out(v);
+  },
+  async close(id) { demoVaults.delete(id); },
+  async lockAll() { demoVaults.clear(); },
+  async changeKey() {},
+  async rename(id, name) { const v = get(id); v.data.name = name; return out(v); },
+  async save(vault, input) {
+    const v = get(vault);
+    const id = input.id ?? crypto.randomUUID();
+    const prev = v.data.items.find(i => i.id === id);
+    const oldSecrets = v.secrets.get(id) ?? {};
+    if (prev) v.snapshots.set(id, [clone(prev), ...(v.snapshots.get(id) ?? [])].slice(0, 10));
+    const secrets: Record<string, string> = {};
+    const fields = input.fields.map(f => {
+      if (!f.protected) return f;
+      secrets[f.name] = f.value ?? oldSecrets[f.name] ?? '';
+      return { ...f, value: null };
+    });
+    v.secrets.set(id, secrets);
+    for (const a of input.addAttachments) v.files.set(id + '/' + a.name, Uint8Array.from(atob(a.base64), c => c.charCodeAt(0)));
+    const next: RawItem = {
+      id, folder: input.folder, trashed: false, fields, tags: input.tags, customData: input.customData,
+      attachments: [
+        ...(prev?.attachments ?? []).filter(a => input.keepAttachments.includes(a.name)),
+        ...input.addAttachments.map(a => ({ name: a.name, size: Math.floor(a.base64.length * 3 / 4) })),
+      ],
+      modified: now(), expires: input.expires ? input.expires.slice(0, 10) + 'T23:59:59' : null,
+      history: (v.snapshots.get(id) ?? []).map(s => s.modified ?? ''),
+    };
+    v.data.items = prev ? v.data.items.map(i => i.id === id ? next : i) : [...v.data.items, next];
+    return [id, out(v)];
+  },
+  async secrets(vault, id) { return { ...(get(vault).secrets.get(id) ?? {}) }; },
+  async totp(vault, id) {
+    const s = get(vault).secrets.get(id)?.otp ?? '';
+    const t = Date.now();
+    return { code: await totp(s, t), remaining: 30 - (Math.floor(t / 1000) % 30), period: 30 };
+  },
+  async copy(vault, id, field, clearAfter) {
+    const v = get(vault);
+    const raw = item(v, id).fields.find(f => f.name === field);
+    const value = field === 'otp' ? (await demo.totp(vault, id)).code
+      : raw?.protected ? v.secrets.get(id)?.[field] ?? '' : raw?.value ?? '';
+    await demo.copyText(value, clearAfter);
+  },
+  async copyText(text, clearAfter) {
+    await navigator.clipboard.writeText(text);
+    clearTimeout(clipTimer);
+    if (clearAfter) clipTimer = setTimeout(() => navigator.clipboard.writeText('').catch(() => {}), clearAfter * 1000);
+  },
+  async trash(vault, id) { const v = get(vault); item(v, id).trashed = true; return out(v); },
+  async restore(vault, id) { const v = get(vault); item(v, id).trashed = false; return out(v); },
+  async remove(vault, id) { const v = get(vault); v.data.items = v.data.items.filter(i => i.id !== id); return out(v); },
+  async emptyTrash(vault) { const v = get(vault); v.data.items = v.data.items.filter(i => !i.trashed); return out(v); },
+  async historyRestore(vault, id, index) {
+    const v = get(vault);
+    const old = v.snapshots.get(id)?.[index];
+    if (!old) throw new Error('not_found');
+    const cur = item(v, id);
+    v.snapshots.set(id, [clone(cur), ...(v.snapshots.get(id) ?? [])].slice(0, 10));
+    Object.assign(cur, { ...clone(old), modified: now(), history: (v.snapshots.get(id) ?? []).map(s => s.modified ?? '') });
+    return out(v);
+  },
+  async attachmentSave() { /* demo: the UI downloads from memory instead */ },
+  async folderCreate(vault, parent, name) {
+    const v = get(vault);
+    v.data.folders.push({ id: crypto.randomUUID(), name, parent: parent ?? null });
+    return out(v);
+  },
+  async folderRename(vault, id, name) {
+    const v = get(vault);
+    const f = v.data.folders.find(x => x.id === id);
+    if (f) f.name = name;
+    return out(v);
+  },
+  async folderTrash(vault, id) {
+    const v = get(vault);
+    v.data.folders = v.data.folders.filter(f => f.id !== id);
+    v.data.items.forEach(i => { if (i.folder === id) { i.trashed = true; i.folder = v.data.root; } });
+    return out(v);
+  },
+};
+
+/** Demo only: bytes of an attachment added in this session (desktop saves via dialog). */
+export const demoAttachment = (vault: string, id: string, name: string) => demoVaults.get(vault)?.files.get(id + '/' + name);
+
+export const backend: Backend = '__TAURI_INTERNALS__' in window ? desktop : demo;
+
+/** Maps backend error codes to something a user can act on. */
+export const errorCode = (e: unknown) => String(e instanceof Error ? e.message : e).split(':')[0];
