@@ -35,6 +35,8 @@ export interface Item {
   expires?: string | null; // YYYY-MM-DD
   history?: string[];
   tags?: string[];
+  /** data: URL of the KeePass custom icon (website favicon) */
+  icon?: string;
 }
 
 export interface Folder { id: string; vault: string; name: string; parent?: string | null }
@@ -73,6 +75,12 @@ function inferType(names: Set<string>, note: string): ItemType {
   return note ? 'note' : 'other';
 }
 
+/** PNG/ICO/SVG bytes (base64) → data: URL with the right type */
+export function iconUrl(b64: string) {
+  const type = b64.startsWith('iVBOR') ? 'image/png' : b64.startsWith('AAABAA') ? 'image/x-icon' : b64.startsWith('PHN2') || b64.startsWith('PD94') ? 'image/svg+xml' : 'image/png';
+  return `data:${type};base64,${b64}`;
+}
+
 export function rawToItem(raw: RawItem, v: VaultData): Item {
   let title = '', note = '';
   let kinds: Record<string, FieldKind> = {};
@@ -108,6 +116,7 @@ export function rawToItem(raw: RawItem, v: VaultData): Item {
     folder: raw.folder === v.root ? undefined : raw.folder,
     expires: raw.expires?.slice(0, 10) ?? null,
     history: raw.history,
+    icon: raw.icon && v.icons?.[raw.icon] ? iconUrl(v.icons[raw.icon]) : undefined,
   };
 }
 

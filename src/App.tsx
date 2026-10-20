@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { createPortal } from 'react-dom';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { backend, demoAttachment, type AutoTypePick, type BrowserAsk, type Health, type Totp, type VaultData } from './backend';
-import { draftToInput, rawToItem, type Attachment, type Draft, type Field, type FieldKind, type Folder, type Item, type ItemType, type VaultInfo } from './model';
+import { draftToInput, iconUrl, rawToItem, type Attachment, type Draft, type Field, type FieldKind, type Folder, type Item, type ItemType, type VaultInfo } from './model';
 import { DEMO_VAULTS } from './mock';
 import { openExternal, openOptions } from './open';
 import { clearHistory, generate } from './generator';
@@ -475,10 +475,32 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
       { icon: 'edit', label: t.edit, kbd: 'Ctrl+E', action: edit },
       { icon: 'content_copy', label: t.duplicate, kbd: 'Ctrl+D', action: () => duplicate(it) },
       { icon: 'push_pin', label: it.pinned ? t.unpinItem : t.pinItem, action: () => togglePin(it) },
+      ...(f('URL')?.value && backend.desktop ? [{ icon: 'image_search', label: t.loadIcon, action: () => loadIcons([it]) }] : []),
+      ...(it.icon ? [{ icon: 'hide_image', label: t.removeIcon, action: () => removeIcon(it) }] : []),
       'sep',
       { icon: 'delete', label: ts.ui.moveToTrash, kbd: 'Entf', danger: true, action: () => requestTrash(it) },
     ];
   };
+  // website icons: download (backend), scale to a 64 px PNG here, store as KeePass custom icons
+  const loadIcons = async (list: Item[]) => {
+    const withUrl = list.filter(i => i.fields.some(f => f.raw === 'URL' && f.value));
+    if (!withUrl.length) return;
+    if (withUrl.length > 1) notify(t.iconsLoading);
+    const found: Record<string, [string, string | null][]> = {};
+    for (let i = 0; i < withUrl.length; i += 4) {
+      await Promise.all(withUrl.slice(i, i + 4).map(async it => {
+        try {
+          const raw = await backend.faviconFetch(it.fields.find(f => f.raw === 'URL')!.value, settings.ddgFavicons, settings.faviconTimeout);
+          const png = await toPng(raw);
+          if (png) (found[it.vault] ??= []).push([it.id, png]);
+        } catch { /* no icon for this site */ }
+      }));
+    }
+    let n = 0;
+    for (const [vid, icons] of Object.entries(found)) if (apply(await run(backend.iconsSet(vid, icons)))) n += icons.length;
+    notify(n ? `${n} ${t.iconsLoaded}` : t.iconNone, !n);
+  };
+  const removeIcon = async (it: Item) => { apply(await run(backend.iconsSet(it.vault, [[it.id, null]]))); };
   const folderMenu = (f: Folder): MenuItem[] => [
     { icon: 'create_new_folder', label: t.newSubfolder, action: () => setFolderDialog({ mode: 'create', vault: f.vault, parent: f.id }) },
     { icon: 'drive_file_rename_outline', label: t.renameFolder, action: () => setFolderDialog({ mode: 'rename', vault: f.vault, id: f.id, name: f.name }) },
@@ -491,6 +513,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
     : [
       { icon: 'create_new_folder', label: t.newFolder, action: () => setFolderDialog({ mode: 'create', vault: v.id, parent: '' }) },
       { icon: 'upload_file', label: t.importItems, action: () => setImportFor(v.id) },
+      ...(backend.desktop ? [{ icon: 'image_search', label: t.loadIcons, action: () => loadIcons(items.filter(i => i.vault === v.id && !i.trashed && !i.icon)) }] : []),
       { icon: 'key', label: t.changeMasterKey, action: () => setKeyDialog(v.id) },
       'sep',
       { icon: 'lock', label: t.closeVault, action: () => closeVault(v.id) },
@@ -749,7 +772,9 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
             onDeleteForever={() => deleteForever(current)}
             onTogglePin={() => togglePin(current)}
             onHistoryRestore={i => historyRestore(current, i)}
-            onDownload={a => download(current, a)} />
+            onDownload={a => download(current, a)}
+            onLoadIcon={backend.desktop && current.fields.some(f => f.raw === 'URL' && f.value) ? () => loadIcons([current]) : undefined}
+            onRemoveIcon={current.icon ? () => removeIcon(current) : undefined} />
         ) : (
           vault === HEALTH ? (
             <HealthOverview t={t} total={Object.keys(health).length} counts={healthCounts} breachesChecked={!!breaches} checking={checking}
@@ -1060,6 +1085,31 @@ function NavItem(p: {
 
 const isExpired = (i: Item) => !!i.expires && i.expires < today();
 
+/** Type avatar, or the entry's website/custom icon on a soft tile. */
+function ItemAvatar({ item }: { item: Item }) {
+  return item.icon
+    ? <span className="avatar favicon"><img src={item.icon} alt="" draggable={false} /></span>
+    : <span className={'avatar ' + item.type}><Icon n={TYPE_ICON[item.type]} /></span>;
+}
+
+/** Any image the webview can decode → 64×64 PNG (base64), what KeePass clients expect. */
+function toPng(b64: string): Promise<string | null> {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const ctx = c.getContext('2d');
+      if (!ctx || !img.width) return resolve(null);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, 64, 64);
+      resolve(c.toDataURL('image/png').split(',')[1] ?? null);
+    };
+    img.onerror = () => resolve(null);
+    img.src = iconUrl(b64);
+  });
+}
+
 function Row({ t, item, active, onClick, dragRef, onDragEnd, onContextMenu }: {
   t: Strings; item: Item; active: boolean; onClick: () => void;
   dragRef: React.MutableRefObject<Item | null>; onDragEnd: () => void; onContextMenu: (e: React.MouseEvent) => void;
@@ -1069,7 +1119,7 @@ function Row({ t, item, active, onClick, dragRef, onDragEnd, onContextMenu }: {
     <button className={'item' + (active ? ' active' : '')} onClick={onClick} onContextMenu={onContextMenu} draggable={saved}
       onDragStart={e => { dragRef.current = item; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', item.title); }}
       onDragEnd={() => { dragRef.current = null; onDragEnd(); }}>
-      <span className={'avatar ' + item.type}><Icon n={TYPE_ICON[item.type]} /></span>
+      <ItemAvatar item={item} />
       <span><b>{item.title || t.untitled}</b><span>{item.subtitle || t[item.type]}</span></span>
       {isExpired(item) ? <span className="pin expired" title={t.expired}><Icon n="event_busy" /></span>
         : item.pinned && <span className="pin"><Icon n="push_pin" fill /></span>}
@@ -1236,13 +1286,14 @@ function EditRow({ t, f, prefs, title, onChange, onRemove, onCopy }: {
 }
 
 function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyText, loadSecrets, getTotp, onDuplicate, onSave, onDiscard,
-  onTrash, onRestore, onDeleteForever, onTogglePin, onHistoryRestore, onDownload }: {
+  onTrash, onRestore, onDeleteForever, onTogglePin, onHistoryRestore, onDownload, onLoadIcon, onRemoveIcon }: {
   t: Strings; item: Item; vault: VaultInfo; folders: Folder[]; isNew: boolean; prefs: Prefs;
   onCopyField: (f: Field, what: string) => void; onCopyText: (text: string, what: string) => void;
   loadSecrets: () => Promise<Record<string, string>>; getTotp: (field: string) => Promise<Totp>; onDuplicate: () => void;
   onSave: (d: Draft) => Promise<boolean>; onDiscard: () => void;
   onTrash: () => void; onRestore: () => void; onDeleteForever: () => void; onTogglePin: () => void;
   onHistoryRestore: (index: number) => void; onDownload: (a: Attachment) => void;
+  onLoadIcon?: () => void; onRemoveIcon?: () => void;
 }) {
   const [moreMenu, setMoreMenu] = useState(false);
   const fromItem = (): Draft => ({
@@ -1303,7 +1354,7 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
     <>
       <header>
         <div className="hero">
-          <span className={'avatar ' + item.type}><Icon n={TYPE_ICON[item.type]} /></span>
+          <ItemAvatar item={item} />
           <div>
             {draft ? (
               <input className="title-edit" value={draft.title} placeholder={t.title} aria-label={t.title} autoFocus={isNew}
@@ -1358,6 +1409,16 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
                       {!item.trashed && (
                         <button role="menuitem" onClick={() => { setMoreMenu(false); onDuplicate(); }}>
                           <Icon n="content_copy" />{t.duplicate}<kbd>Ctrl+D</kbd>
+                        </button>
+                      )}
+                      {!item.trashed && onLoadIcon && (
+                        <button role="menuitem" onClick={() => { setMoreMenu(false); onLoadIcon(); }}>
+                          <Icon n="image_search" />{t.loadIcon}
+                        </button>
+                      )}
+                      {!item.trashed && onRemoveIcon && (
+                        <button role="menuitem" onClick={() => { setMoreMenu(false); onRemoveIcon(); }}>
+                          <Icon n="hide_image" />{t.removeIcon}
                         </button>
                       )}
                       {item.trashed ? (

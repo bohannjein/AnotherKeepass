@@ -6,6 +6,7 @@ pub mod proxy;
 use tauri::Manager;
 mod clipboard;
 mod desktop;
+mod favicon;
 mod health;
 mod vault;
 
@@ -38,6 +39,8 @@ pub fn run() {
       vault::vault_rename,
       vault::entry_save,
       vault::entry_import,
+      vault::entry_icons_set,
+      favicon::favicon_fetch,
       health::health_report,
       health::health_breach_prefixes,
       health::health_breach_match,

@@ -99,6 +99,8 @@ const en = {
     ksSigner: 'Signer name', ksFingerprint: 'Certificate fingerprint', ksGenerate: 'Generate new certificate',
   },
   hints: {
+    faviconTimeout: "How long to wait for a website when loading its icon (right-click an entry or vault → Load website icons).",
+    ddgFavicons: "Icons come from DuckDuckGo instead of the sites themselves, so the sites don't see the request.",
     autoReload: "If the file changes elsewhere (Dropbox, Nextcloud, KeePassXC on another PC), the vault is re-read automatically.",
     trayStyle: "Monochrome shows only the shield, in white or black, to match your taskbar.",
     atRelock: "If the vault was locked when you pressed the shortcut, it is locked again right after typing.",
@@ -279,6 +281,8 @@ const de: SettingsStrings = {
     ksSigner: 'Name des Unterzeichners', ksFingerprint: 'Fingerabdruck des Zertifikats', ksGenerate: 'Neues Zertifikat generieren',
   },
   hints: {
+    faviconTimeout: "Wie lange auf eine Website gewartet wird, wenn ihr Symbol geladen wird (Rechtsklick auf Eintrag oder Tresor → Website-Symbole laden).",
+    ddgFavicons: "Symbole kommen von DuckDuckGo statt von den Websites selbst – die Websites sehen die Anfrage nicht.",
     autoReload: "Ändert sich die Datei woanders (Dropbox, Nextcloud, KeePassXC auf einem anderen PC), wird der Tresor automatisch neu eingelesen.",
     trayStyle: "Einfarbig zeigt nur das Schild, weiß oder schwarz, passend zur Taskleiste.",
     atRelock: "War der Tresor beim Drücken des Kürzels gesperrt, wird er direkt nach dem Tippen wieder gesperrt.",
@@ -457,6 +461,8 @@ const fr: SettingsStrings = {
     ksSigner: 'Nom du signataire', ksFingerprint: 'Empreinte du certificat', ksGenerate: 'Générer un nouveau certificat',
   },
   hints: {
+    faviconTimeout: "Délai d’attente d’un site pour charger son icône (clic droit sur une entrée ou un coffre → Charger les icônes).",
+    ddgFavicons: "Les icônes viennent de DuckDuckGo plutôt que des sites eux-mêmes, qui ne voient donc pas la requête.",
     autoReload: "Si le fichier change ailleurs (Dropbox, Nextcloud, KeePassXC sur un autre PC), le coffre est relu automatiquement.",
     trayStyle: "Monochrome n’affiche que le bouclier, en blanc ou noir, selon la barre des tâches.",
     atRelock: "Si le coffre était verrouillé au moment du raccourci, il est reverrouillé juste après la saisie.",
@@ -635,6 +641,8 @@ const es: SettingsStrings = {
     ksSigner: 'Nombre del firmante', ksFingerprint: 'Huella del certificado', ksGenerate: 'Generar nuevo certificado',
   },
   hints: {
+    faviconTimeout: "Cuánto esperar a un sitio al cargar su icono (clic derecho en una entrada o bóveda → Cargar iconos).",
+    ddgFavicons: "Los iconos vienen de DuckDuckGo en lugar de los propios sitios, que así no ven la petición.",
     autoReload: "Si el archivo cambia en otro sitio (Dropbox, Nextcloud, KeePassXC en otro PC), la bóveda se vuelve a leer sola.",
     trayStyle: "Monocromo muestra solo el escudo, en blanco o negro, según la barra de tareas.",
     atRelock: "Si la bóveda estaba bloqueada al pulsar el atajo, se vuelve a bloquear justo después de escribir.",

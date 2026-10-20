@@ -79,6 +79,8 @@ pub struct VaultDto {
     format: String,
     folders: Vec<FolderDto>,
     items: Vec<ItemDto>,
+    /// custom icon id → image bytes (base64), for icons the entries use
+    icons: HashMap<String, String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -111,6 +113,8 @@ pub struct ItemDto {
     modified: Option<String>,
     expires: Option<String>,
     history: Vec<String>,
+    /// custom icon id (KeePass custom icon, e.g. a website favicon)
+    icon: Option<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -334,6 +338,7 @@ fn dto(id: &str, v: &OpenVault) -> VaultDto {
                 })
                 .collect();
             ItemDto {
+                icon: e.custom_icon().map(|i| i.id().to_string()),
                 id: e.id().to_string(),
                 folder: e.parent().id().to_string(),
                 trashed: in_bin(Some(e.parent().id())),
@@ -375,7 +380,30 @@ fn dto(id: &str, v: &OpenVault) -> VaultDto {
         },
         folders,
         items,
+        icons: db.iter_all_custom_icons().map(|i| (i.id().to_string(), B64.encode(&i.data))).collect(),
     }
+}
+
+/// Set (Some png) or clear (None) the icons of several entries, one write for all.
+/// Same image bytes share one custom icon, like KeePassXC does.
+#[tauri::command]
+pub fn entry_icons_set(state: tauri::State<'_, Vaults>, vault: String, icons: Vec<(String, Option<String>)>) -> R<VaultDto> {
+    mutate(&state, &vault, |db| {
+        for (id, data) in icons {
+            let eid = EntryId::from(parse_uuid(&id)?);
+            let data = data.map(|b| B64.decode(b).map_err(|_| "bad_icon")).transpose()?;
+            let existing = data.as_ref().and_then(|d| db.iter_all_custom_icons().find(|i| &i.data == d).map(|i| i.id()));
+            let mut e = db.entry_mut(eid).ok_or("not_found")?;
+            match (data, existing) {
+                (None, _) => e.set_icon_none(),
+                (Some(_), Some(icon)) => e.set_icon_custom(icon).map_err(|_| "not_found")?,
+                (Some(d), None) => {
+                    e.set_icon_custom_new(d);
+                }
+            }
+        }
+        Ok(())
+    })
 }
 
 fn with_vault<T>(state: &Vaults, id: &str, f: impl FnOnce(&mut OpenVault) -> R<T>) -> R<T> {

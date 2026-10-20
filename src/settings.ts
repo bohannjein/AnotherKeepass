@@ -157,7 +157,7 @@ export const SECTIONS: Section[] = [
           { key: 'urlDoubleClick', type: 'select', options: ['open', 'copy', 'edit'] },
           { key: 'minimizeOnUrl', type: 'toggle' },
           { key: 'onCopy', type: 'select', options: ['none', 'minimize', 'background'] },
-          { key: 'faviconTimeout', type: 'number', min: 1, max: 60, unit: 's', planned: true },
+          { key: 'faviconTimeout', type: 'number', min: 1, max: 60, unit: 's' },
         ],
       },
       {
@@ -227,7 +227,7 @@ export const SECTIONS: Section[] = [
           { key: 'hideNotesPreview', type: 'toggle' },
         ],
       },
-      { id: 'privacy', items: [{ key: 'ddgFavicons', type: 'toggle', planned: true }] },
+      { id: 'privacy', items: [{ key: 'ddgFavicons', type: 'toggle' }] },
     ],
   },
   {

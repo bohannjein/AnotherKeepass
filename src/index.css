@@ -947,3 +947,9 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   .health-ring::before, .avatar.issue-breached, .health-tile, .health-ring .value { animation: none; }
 }
+
+/* ---------- website icons ---------- */
+.avatar.favicon { background: #fff; border-radius: var(--r-s); padding: 8px; }
+:root[data-theme='light'] .avatar.favicon { box-shadow: inset 0 0 0 1px var(--outline-var); }
+.avatar.favicon img { width: 100%; height: 100%; object-fit: contain; }
+.hero .avatar.favicon { padding: 14px; }

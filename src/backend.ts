@@ -16,6 +16,8 @@ export interface RawItem {
   modified: string | null;
   expires: string | null;
   history: string[];
+  /** custom icon id (see VaultData.icons) */
+  icon?: string | null;
 }
 export interface VaultData {
   id: string;
@@ -26,6 +28,8 @@ export interface VaultData {
   format: string; // "KDBX 3.1" is upgraded to KDBX 4 on the next save (backup kept)
   folders: { id: string; name: string; parent: string | null }[];
   items: RawItem[];
+  /** custom icon id → image bytes (base64) */
+  icons?: Record<string, string>;
 }
 export interface ItemInput {
   id: string | null;
@@ -61,6 +65,10 @@ export interface Backend {
   /** many new entries, folders by name path below parent (null = root); one file write */
   importItems(vault: string, parent: string | null, items: ImportInput[]): Promise<[number, VaultData]>;
   secrets(vault: string, id: string): Promise<Record<string, string>>;
+  /** set (PNG base64) or clear (null) entry icons, one write */
+  iconsSet(vault: string, icons: [string, string | null][]): Promise<VaultData>;
+  /** website icon bytes (base64), downloaded by the backend */
+  faviconFetch(url: string, ddg: boolean, timeout: number): Promise<string>;
   /** password health of all open vaults (flags only, passwords stay in the backend) */
   healthReport(): Promise<Health[]>;
   /** HIBP k-anonymity: hash prefixes to ask for, then entry id → breach count */
@@ -111,6 +119,8 @@ const desktop: Backend = {
   save: (vault, item) => invoke('entry_save', { vault, item }),
   importItems: (vault, parent, items) => invoke('entry_import', { vault, parent, items }),
   secrets: (vault, id) => invoke('entry_secrets', { vault, id }),
+  iconsSet: (vault, icons) => invoke('entry_icons_set', { vault, icons }),
+  faviconFetch: (url, ddg, timeout) => invoke('favicon_fetch', { url, ddg, timeout }),
   healthReport: () => invoke('health_report'),
   breachPrefixes: () => invoke('health_breach_prefixes'),
   breachMatch: ranges => invoke('health_breach_match', { ranges }),
@@ -241,6 +251,17 @@ const demo: Backend = {
   },
   breachPrefixes: async () => [],
   breachMatch: async () => ({}),
+  async iconsSet(vault, icons) {
+    const v = get(vault);
+    v.data.icons ??= {};
+    for (const [id, png] of icons) {
+      const it = item(v, id);
+      if (png) { const key = crypto.randomUUID(); v.data.icons[key] = png; it.icon = key; } else it.icon = null;
+    }
+    return out(v);
+  },
+  // demo: no network access from the browser preview (CSP); DuckDuckGo icons work in the desktop app
+  faviconFetch: async () => { throw new Error('no_icon'); },
   async secrets(vault, id) { return { ...(get(vault).secrets.get(id) ?? {}) }; },
   async totp(vault, id, field) {
     const s = get(vault).secrets.get(id)?.[field] ?? '';
