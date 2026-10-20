@@ -5,9 +5,9 @@
   --on-primary: #522300;
   --primary-container: #723610;
   --on-primary-container: #ffdbc8;
-  --secondary: #b8cf8f;
-  --secondary-container: #3a4d1c;
-  --on-secondary-container: #d4ebaa;
+  --secondary: #bcc5a6;
+  --secondary-container: #3a4233;
+  --on-secondary-container: #dbe3cb;
   --tertiary-container: #574500;
   --on-tertiary-container: #ffe08f;
 
@@ -24,7 +24,7 @@
   --inverse-on-surface: #352f29;
 
   --v-clay: #723610;
-  --v-moss: #3a4d1c;
+  --v-moss: #3e4636;
   --v-ochre: #574500;
   --v-on: #ffe9dc;
 
@@ -40,9 +40,9 @@
   --on-primary: #ffffff;
   --primary-container: #ffdbc8;
   --on-primary-container: #351000;
-  --secondary: #52652e;
-  --secondary-container: #d4ebaa;
-  --on-secondary-container: #121f00;
+  --secondary: #5a6449;
+  --secondary-container: #dfe5cf;
+  --on-secondary-container: #181e10;
   --tertiary-container: #ffe08f;
   --on-tertiary-container: #241a00;
 
@@ -59,7 +59,7 @@
   --inverse-on-surface: #fbeee5;
 
   --v-clay: #ffdbc8;
-  --v-moss: #d4ebaa;
+  --v-moss: #dfe5cf;
   --v-ochre: #ffe08f;
   --v-on: #2a1a0c;
   color-scheme: light;
