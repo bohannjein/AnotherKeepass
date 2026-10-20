@@ -37,6 +37,10 @@ pub struct DesktopPrefs {
     pub at_match_title: bool,
     pub at_match_url: bool,
     pub at_hide_expired: bool,
+    pub at_relock: bool,
+    pub tray_style: String,
+    pub at_remember: u64,
+    pub auto_reload: bool,
     /// tray menu texts in the UI language: show, lock, quit
     pub tray_labels: [String; 3],
     // browser integration (KeePassXC-Browser protocol)
@@ -81,6 +85,10 @@ impl Default for DesktopPrefs {
             at_match_title: true,
             at_match_url: true,
             at_hide_expired: false,
+            at_relock: false,
+            tray_style: "colorful".into(),
+            at_remember: 10,
+            auto_reload: true,
             tray_labels: ["Show".into(), "Lock all".into(), "Quit".into()],
             browser_enabled: false,
             b_chrome: false,
@@ -203,9 +211,48 @@ fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, labels: &[String; 3]) -> taur
     ])
 }
 
+/// Tray icon for the chosen style. Monochrome = just the shield (the dark part of the app
+/// icon), cropped to fill the square, in white (dark taskbar) or black (light taskbar).
+fn tray_image<R: Runtime>(app: &AppHandle<R>, style: &str) -> Option<tauri::image::Image<'static>> {
+    let icon = app.default_window_icon()?;
+    let (w, h, px) = (icon.width() as usize, icon.height() as usize, icon.rgba());
+    let color: u8 = match style {
+        "monoLight" => 255,
+        "monoDark" => 0,
+        _ => return Some(icon.clone().to_owned()),
+    };
+    let dark = |x: usize, y: usize| {
+        let p = &px[(y * w + x) * 4..][..4];
+        p[3] > 128 && (p[0] as u32 + p[1] as u32 + p[2] as u32) < 3 * 110
+    };
+    let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
+    for y in 0..h {
+        for x in 0..w {
+            if dark(x, y) {
+                (x0, y0, x1, y1) = (x0.min(x), y0.min(y), x1.max(x), y1.max(y));
+            }
+        }
+    }
+    if x0 > x1 {
+        return Some(icon.clone().to_owned());
+    }
+    let side = (x1 - x0).max(y1 - y0) + 1;
+    let (ox, oy) = ((side - (x1 - x0 + 1)) / 2, (side - (y1 - y0 + 1)) / 2);
+    let mut out = vec![0u8; side * side * 4];
+    for y in y0..=y1 {
+        for x in x0..=x1 {
+            if dark(x, y) {
+                let i = ((y - y0 + oy) * side + (x - x0 + ox)) * 4;
+                out[i..i + 4].copy_from_slice(&[color, color, color, 255]);
+            }
+        }
+    }
+    Some(tauri::image::Image::new_owned(out, side as u32, side as u32))
+}
+
 pub fn create_tray<R: Runtime>(app: &AppHandle<R>, p: &DesktopPrefs) -> tauri::Result<()> {
     let tray = TrayIconBuilder::with_id(TRAY_ID)
-        .icon(app.default_window_icon().cloned().ok_or(tauri::Error::InvalidIcon(std::io::Error::other("no icon")))?)
+        .icon(tray_image(app, &p.tray_style).ok_or(tauri::Error::InvalidIcon(std::io::Error::other("no icon")))?)
         .tooltip("AnotherKeepass")
         .menu(&build_tray_menu(app, &p.tray_labels)?)
         .show_menu_on_left_click(false)
@@ -286,6 +333,9 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
 
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         let _ = tray.set_visible(prefs.tray_icon);
+        if old.tray_style != prefs.tray_style {
+            let _ = tray.set_icon(tray_image(&app, &prefs.tray_style));
+        }
         if old.tray_labels != prefs.tray_labels {
             if let Ok(menu) = build_tray_menu(&app, &prefs.tray_labels) {
                 let _ = tray.set_menu(Some(menu));

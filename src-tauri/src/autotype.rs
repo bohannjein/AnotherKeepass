@@ -3,7 +3,11 @@
 //! KeePass window associations) → type the entry's sequence. Several matches (or
 //! "always ask") hand a picker to the UI; the target window is remembered meanwhile.
 
-use std::{sync::Mutex, thread, time::Duration};
+use std::{
+    sync::{atomic::{AtomicBool, Ordering}, Mutex},
+    thread,
+    time::{Duration, Instant},
+};
 
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use keepass::db::{fields, Entry, EntryId};
@@ -16,6 +20,13 @@ use zeroize::Zeroizing;
 use crate::{desktop, vault::Vaults};
 
 pub const DEFAULT_SEQUENCE: &str = "{USERNAME}{TAB}{PASSWORD}{ENTER}";
+
+/// Shortcut pressed while everything was locked: continue once a vault is unlocked.
+static PENDING: Mutex<Option<(Option<isize>, String)>> = Mutex::new(None);
+/// "Re-lock after Auto-Type": the vault was only unlocked for this Auto-Type.
+static RELOCK: AtomicBool = AtomicBool::new(false);
+/// Last typed entry (vault, id, when), reused for "remember last entry" instead of asking again.
+static LAST: Mutex<Option<(String, String, Instant)>> = Mutex::new(None);
 
 /// Window that was active when the shortcut fired (Windows HWND as isize).
 #[derive(Default)]
@@ -225,12 +236,14 @@ pub fn register_shortcut<R: Runtime>(app: &AppHandle<R>, shortcut: &str) -> Resu
 }
 
 fn on_hotkey<R: Runtime>(app: &AppHandle<R>) {
+    RELOCK.store(false, Ordering::Relaxed);
     let (hwnd, title) = foreground();
     trigger(app, hwnd, &title);
 }
 
 /// Browser extension asked for Auto-Type ("request-autotype"): match by its domain instead of the window title.
 pub fn request<R: Runtime>(app: &AppHandle<R>, search: &str) {
+    RELOCK.store(false, Ordering::Relaxed);
     let (hwnd, _) = foreground();
     trigger(app, hwnd, search);
 }
@@ -240,13 +253,20 @@ fn trigger<R: Runtime>(app: &AppHandle<R>, hwnd: Option<isize>, title: &str) {
         *t = hwnd;
     }
     if app.state::<Vaults>().0.lock().map(|m| m.is_empty()).unwrap_or(true) {
-        desktop::show_for_unlock(app); // locked: user unlocks first, then presses the shortcut again
+        // locked: unlock first, then after_unlock() continues with this window
+        if let Ok(mut p) = PENDING.lock() {
+            *p = Some((hwnd, title.to_string()));
+        }
+        RELOCK.store(desktop::prefs(app).at_relock, Ordering::Relaxed);
+        desktop::show_for_unlock(app);
         return;
     }
     let found = candidates(app, title);
     let p = desktop::prefs(app);
-    if found.len() == 1 && !p.at_always_ask {
-        let c = found[0].clone();
+    // "remember last entry": typed for this window a moment ago → take it again without asking
+    let recent = LAST.lock().ok().and_then(|l| l.clone()).filter(|(_, _, at)| at.elapsed().as_secs() < p.at_remember);
+    let remembered = recent.and_then(|(v, id, _)| found.iter().find(|c| c.vault == v && c.id == id).cloned());
+    if let Some(c) = remembered.or_else(|| (found.len() == 1 && !p.at_always_ask).then(|| found[0].clone())) {
         let app = app.clone();
         thread::spawn(move || {
             if let Err(e) = perform(&app, &c.vault, &c.id, Some(c.sequence), true) {
@@ -281,7 +301,21 @@ pub fn perform<R: Runtime>(app: &AppHandle<R>, vault: &str, id: &str, sequence: 
             focus(h);
         }
     }
-    type_actions(actions, p.at_start_delay.max(100), p.at_char_delay)
+    type_actions(actions, p.at_start_delay.max(100), p.at_char_delay)?;
+    if let Ok(mut l) = LAST.lock() {
+        *l = Some((vault.to_string(), id.to_string(), Instant::now()));
+    }
+    if RELOCK.swap(false, Ordering::Relaxed) {
+        desktop::lock_all(app);
+    }
+    Ok(())
+}
+
+/// A vault was unlocked: finish an Auto-Type that was waiting for it.
+pub fn after_unlock<R: Runtime>(app: &AppHandle<R>) {
+    if let Some((hwnd, title)) = PENDING.lock().ok().and_then(|mut p| p.take()) {
+        trigger(app, hwnd, &title);
+    }
 }
 
 #[tauri::command]

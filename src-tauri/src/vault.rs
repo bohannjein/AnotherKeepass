@@ -225,7 +225,66 @@ fn write_db(v: &mut OpenVault) -> R<()> {
     let tmp = v.path.with_extension("kdbx.tmp");
     fs::write(&tmp, &buf).map_err(|e| format!("io:{e}"))?;
     fs::rename(&tmp, &v.path).map_err(|e| format!("io:{e}"))?;
+    stamp(&v.path);
     Ok(())
+}
+
+// ---------------------------------------------------------------- external changes (cloud sync, KeePassXC)
+
+/// Modification time of each vault file as we last read or wrote it.
+static STAMPS: Mutex<Option<HashMap<PathBuf, std::time::SystemTime>>> = Mutex::new(None);
+
+fn mtime(p: &Path) -> Option<std::time::SystemTime> {
+    fs::metadata(p).and_then(|m| m.modified()).ok()
+}
+
+fn stamp(p: &Path) {
+    if let (Ok(mut s), Some(t)) = (STAMPS.lock(), mtime(p)) {
+        s.get_or_insert_with(HashMap::new).insert(p.to_path_buf(), t);
+    }
+}
+
+/// Polls open vault files; when one changed on disk (Dropbox, Nextcloud, KeePassXC …) and
+/// "auto reload" is on, re-reads it with the stored key. We save every edit at once, so the
+/// only local state is an open edit form, and saving that afterwards lands in the fresh file.
+pub fn watch_files(app: tauri::AppHandle) {
+    use tauri::{Emitter, Manager};
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        if !crate::desktop::prefs(&app).auto_reload {
+            continue;
+        }
+        let changed: Vec<(String, PathBuf, DatabaseKey)> = {
+            let state = app.state::<Vaults>();
+            let Ok(map) = state.0.lock() else { continue };
+            let stamps = STAMPS.lock().ok().and_then(|s| s.clone()).unwrap_or_default();
+            map.iter()
+                .filter(|(_, v)| matches!((mtime(&v.path), stamps.get(&v.path)), (Some(now), Some(seen)) if now != *seen))
+                .map(|(id, v)| (id.clone(), v.path.clone(), v.key.clone()))
+                .collect()
+        };
+        for (id, path, key) in changed {
+            stamp(&path); // also on failure: don't retry a broken file every 2 s
+            // key derivation outside the lock, the UI keeps working meanwhile
+            let db = fs::File::open(&path)
+                .map_err(|e| e.to_string())
+                .and_then(|mut f| Database::open(&mut f, key).map_err(|e| e.to_string()));
+            let db = match db {
+                Ok(db) => db,
+                Err(e) => {
+                    log::warn!("reload after external change failed: {e}");
+                    continue;
+                }
+            };
+            let state = app.state::<Vaults>();
+            let Ok(mut map) = state.0.lock() else { continue };
+            let Some(v) = map.get_mut(&id) else { continue };
+            v.db = db;
+            log::info!("vault reloaded after external change");
+            let _ = app.emit("akp-vault-updated", dto(&id, v));
+            let _ = app.emit("akp-vault-reloaded", ());
+        }
+    });
 }
 
 fn dto(id: &str, v: &OpenVault) -> VaultDto {
@@ -414,6 +473,7 @@ pub fn vault_create(
 
 #[tauri::command]
 pub async fn vault_open(
+    app: tauri::AppHandle,
     state: tauri::State<'_, Vaults>,
     path: String,
     password: Option<String>,
@@ -435,9 +495,16 @@ pub async fn vault_open(
     .map_err(|e| format!("open:{e}"))??;
     log::info!("vault opened: {} entries, {} ms (key derivation + decrypt)", db.num_entries(), started.elapsed().as_millis());
     let v = OpenVault { path: PathBuf::from(&path), db, key };
+    stamp(&v.path);
     let d = dto(&path, &v);
     state.0.lock().map_err(|_| "lock")?.insert(path, v);
     crate::browser_server::notify("database-unlocked");
+    // after the UI got the listing: an Auto-Type may be waiting for this unlock
+    let app2 = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        crate::autotype::after_unlock(&app2);
+    });
     Ok(d)
 }
 

@@ -99,6 +99,10 @@ const en = {
     ksSigner: 'Signer name', ksFingerprint: 'Certificate fingerprint', ksGenerate: 'Generate new certificate',
   },
   hints: {
+    autoReload: "If the file changes elsewhere (Dropbox, Nextcloud, KeePassXC on another PC), the vault is re-read automatically.",
+    trayStyle: "Monochrome shows only the shield, in white or black, to match your taskbar.",
+    atRelock: "If the vault was locked when you pressed the shortcut, it is locked again right after typing.",
+    atRemember: "Pressing the shortcut again in the same window within this time types the same entry without asking. 0 = off.",
     showPlanned: 'Options that are prepared but not working yet.',
     autostart: 'Starts AnotherKeepass when you sign in to Windows.',
     startMinimized: 'With autostart: starts in the background (in the tray if the tray icon is on). Starting it yourself always shows the window.',
@@ -275,6 +279,10 @@ const de: SettingsStrings = {
     ksSigner: 'Name des Unterzeichners', ksFingerprint: 'Fingerabdruck des Zertifikats', ksGenerate: 'Neues Zertifikat generieren',
   },
   hints: {
+    autoReload: "Ändert sich die Datei woanders (Dropbox, Nextcloud, KeePassXC auf einem anderen PC), wird der Tresor automatisch neu eingelesen.",
+    trayStyle: "Einfarbig zeigt nur das Schild, weiß oder schwarz, passend zur Taskleiste.",
+    atRelock: "War der Tresor beim Drücken des Kürzels gesperrt, wird er direkt nach dem Tippen wieder gesperrt.",
+    atRemember: "Drückst du das Kürzel in dieser Zeit im selben Fenster erneut, wird ohne Nachfrage derselbe Eintrag getippt. 0 = aus.",
     showPlanned: 'Optionen, die vorbereitet sind, aber noch nicht funktionieren.',
     autostart: 'Startet AnotherKeepass, wenn du dich bei Windows anmeldest.',
     startMinimized: 'Beim Autostart im Hintergrund starten (im Infobereich, wenn das Tray-Symbol an ist). Selbst gestartet öffnet sich immer das Fenster.',
@@ -449,6 +457,10 @@ const fr: SettingsStrings = {
     ksSigner: 'Nom du signataire', ksFingerprint: 'Empreinte du certificat', ksGenerate: 'Générer un nouveau certificat',
   },
   hints: {
+    autoReload: "Si le fichier change ailleurs (Dropbox, Nextcloud, KeePassXC sur un autre PC), le coffre est relu automatiquement.",
+    trayStyle: "Monochrome n’affiche que le bouclier, en blanc ou noir, selon la barre des tâches.",
+    atRelock: "Si le coffre était verrouillé au moment du raccourci, il est reverrouillé juste après la saisie.",
+    atRemember: "Un nouveau raccourci dans la même fenêtre pendant ce délai saisit la même entrée sans demander. 0 = désactivé.",
     showPlanned: 'Options préparées mais pas encore fonctionnelles.',
     autostart: 'Lance AnotherKeepass à l’ouverture de session Windows.',
     startMinimized: 'Au démarrage automatique : en arrière-plan (zone de notification si l’icône est activée). Lancée à la main, la fenêtre s’ouvre toujours.',
@@ -623,6 +635,10 @@ const es: SettingsStrings = {
     ksSigner: 'Nombre del firmante', ksFingerprint: 'Huella del certificado', ksGenerate: 'Generar nuevo certificado',
   },
   hints: {
+    autoReload: "Si el archivo cambia en otro sitio (Dropbox, Nextcloud, KeePassXC en otro PC), la bóveda se vuelve a leer sola.",
+    trayStyle: "Monocromo muestra solo el escudo, en blanco o negro, según la barra de tareas.",
+    atRelock: "Si la bóveda estaba bloqueada al pulsar el atajo, se vuelve a bloquear justo después de escribir.",
+    atRemember: "Si pulsas el atajo de nuevo en la misma ventana dentro de este tiempo, se escribe la misma entrada sin preguntar. 0 = desactivado.",
     showPlanned: 'Opciones preparadas que aún no funcionan.',
     autostart: 'Inicia AnotherKeepass al iniciar sesión en Windows.',
     startMinimized: 'Con inicio automático: arranca en segundo plano (en la bandeja si el icono está activado). Abierta a mano siempre muestra la ventana.',

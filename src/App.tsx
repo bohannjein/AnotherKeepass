@@ -58,7 +58,7 @@ const DESKTOP_KEYS = [
   'atShortcut', 'atStartDelay', 'atCharDelay', 'atAlwaysAsk', 'atMatchTitle', 'atMatchUrl', 'atHideExpired',
   'browserEnabled', 'bChrome', 'bFirefox', 'bChromium', 'bEdge', 'bBrave', 'bVivaldi', 'bTor', 'bUnlock', 'bMatchScheme',
   'bBestMatch', 'bAllowExpired', 'bSearchAll', 'bNoAccessConfirm', 'bUpdateNoConfirm', 'bKph', 'bUpdateManifests',
-  'bCustomProxy', 'bProxyPath', 'backupBeforeSave', 'backupPath',
+  'bCustomProxy', 'bProxyPath', 'backupBeforeSave', 'backupPath', 'autoReload', 'atRelock', 'atRemember', 'trayStyle',
 ] as const;
 const KNOWN_KEY = 'anotherkeepass.vaults';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -206,6 +206,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const [snack, setSnack] = useState('');
   const [snackError, setSnackError] = useState(false);
   const notify = (msg: string, error = false) => { setSnack(msg); setSnackError(error); };
+  useEffect(() => backend.on('akp-vault-reloaded', () => { setSnack(t.vaultReloaded); setSnackError(false); }), [t.vaultReloaded]);
   const [page, setPage] = useState<'vault' | 'settings'>('vault');
   // drawer collapses to an icon rail: automatically on narrow windows, or via the toggle
   const narrow = '(max-width: 1199px)';
