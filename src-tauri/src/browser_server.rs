@@ -84,6 +84,7 @@ impl Host for AppHost {
             no_access_confirm: p.b_no_access_confirm,
             update_no_confirm: p.b_update_no_confirm,
             kph: p.b_kph,
+            skip_basic_auth: p.b_skip_basic_auth,
         }
     }
     fn active_vault(&self) -> Option<String> {

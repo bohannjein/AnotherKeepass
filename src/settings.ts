@@ -253,7 +253,7 @@ export const SECTIONS: Section[] = [
         id: 'browserAdvanced', items: [
           { key: 'bNoAccessConfirm', type: 'toggle', dependsOn: 'browserEnabled' },
           { key: 'bUpdateNoConfirm', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bSkipBasicAuth', type: 'toggle', dependsOn: 'browserEnabled', planned: true },
+          { key: 'bSkipBasicAuth', type: 'toggle', dependsOn: 'browserEnabled' },
           { key: 'bKph', type: 'toggle', dependsOn: 'browserEnabled' },
           { key: 'bLocalhostPasskeys', type: 'toggle', dependsOn: 'browserEnabled', planned: true },
           { key: 'bUpdateManifests', type: 'toggle', dependsOn: 'browserEnabled' },

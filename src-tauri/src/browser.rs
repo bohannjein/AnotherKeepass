@@ -75,6 +75,8 @@ pub struct BrowserPrefs {
     pub no_access_confirm: bool,
     pub update_no_confirm: bool,
     pub kph: bool,
+    /// HTTP Basic Auth requests (httpAuth: true) don't ask for access
+    pub skip_basic_auth: bool,
 }
 
 /// Questions for the user. Answers come back as JSON (None = denied / timed out).
@@ -425,6 +427,7 @@ fn get_logins(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
     let page = p["url"].as_str().and_then(site).ok_or(E_NO_URL)?;
     let form = p["submitUrl"].as_str().and_then(site);
     let prefs = host.prefs();
+    let basic_auth_ok = prefs.skip_basic_auth && p["httpAuth"].as_bool().unwrap_or(false);
     let keys = keys_of(p);
     let mut vault_ids = associated_vaults(host, &keys);
     if !prefs.search_all {
@@ -462,7 +465,7 @@ fn get_logins(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
                 }
                 let st = entry_settings(&e);
                 let perm = if host_in(&st, "Deny", &page.host) { Some(false) }
-                    else if host_in(&st, "Allow", &page.host) || prefs.no_access_confirm { Some(true) }
+                    else if host_in(&st, "Allow", &page.host) || prefs.no_access_confirm || basic_auth_ok { Some(true) }
                     else { None };
                 found.push((vid.clone(), e.id(), sc, perm));
             }
