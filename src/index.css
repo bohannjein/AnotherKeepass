@@ -786,3 +786,42 @@ textarea.val.edit { resize: vertical; display: block; }
 .history-row span:nth-child(2) { flex: 1; }
 .more dd { overflow-wrap: anywhere; }
 .set-row.wip { opacity: .6; }
+
+/* ================= M3: drag & drop, tags, TOTP setup, shortcuts ================= */
+.item[draggable=true] { cursor: grab; }
+.item[draggable=true]:active { cursor: grabbing; }
+.nav-item.drop-over {
+  background: var(--primary-container); color: var(--on-primary-container);
+  outline: 2px dashed var(--primary); outline-offset: -2px;
+  border-radius: var(--r-m);
+}
+
+.tag-filter { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 16px 8px; }
+.tag-filter .chip { height: 28px; font-size: 12px; }
+.badge.tag { background: var(--tertiary-container); color: var(--on-tertiary-container); }
+.tag-editor .tag-input { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.tag-editor .badge.tag { padding-right: 2px; }
+.tag-editor .badge.tag button { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: inherit; }
+.tag-editor .badge.tag button:hover { background: rgb(0 0 0 / .15); }
+.tag-editor .badge.tag .ms { font-size: 14px; }
+.tag-editor input { flex: 1; min-width: 120px; border: 0; background: none; padding: 6px 4px; font-size: 14px; color: var(--on-surface); }
+.tag-editor input:focus { outline: none; border-bottom: 2px solid var(--primary); }
+
+.totp-setup { display: grid; gap: 8px; border-radius: var(--r-s); transition: background .2s; }
+.totp-setup.over { background: var(--primary-container); outline: 2px dashed var(--primary); outline-offset: 4px; }
+.totp-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.totp-tools .btn { height: 34px; padding: 0 14px; font-size: 13px; }
+.totp-preview { display: inline-flex; align-items: center; gap: 6px; font-family: ui-monospace, 'Cascadia Mono', monospace; font-weight: 600; color: var(--primary); letter-spacing: .08em; }
+.totp-preview small { font-family: var(--font); letter-spacing: 0; color: var(--on-surface-var); font-weight: 500; }
+.totp-hint { color: var(--on-surface-var); font-size: 12px; }
+
+kbd {
+  font-family: ui-monospace, 'Cascadia Mono', monospace; font-size: 11px; font-weight: 600;
+  padding: 2px 7px; border-radius: 6px;
+  background: var(--surface-highest); color: var(--on-surface-var);
+  border-bottom: 2px solid var(--outline-var);
+}
+.menu button kbd { margin-left: auto; }
+.shortcut-list { display: grid; gap: 2px; max-height: 60vh; overflow-y: auto; }
+.shortcut-list > div { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 12px; padding: 8px 4px; border-bottom: 1px solid var(--outline-var); }
+.shortcut-list dd { font-size: 14px; }

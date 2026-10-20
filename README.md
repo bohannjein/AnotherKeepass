@@ -24,6 +24,7 @@ npx tauri build --bundles appimage   # Linux (or use .github/workflows/build.yml
 npx tsc -b
 node src/totp.check.ts
 node src/generator.check.ts
+node src/model.check.ts
 cd src-tauri && cargo test --lib
 ```
 

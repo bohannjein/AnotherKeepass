@@ -133,7 +133,15 @@ export function toRawFields(title: string, note: string, fields: Field[]): { fie
   return { fields: out, kinds };
 }
 
-export interface Draft { title: string; folder: string; fields: Field[]; note: string; attachments: Attachment[]; expires: string | null }
+export interface Draft { title: string; folder: string; fields: Field[]; note: string; attachments: Attachment[]; expires: string | null; tags: string[] }
+
+/** Store TOTP like KeePassXC: always an otpauth:// URI, even when the user pasted a bare secret. */
+export function normalizeTotp(value: string, label: string): string {
+  const v = value.trim();
+  if (!v || v.toLowerCase().startsWith('otpauth://')) return v;
+  const secret = v.replace(/[\s-]/g, '').toUpperCase();
+  return `otpauth://totp/${encodeURIComponent(label || 'AnotherKeepass')}?secret=${secret}&period=30&digits=6&issuer=AnotherKeepass`;
+}
 
 const toBase64 = async (file: File) => {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -143,12 +151,15 @@ const toBase64 = async (file: File) => {
 };
 
 export async function draftToInput(item: Item, d: Draft, root: string): Promise<ItemInput> {
-  const { fields, kinds } = toRawFields(d.title, d.note, d.fields.filter(f => f.key || f.label || f.value));
+  const filled = d.fields
+    .filter(f => f.key || f.label || f.value)
+    .map(f => f.kind === 'totp' && (!f.protected || f.loaded || !f.raw) ? { ...f, value: normalizeTotp(f.value, d.title) } : f);
+  const { fields, kinds } = toRawFields(d.title, d.note, filled);
   return {
     id: item.id.startsWith('new:') ? null : item.id,
     folder: d.folder || root,
     fields,
-    tags: [...(item.tags ?? []), ...(item.pinned ? [PINNED_TAG] : [])],
+    tags: [...d.tags.filter(t => t !== PINNED_TAG), ...(item.pinned ? [PINNED_TAG] : [])],
     customData: { [CD_TYPE]: item.type, ...(Object.keys(kinds).length ? { [CD_KINDS]: JSON.stringify(kinds) } : {}) },
     expires: d.expires,
     keepAttachments: d.attachments.filter(a => !a.file).map(a => a.name),

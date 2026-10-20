@@ -48,8 +48,11 @@ export interface Backend {
   rename(id: string, name: string): Promise<VaultData>;
   save(vault: string, item: ItemInput): Promise<[string, VaultData]>;
   secrets(vault: string, id: string): Promise<Record<string, string>>;
-  totp(vault: string, id: string): Promise<Totp>;
-  copy(vault: string, id: string, field: string, clearAfter: number | null): Promise<void>;
+  totp(vault: string, id: string, field: string): Promise<Totp>;
+  copy(vault: string, id: string, field: string, asTotp: boolean, clearAfter: number | null): Promise<void>;
+  move(vault: string, id: string, folder: string | null): Promise<VaultData>;
+  moveToVault(src: string, id: string, dst: string, folder: string | null): Promise<[VaultData, VaultData]>;
+  duplicate(vault: string, id: string, suffix: string): Promise<[string, VaultData]>;
   copyText(text: string, clearAfter: number | null): Promise<void>;
   trash(vault: string, id: string): Promise<VaultData>;
   restore(vault: string, id: string): Promise<VaultData>;
@@ -72,8 +75,11 @@ const desktop: Backend = {
   rename: (id, name) => invoke('vault_rename', { id, name }),
   save: (vault, item) => invoke('entry_save', { vault, item }),
   secrets: (vault, id) => invoke('entry_secrets', { vault, id }),
-  totp: (vault, id) => invoke('entry_totp', { vault, id }),
-  copy: (vault, id, field, clearAfter) => invoke('entry_copy', { vault, id, field, clearAfter }),
+  totp: (vault, id, field) => invoke('entry_totp', { vault, id, field }),
+  copy: (vault, id, field, asTotp, clearAfter) => invoke('entry_copy', { vault, id, field, asTotp, clearAfter }),
+  move: (vault, id, folder) => invoke('entry_move', { vault, id, folder }),
+  moveToVault: (src, id, dst, folder) => invoke('entry_move_to_vault', { src, id, dst, folder }),
+  duplicate: (vault, id, suffix) => invoke('entry_duplicate', { vault, id, suffix }),
   copyText: (text, clearAfter) => invoke('clipboard_copy_text', { text, clearAfter }),
   trash: (vault, id) => invoke('entry_trash', { vault, id }),
   restore: (vault, id) => invoke('entry_restore', { vault, id }),
@@ -159,15 +165,15 @@ const demo: Backend = {
     return [id, out(v)];
   },
   async secrets(vault, id) { return { ...(get(vault).secrets.get(id) ?? {}) }; },
-  async totp(vault, id) {
-    const s = get(vault).secrets.get(id)?.otp ?? '';
+  async totp(vault, id, field) {
+    const s = get(vault).secrets.get(id)?.[field] ?? '';
     const t = Date.now();
     return { code: await totp(s, t), remaining: 30 - (Math.floor(t / 1000) % 30), period: 30 };
   },
-  async copy(vault, id, field, clearAfter) {
+  async copy(vault, id, field, asTotp, clearAfter) {
     const v = get(vault);
     const raw = item(v, id).fields.find(f => f.name === field);
-    const value = field === 'otp' ? (await demo.totp(vault, id)).code
+    const value = asTotp ? (await demo.totp(vault, id, field)).code
       : raw?.protected ? v.secrets.get(id)?.[field] ?? '' : raw?.value ?? '';
     await demo.copyText(value, clearAfter);
   },
@@ -188,6 +194,30 @@ const demo: Backend = {
     v.snapshots.set(id, [clone(cur), ...(v.snapshots.get(id) ?? [])].slice(0, 10));
     Object.assign(cur, { ...clone(old), modified: now(), history: (v.snapshots.get(id) ?? []).map(s => s.modified ?? '') });
     return out(v);
+  },
+  async move(vault, id, folder) {
+    const v = get(vault);
+    item(v, id).folder = folder ?? v.data.root;
+    return out(v);
+  },
+  async moveToVault(src, id, dst, folder) {
+    const s = get(src), d = get(dst);
+    const moved = { ...clone(item(s, id)), folder: folder ?? d.data.root, history: [] };
+    d.data.items.push(moved);
+    d.secrets.set(id, s.secrets.get(id) ?? {});
+    s.data.items = s.data.items.filter(i => i.id !== id);
+    return [out(s), out(d)];
+  },
+  async duplicate(vault, id, suffix) {
+    const v = get(vault);
+    const copy = clone(item(v, id));
+    copy.id = crypto.randomUUID();
+    copy.history = [];
+    copy.modified = now();
+    copy.fields = copy.fields.map(f => f.name === 'Title' ? { ...f, value: (f.value ?? '') + suffix } : f);
+    v.data.items.push(copy);
+    v.secrets.set(copy.id, { ...(v.secrets.get(id) ?? {}) });
+    return [copy.id, out(v)];
   },
   async attachmentSave() { /* demo: the UI downloads from memory instead */ },
   async folderCreate(vault, parent, name) {

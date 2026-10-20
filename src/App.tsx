@@ -12,6 +12,7 @@ import { settingsStrings } from './i18n-settings';
 import SettingsPage from './SettingsPage';
 import VaultDialog, { fileName, type Known } from './VaultDialog';
 import { Icon } from './Icon';
+import { TotpSetup } from './TotpSetup';
 
 type Theme = 'dark' | 'light';
 type Settings = Prefs;
@@ -129,6 +130,11 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const [vaultDialog, setVaultDialog] = useState<{ path?: string } | null>(null);
   const [keyDialog, setKeyDialog] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [tag, setTag] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const dragItem = useRef<Item | null>(null);
+  const [showKeys, setShowKeys] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [snack, setSnack] = useState('');
   const [snackError, setSnackError] = useState(false);
   const notify = (msg: string, error = false) => { setSnack(msg); setSnackError(error); };
@@ -220,7 +226,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   // stored fields are copied by the backend, so secrets never pass through the UI
   const copyField = async (item: Item, f: Field, what: string) => {
     if (item.id.startsWith('new:') || !f.raw) return copyText(f.value, what);
-    try { await backend.copy(item.vault, item.id, f.raw, clearAfter); copied(what); }
+    try { await backend.copy(item.vault, item.id, f.raw, f.kind === 'totp', clearAfter); copied(what); }
     catch (e) { notify(`${t.saveError}: ${String(e)}`, true); }
   };
 
@@ -229,9 +235,14 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
     let list = allItems.filter(i => vault === TRASH ? i.trashed
       : !i.trashed && (vault === ALL || i.vault === vault) && (!folder || i.folder === folder));
     if (q) list = list.filter(i => (i.title + ' ' + i.subtitle + ' ' + (i.tags ?? []).join(' ')).toLowerCase().includes(q));
+    if (tag) list = list.filter(i => i.tags?.includes(tag));
     return [...list].sort((a, b) =>
       tab === 'recent' ? b.modified.localeCompare(a.modified) : a.title.localeCompare(b.title));
-  }, [allItems, vault, folder, query, tab]);
+  }, [allItems, vault, folder, query, tab, tag]);
+  // tags present in the current vault/folder scope, for the filter chips
+  const scopeTags = useMemo(() => [...new Set(allItems
+    .filter(i => vault === TRASH ? i.trashed : !i.trashed && (vault === ALL || i.vault === vault) && (!folder || i.folder === folder))
+    .flatMap(i => i.tags ?? []))].sort((a, b) => a.localeCompare(b)), [allItems, vault, folder]);
 
   const openIds = Object.keys(open);
   const targetVault = open[vault] ? vault : openIds[0];
@@ -278,11 +289,76 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
     },
   });
   const togglePin = async (item: Item) => {
-    const draft: Draft = { title: item.title, folder: item.folder ?? '', note: item.note ?? '', fields: item.fields, attachments: item.attachments ?? [], expires: item.expires ?? null };
+    const draft: Draft = { title: item.title, folder: item.folder ?? '', note: item.note ?? '', fields: item.fields, attachments: item.attachments ?? [], expires: item.expires ?? null, tags: item.tags ?? [] };
     const input = await draftToInput({ ...item, pinned: !item.pinned }, draft, open[item.vault].root);
     const res = await run(backend.save(item.vault, input));
     if (res) onUpdate(res[1]);
   };
+  const moveItem = async (it: Item, vaultId: string, folderId: string | null) => {
+    if (it.id.startsWith('new:')) return;
+    const target = folderId ? folders.find(f => f.id === folderId)?.name : vaultList.find(v => v.id === vaultId)?.name;
+    if (it.vault === vaultId) {
+      if ((it.folder ?? null) === folderId && !it.trashed) return;
+      if (!apply(await run(backend.move(vaultId, it.id, folderId)))) return;
+    } else {
+      const res = await run(backend.moveToVault(it.vault, it.id, vaultId, folderId));
+      if (!res) return;
+      onUpdate(res[0]);
+      onUpdate(res[1]);
+    }
+    notify(`${t.movedTo} ${target}`);
+  };
+  // drop target props for vault and folder rows
+  const dropProps = (key: string, vaultId: string, folderId: string | null) => ({
+    onDragOver: (e: React.DragEvent) => { if (dragItem.current && open[vaultId]) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOver(key); } },
+    onDragLeave: () => setDragOver(k => k === key ? null : k),
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(null);
+      const it = dragItem.current;
+      dragItem.current = null;
+      if (it) moveItem(it, vaultId, folderId);
+    },
+  });
+  const duplicate = async (item: Item) => {
+    const res = await run(backend.duplicate(item.vault, item.id, ` (${t.copySuffix})`));
+    if (res) { onUpdate(res[1]); setSelected(res[0]); }
+  };
+
+  // keyboard shortcuts (KeePassXC-like); entry-level ones act on the selected entry
+  const shortcutRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  shortcutRef.current = (e: KeyboardEvent) => {
+    const typing = e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable=true]') !== null;
+    const mod = e.ctrlKey || e.metaKey;
+    const field = (raw: string) => current?.fields.find(f => f.raw === raw);
+    const totpField = current?.fields.find(f => f.kind === 'totp');
+    const run1 = (fn: () => void) => { e.preventDefault(); fn(); };
+    if (e.key === 'F1' || (mod && e.key === '/')) return run1(() => setShowKeys(s => !s));
+    if (e.key === 'Escape') { window.dispatchEvent(new Event('akp:cancel')); setShowKeys(false); return; }
+    if (mod && e.key.toLowerCase() === 'f') return run1(() => searchRef.current?.focus());
+    if (mod && e.key.toLowerCase() === 'l') return run1(onLock);
+    if (mod && e.key.toLowerCase() === 'n' && targetVault) return run1(() => createItem('login'));
+    if (!current || current.id.startsWith('new:')) return;
+    if (mod && e.key.toLowerCase() === 'e') return run1(() => window.dispatchEvent(new Event('akp:edit')));
+    if (typing) return; // below: keys that would clash with text editing
+    if (mod && e.key.toLowerCase() === 'b' && field('UserName')) return run1(() => copyField(current, field('UserName')!, t.username));
+    if (mod && e.key.toLowerCase() === 'c' && !window.getSelection()?.toString() && field('Password')) return run1(() => copyField(current, field('Password')!, t.password));
+    if (mod && e.key.toLowerCase() === 't' && totpField) return run1(() => copyField(current, totpField, t.totp));
+    if (mod && e.key.toLowerCase() === 'u' && field('URL')?.value) return run1(() => openExternal(field('URL')!.value));
+    if (mod && e.key.toLowerCase() === 'd') return run1(() => duplicate(current));
+    if (e.key === 'Delete' && !current.trashed) return run1(() => requestTrash(current));
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const list = [...pinned, ...rest];
+      const i = list.findIndex(x => x.id === current.id) + (e.key === 'ArrowDown' ? 1 : -1);
+      if (list[i]) run1(() => setSelected(list[i].id));
+    }
+  };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => shortcutRef.current(e);
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
+
   const historyRestore = async (item: Item, index: number) => apply(await run(backend.historyRestore(item.vault, item.id, index)));
   const download = async (item: Item, a: Attachment) => {
     if (backend.desktop && !a.file) {
@@ -367,10 +443,12 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
             <div key={v.id}>
               <NavItem active={vault === v.id && !folder} onClick={() => selectVault(v.id)} icon={v.locked ? 'lock' : v.icon} bg={v.color}
                 name={v.name} sub={v.locked ? `${t.locked} · ${v.file}` : v.file} locked={v.locked}
+                drop={v.locked ? undefined : dropProps('v:' + v.id, v.id, null)} over={dragOver === 'v:' + v.id}
                 count={v.locked ? undefined : items.filter(i => i.vault === v.id && !i.trashed).length} />
               {vault === v.id && folders.filter(f => f.vault === v.id).map(f => (
                 <div key={f.id} className={'folder-row' + (folder === f.id ? ' active' : '')} style={{ '--depth': depth(f) } as React.CSSProperties}>
-                  <button className={'nav-item folder' + (folder === f.id ? ' active' : '')} onClick={() => setFolder(f.id)} title={f.name}>
+                  <button className={'nav-item folder' + (folder === f.id ? ' active' : '') + (dragOver === 'f:' + f.id ? ' drop-over' : '')}
+                    onClick={() => setFolder(f.id)} title={f.name} {...dropProps('f:' + f.id, f.vault, f.id)}>
                     <Icon n={folder === f.id ? 'folder_open' : 'folder'} fill={folder === f.id} />
                     <span>{f.name}</span>
                     <span className="count">{items.filter(i => i.folder === f.id && !i.trashed).length}</span>
@@ -411,7 +489,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
       <section className="pane">
         <label className="searchbar">
           <Icon n="search" />
-          <input placeholder={t.search} value={query} onChange={e => setQuery(e.target.value)} aria-label={t.search} />
+          <input ref={searchRef} placeholder={t.search} value={query} onChange={e => setQuery(e.target.value)} aria-label={t.search} title={`${t.scSearch} (Ctrl+F)`} />
           {query && <button className="icon-btn" onClick={() => setQuery('')} aria-label={t.close}><Icon n="close" /></button>}
         </label>
         {activeVault && (
@@ -435,12 +513,21 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
             {tab === 'recent' && <Icon n="check" />}{t.recent}
           </button>
         </div>
+        {scopeTags.length > 0 && (
+          <div className="tag-filter" role="toolbar" aria-label={t.tags}>
+            {scopeTags.map(tg => (
+              <button key={tg} className={'chip' + (tag === tg ? ' on' : '')} onClick={() => setTag(x => x === tg ? null : tg)}>
+                <Icon n="sell" />{tg}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="items">
           {visible.length === 0 && <div className="empty"><Icon n="eco" />{t.noItems}</div>}
           {pinned.length > 0 && <span className="label group-label">{t.pinned}</span>}
-          {pinned.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} />)}
+          {pinned.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} dragRef={dragItem} onDragEnd={() => setDragOver(null)} />)}
           {rest.length > 0 && pinned.length > 0 && <span className="label group-label">{t.others}</span>}
-          {rest.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} />)}
+          {rest.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} dragRef={dragItem} onDragEnd={() => setDragOver(null)} />)}
         </div>
       </section>
 
@@ -453,7 +540,8 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
             onCopyField={(f, what) => copyField(current, f, what)}
             onCopyText={copyText}
             loadSecrets={() => backend.secrets(current.vault, current.id)}
-            getTotp={() => backend.totp(current.vault, current.id)}
+            getTotp={field => backend.totp(current.vault, current.id, field)}
+            onDuplicate={() => duplicate(current)}
             onSave={d => saveItem(current, d)}
             onDiscard={discardNew}
             onTrash={() => requestTrash(current)}
@@ -468,13 +556,15 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
       </main>
 
       {showGen && <Generator t={t} onClose={() => setShowGen(false)} onCopy={copyText} />}
+      {showKeys && <ShortcutsDialog t={t} onClose={() => setShowKeys(false)} />}
       {folderDialog && (
         <FolderDialog t={t} mode={folderDialog.mode} name={folderDialog.name ?? ''} vault={folderDialog.vault ?? targetVault}
+          folders={folders} parent={folderDialog.mode === 'create' && folder && folders.some(f => f.id === folder && f.vault === (folderDialog.vault ?? targetVault)) ? folder : ''}
           vaults={vaultList.filter(v => !v.locked)} onClose={() => setFolderDialog(null)}
-          onSubmit={async (vid, name) => {
+          onSubmit={async (vid, name, parent) => {
             const res = folderDialog.mode === 'rename'
               ? await run(backend.folderRename(vid, folderDialog.id!, name))
-              : await run(backend.folderCreate(vid, null, name));
+              : await run(backend.folderCreate(vid, parent || null, name));
             if (apply(res)) { setFolderDialog(null); if (folderDialog.mode === 'create') { setVault(vid); setFolder(null); } }
           }} />
       )}
@@ -510,16 +600,18 @@ function rawToItemCached(r: VaultData['items'][number], v: VaultData): Item {
   return i;
 }
 
-function FolderDialog({ t, mode, name: initialName, vault: initialVault, vaults, onClose, onSubmit }: {
-  t: Strings; mode: 'create' | 'rename'; name: string; vault: string; vaults: VaultInfo[];
-  onClose: () => void; onSubmit: (vault: string, name: string) => void;
+function FolderDialog({ t, mode, name: initialName, vault: initialVault, vaults, folders, parent: initialParent, onClose, onSubmit }: {
+  t: Strings; mode: 'create' | 'rename'; name: string; vault: string; vaults: VaultInfo[]; folders: Folder[]; parent: string;
+  onClose: () => void; onSubmit: (vault: string, name: string, parent: string) => void;
 }) {
   const [name, setName] = useState(initialName);
   const [vault, setVault] = useState(initialVault);
+  const [parent, setParent] = useState(initialParent);
+  const options = folders.filter(f => f.vault === vault);
   return (
     <div className="scrim" onClick={onClose}>
       <form className="dialog" role="dialog" aria-label={mode === 'create' ? t.newFolder : t.renameFolder} onClick={e => e.stopPropagation()}
-        onSubmit={e => { e.preventDefault(); if (name.trim()) onSubmit(vault, name.trim()); }}>
+        onSubmit={e => { e.preventDefault(); if (name.trim()) onSubmit(vault, name.trim(), parent); }}>
         <h3><Icon n={mode === 'create' ? 'create_new_folder' : 'drive_file_rename_outline'} />{mode === 'create' ? t.newFolder : t.renameFolder}</h3>
         <label className="textfield">
           <Icon n="folder" />
@@ -530,18 +622,78 @@ function FolderDialog({ t, mode, name: initialName, vault: initialVault, vaults,
             <span className="label">{t.vault}</span>
             <div className="choices">
               {vaults.map(v => (
-                <button type="button" key={v.id} className={'choice' + (vault === v.id ? ' on' : '')} onClick={() => setVault(v.id)}>
+                <button type="button" key={v.id} className={'choice' + (vault === v.id ? ' on' : '')} onClick={() => { setVault(v.id); setParent(''); }}>
                   {v.name}{vault === v.id && <Icon n="check_circle" fill />}
                 </button>
               ))}
             </div>
           </>
         )}
+        {mode === 'create' && options.length > 0 && (
+          <label className="opt">{t.parentFolder}
+            <select className="set-select" value={parent} onChange={e => setParent(e.target.value)}>
+              <option value="">{vaults.find(v => v.id === vault)?.name ?? '—'}</option>
+              {options.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </label>
+        )}
         <div className="row">
           <button type="button" className="btn text" onClick={onClose}>{t.cancel}</button>
           <button type="submit" className="btn filled" disabled={!name.trim()}><Icon n="check" />{mode === 'create' ? t.create : t.rename}</button>
         </div>
       </form>
+    </div>
+  );
+}
+
+const SHORTCUTS: [string, keyof Strings][] = [
+  ['Ctrl+F', 'scSearch'], ['Ctrl+N', 'scNew'], ['Ctrl+E', 'scEdit'], ['Ctrl+B', 'scCopyUser'], ['Ctrl+C', 'scCopyPw'],
+  ['Ctrl+T', 'scCopyTotp'], ['Ctrl+U', 'scOpenUrl'], ['Ctrl+D', 'scDuplicate'], ['Entf / Del', 'scTrash'],
+  ['↑ ↓', 'scNavigate'], ['Esc', 'scCancel'], ['Ctrl+L', 'scLock'], ['F1', 'scHelp'],
+];
+
+function ShortcutsDialog({ t, onClose }: { t: Strings; onClose: () => void }) {
+  return createPortal(
+    <div className="scrim" onClick={onClose}>
+      <div className="dialog" role="dialog" aria-label={t.shortcuts} onClick={e => e.stopPropagation()}>
+        <h3><Icon n="keyboard" />{t.shortcuts}</h3>
+        <dl className="shortcut-list">
+          {SHORTCUTS.map(([keys, label]) => (
+            <div key={keys}><dt><kbd>{keys}</kbd></dt><dd>{t[label]}</dd></div>
+          ))}
+        </dl>
+        <small className="label">{t.dragHint}</small>
+        <div className="row"><button className="btn filled" onClick={onClose}>{t.close}</button></div>
+      </div>
+    </div>, document.body);
+}
+
+/** Free tags; Enter or comma adds, Backspace on empty input removes the last one. */
+function TagEditor({ t, tags, onChange }: { t: Strings; tags: string[]; onChange: (tags: string[]) => void }) {
+  const [text, setText] = useState('');
+  const add = () => {
+    const v = text.trim().replace(/[,;]/g, '');
+    if (v && !tags.includes(v) && v !== 'pinned') onChange([...tags, v]);
+    setText('');
+  };
+  return (
+    <div className="field tag-editor">
+      <Icon n="sell" />
+      <div>
+        <span className="label">{t.tags}</span>
+        <div className="tag-input">
+          {tags.map(tg => (
+            <span key={tg} className="badge tag">{tg}
+              <button type="button" onClick={() => onChange(tags.filter(x => x !== tg))} aria-label={`${t.remove}: ${tg}`}><Icon n="close" /></button>
+            </span>
+          ))}
+          <input value={text} placeholder={t.addTag} aria-label={t.addTag} onChange={e => setText(e.target.value)} onBlur={add}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(); }
+              else if (e.key === 'Backspace' && !text && tags.length) onChange(tags.slice(0, -1));
+            }} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -571,9 +723,13 @@ function KeyDialog({ t, onClose, onSubmit }: { t: Strings; onClose: () => void; 
   );
 }
 
-function NavItem(p: { active: boolean; onClick: () => void; icon: string; bg: string; name: string; sub?: string; count?: number; locked?: boolean }) {
+function NavItem(p: {
+  active: boolean; onClick: () => void; icon: string; bg: string; name: string; sub?: string; count?: number; locked?: boolean;
+  drop?: Pick<React.HTMLAttributes<HTMLButtonElement>, 'onDragOver' | 'onDragLeave' | 'onDrop'>; over?: boolean;
+}) {
   return (
-    <button className={'nav-item' + (p.active ? ' active' : '') + (p.locked ? ' locked' : '')} onClick={p.onClick} title={p.sub ? `${p.name} · ${p.sub}` : p.name}>
+    <button className={'nav-item' + (p.active ? ' active' : '') + (p.locked ? ' locked' : '') + (p.over ? ' drop-over' : '')}
+      onClick={p.onClick} title={p.sub ? `${p.name} · ${p.sub}` : p.name} {...p.drop}>
       <span className="vi" style={{ background: `var(${p.bg})`, color: p.bg.startsWith('--v-') ? 'var(--v-on)' : 'inherit' }}>
         <Icon n={p.icon} fill={p.active} />
       </span>
@@ -585,9 +741,15 @@ function NavItem(p: { active: boolean; onClick: () => void; icon: string; bg: st
 
 const isExpired = (i: Item) => !!i.expires && i.expires < today();
 
-function Row({ t, item, active, onClick }: { t: Strings; item: Item; active: boolean; onClick: () => void }) {
+function Row({ t, item, active, onClick, dragRef, onDragEnd }: {
+  t: Strings; item: Item; active: boolean; onClick: () => void;
+  dragRef: React.MutableRefObject<Item | null>; onDragEnd: () => void;
+}) {
+  const saved = !item.id.startsWith('new:');
   return (
-    <button className={'item' + (active ? ' active' : '')} onClick={onClick}>
+    <button className={'item' + (active ? ' active' : '')} onClick={onClick} draggable={saved} title={saved ? t.dragHint : undefined}
+      onDragStart={e => { dragRef.current = item; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', item.title); }}
+      onDragEnd={() => { dragRef.current = null; onDragEnd(); }}>
       <span className={'avatar ' + item.type}><Icon n={TYPE_ICON[item.type]} /></span>
       <span><b>{item.title || t.untitled}</b><span>{item.subtitle || t[item.type]}</span></span>
       {isExpired(item) ? <span className="pin expired" title={t.expired}><Icon n="event_busy" /></span>
@@ -700,8 +862,8 @@ function FieldRow({ t, f, prefs, onCopy, reveal, totp, onEdit }: {
   );
 }
 
-function EditRow({ t, f, prefs, onChange, onRemove, onCopy }: {
-  t: Strings; f: Field; prefs: Prefs; onChange: (f: Field) => void; onRemove?: () => void;
+function EditRow({ t, f, prefs, title, onChange, onRemove, onCopy }: {
+  t: Strings; f: Field; prefs: Prefs; title: string; onChange: (f: Field) => void; onRemove?: () => void;
   onCopy: (text: string, what: string) => void;
 }) {
   const [shown, setShown] = useState(!prefs.hideInEdit);
@@ -720,6 +882,11 @@ function EditRow({ t, f, prefs, onChange, onRemove, onCopy }: {
           // textarea keeps newlines; <input> would strip them on save
           <textarea className="val edit" rows={4} value={f.value} aria-label={fieldName(t, f)}
             onChange={e => onChange({ ...f, value: e.target.value })} />
+        ) : f.kind === 'totp' ? (
+          <TotpSetup t={t} value={f.value} title={title} onChange={value => onChange({ ...f, value })}>
+            <input className="val edit mono" type={type} value={f.value} aria-label={fieldName(t, f)} placeholder="otpauth://… / JBSWY3DP…"
+              autoComplete="off" spellCheck={false} onChange={e => onChange({ ...f, value: e.target.value })} />
+          </TotpSetup>
         ) : (
           <input className={'val edit' + (isSecret(f) ? ' mono' : '')} type={type} value={f.value} aria-label={fieldName(t, f)}
             autoComplete="off" spellCheck={false} onChange={e => onChange({ ...f, value: e.target.value })} />
@@ -747,18 +914,18 @@ function EditRow({ t, f, prefs, onChange, onRemove, onCopy }: {
   );
 }
 
-function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyText, loadSecrets, getTotp, onSave, onDiscard,
+function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyText, loadSecrets, getTotp, onDuplicate, onSave, onDiscard,
   onTrash, onRestore, onDeleteForever, onTogglePin, onHistoryRestore, onDownload }: {
   t: Strings; item: Item; vault: VaultInfo; folders: Folder[]; isNew: boolean; prefs: Prefs;
   onCopyField: (f: Field, what: string) => void; onCopyText: (text: string, what: string) => void;
-  loadSecrets: () => Promise<Record<string, string>>; getTotp: () => Promise<Totp>;
+  loadSecrets: () => Promise<Record<string, string>>; getTotp: (field: string) => Promise<Totp>; onDuplicate: () => void;
   onSave: (d: Draft) => Promise<boolean>; onDiscard: () => void;
   onTrash: () => void; onRestore: () => void; onDeleteForever: () => void; onTogglePin: () => void;
   onHistoryRestore: (index: number) => void; onDownload: (a: Attachment) => void;
 }) {
   const [moreMenu, setMoreMenu] = useState(false);
   const fromItem = (): Draft => ({
-    title: item.title, folder: item.folder ?? '', note: item.note ?? '', expires: item.expires ?? null,
+    title: item.title, folder: item.folder ?? '', note: item.note ?? '', expires: item.expires ?? null, tags: item.tags ?? [],
     fields: item.fields.map(f => ({ ...f })), attachments: item.attachments ?? [],
   });
   const [draft, setDraft] = useState<Draft | null>(() => isNew ? fromItem() : null); // non-null = edit mode
@@ -789,6 +956,15 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
     if (ok && !isNew) { secrets.current = null; setDraft(null); }
   };
   const cancel = () => { setMenu(false); if (isNew) onDiscard(); else setDraft(null); };
+  const keys = useRef({ startEdit: () => {}, cancel: () => {}, editing: false, trashed: false });
+  keys.current = { startEdit, cancel, editing: !!draft, trashed: !!item.trashed };
+  useEffect(() => {
+    const edit = () => { if (!keys.current.editing && !keys.current.trashed) keys.current.startEdit(); };
+    const esc = () => { if (keys.current.editing) keys.current.cancel(); };
+    window.addEventListener('akp:edit', edit);
+    window.addEventListener('akp:cancel', esc);
+    return () => { window.removeEventListener('akp:edit', edit); window.removeEventListener('akp:cancel', esc); };
+  }, []);
   const patch = (p: Partial<Draft>) => setDraft(x => ({ ...x!, ...p }));
   const setField = (idx: number, f: Field) => patch({ fields: d.fields.map((x, i) => i === idx ? f : x) });
   const addField = (kind: FieldKind, name: keyof Strings) => {
@@ -825,6 +1001,7 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
               ) : folderName && <span className="badge"><Icon n="folder" />{folderName}</span>}
               <span className="badge">{t[item.type]}</span>
               {item.pinned && <span className="badge"><Icon n="push_pin" />{t.pinned}</span>}
+              {!draft && item.tags?.map(tg => <span key={tg} className="badge tag"><Icon n="sell" />{tg}</span>)}
               {!draft && item.expires && (
                 <span className={'badge' + (expired ? ' danger' : '')}><Icon n={expired ? 'event_busy' : 'event'} />
                   {expired ? t.expired : `${t.expiresOn} ${fmtDate(item.expires)}`}</span>
@@ -857,6 +1034,11 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
                           <Icon n="push_pin" />{item.pinned ? t.unpinItem : t.pinItem}
                         </button>
                       )}
+                      {!item.trashed && (
+                        <button role="menuitem" onClick={() => { setMoreMenu(false); onDuplicate(); }}>
+                          <Icon n="content_copy" />{t.duplicate}<kbd>Ctrl+D</kbd>
+                        </button>
+                      )}
                       {item.trashed ? (
                         <button role="menuitem" onClick={() => { setMoreMenu(false); onDeleteForever(); }}>
                           <Icon n="delete_forever" />{t.deleteForever}
@@ -879,14 +1061,14 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
         <div className={'fields' + (draft ? ' editing' : '')}>
           {draft
             ? d.fields.map((f, idx) => (
-              <EditRow key={idx} t={t} f={f} prefs={prefs} onCopy={onCopyText} onChange={nf => setField(idx, nf)}
+              <EditRow key={idx} t={t} f={f} prefs={prefs} title={d.title} onCopy={onCopyText} onChange={nf => setField(idx, nf)}
                 onRemove={f.key ? undefined : () => patch({ fields: d.fields.filter((_, i) => i !== idx) })} />
             ))
             : viewFields.map(f => (
               <FieldRow key={f.raw ?? fieldName(t, f)} t={t} f={f} prefs={prefs} onEdit={startEdit}
                 onCopy={() => onCopyField(f, fieldName(t, f))}
                 reveal={f.protected && f.raw && !isNew ? revealer(f.raw) : undefined}
-                totp={f.kind === 'totp' && !isNew ? getTotp : undefined} />
+                totp={f.kind === 'totp' && !isNew && f.raw ? () => getTotp(f.raw!) : undefined} />
             ))}
         </div>
       )}
@@ -908,6 +1090,7 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
 
       {draft ? (
         <div className="fields editing section">
+          <TagEditor t={t} tags={d.tags} onChange={tags => patch({ tags })} />
           <div className="field">
             <Icon n="sticky_note_2" />
             <div>
