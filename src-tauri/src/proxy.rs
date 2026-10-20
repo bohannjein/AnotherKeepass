@@ -34,6 +34,9 @@ pub fn run() {
         };
         tokio::select! { _ = to_app => {}, _ = to_browser => {} }
     });
+    // app quit or browser closed: exit right away. Dropping the runtime would wait forever
+    // for the blocking stdin read, leaving the proxy (and a lock on the exe) behind.
+    std::process::exit(0);
 }
 
 #[cfg(windows)]
