@@ -67,6 +67,8 @@ export interface Backend {
   /** desktop options mirrored to Rust; returns problems (e.g. invalid shortcut) */
   desktopApply(prefs: Record<string, unknown>): Promise<string[]>;
   windowMinimize(): Promise<void>;
+  /** minimizes only if the browser/Auto-Type asked for the unlock */
+  windowAfterUnlock(): Promise<void>;
   autotypePerform(vault: string, id: string, sequence: string | null): Promise<void>;
   autotypeEntry(vault: string, id: string): Promise<void>;
   /** desktop events from Rust (lock, auto-type); no-op in the browser demo */
@@ -108,6 +110,7 @@ const desktop: Backend = {
   readText: () => invoke('clipboard_read_text'),
   desktopApply: prefs => invoke('desktop_apply', { prefs }),
   windowMinimize: () => invoke('window_minimize'),
+  windowAfterUnlock: () => invoke('window_after_unlock'),
   autotypePerform: (vault, id, sequence) => invoke('autotype_perform', { vault, id, sequence }),
   autotypeEntry: (vault, id) => invoke('autotype_entry', { vault, id }),
   browserAnswer: (id, answer) => invoke('browser_answer', { id, answer }),
@@ -219,6 +222,7 @@ const demo: Backend = {
   readText: () => navigator.clipboard.readText(),
   desktopApply: async () => [],
   windowMinimize: async () => {},
+  windowAfterUnlock: async () => {},
   autotypePerform: async () => {},
   autotypeEntry: async () => {},
   on: () => () => {},

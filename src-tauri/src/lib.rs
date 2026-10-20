@@ -21,7 +21,7 @@ pub fn run() {
   builder
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_dialog::init())
-    .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+    .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![desktop::AUTOSTART_ARG])))
     .plugin(tauri_plugin_global_shortcut::Builder::new().build())
     .manage(vault::Vaults::default())
     .manage(desktop::Desktop { prefs: std::sync::Mutex::new(prefs.clone()) })
@@ -55,6 +55,7 @@ pub fn run() {
       clipboard::clipboard_read_text,
       desktop::desktop_apply,
       desktop::window_minimize,
+      desktop::window_after_unlock,
       desktop::ui_log,
       autotype::autotype_perform,
       autotype::autotype_entry,

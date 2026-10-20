@@ -112,7 +112,7 @@ impl Host for AppHost {
         desktop::lock_all(&self.app);
     }
     fn show_window(&self) {
-        desktop::show_main(&self.app);
+        desktop::show_for_unlock(&self.app);
     }
     fn autotype_search(&self, search: &str) {
         crate::autotype::request(&self.app, search);

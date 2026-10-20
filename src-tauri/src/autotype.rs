@@ -240,7 +240,7 @@ fn trigger<R: Runtime>(app: &AppHandle<R>, hwnd: Option<isize>, title: &str) {
         *t = hwnd;
     }
     if app.state::<Vaults>().0.lock().map(|m| m.is_empty()).unwrap_or(true) {
-        desktop::show_main(app); // locked: user unlocks first, then presses the shortcut again
+        desktop::show_for_unlock(app); // locked: user unlocks first, then presses the shortcut again
         return;
     }
     let found = candidates(app, title);

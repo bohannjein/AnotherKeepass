@@ -153,7 +153,7 @@ export default function App() {
     <ContextMenuProvider t={t}>
       {!Object.keys(open).length
         ? <VaultDialog t={t} known={known} missing={missing} onMissing={p => forget([p])}
-            onOpened={(d, meta) => { opened(d, meta); if (settings.minimizeAfterUnlock) backend.windowMinimize(); }} />
+            onOpened={(d, meta) => { opened(d, meta); if (settings.minimizeAfterUnlock) backend.windowAfterUnlock(); }} />
         : <Vaults t={t} settings={settings} onSettings={update} open={open} known={known}
           onOpened={opened} onUpdate={onUpdate} onClosed={onClosed} onLock={lock} desktopProblems={desktopProblems} />}
     </ContextMenuProvider>

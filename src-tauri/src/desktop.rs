@@ -2,7 +2,7 @@
 //! session events. Options mirror the settings page; the UI pushes them via `desktop_apply`
 //! and they are kept in `<config>/desktop.json` so they apply before the UI has loaded.
 
-use std::{fs, path::PathBuf, sync::Mutex};
+use std::{fs, path::PathBuf, sync::{Mutex, atomic::{AtomicBool, Ordering}}};
 
 use serde::{Deserialize, Serialize};
 use tauri::{
@@ -15,6 +15,8 @@ use tauri_plugin_autostart::ManagerExt as _;
 use crate::vault::Vaults;
 
 pub const IDENTIFIER: &str = "app.anotherkeepass.desktop";
+/// Passed by the autostart entry so we can tell a login start from a manual one.
+pub const AUTOSTART_ARG: &str = "--autostart";
 const TRAY_ID: &str = "main";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -157,6 +159,22 @@ pub fn main_window<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
     app.get_webview_window("main")
 }
 
+/// Set when the browser extension or Auto-Type opened the window to get a vault unlocked;
+/// only then "minimize after unlock" applies (not when the user opened the window).
+static UNLOCK_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+pub fn show_for_unlock<R: Runtime>(app: &AppHandle<R>) {
+    UNLOCK_REQUESTED.store(true, Ordering::Relaxed);
+    show_main(app);
+}
+
+#[tauri::command]
+pub fn window_after_unlock(app: AppHandle) {
+    if UNLOCK_REQUESTED.swap(false, Ordering::Relaxed) {
+        window_minimize(app);
+    }
+}
+
 pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
     if let Some(w) = main_window(app) {
         let _ = w.unminimize();
@@ -239,7 +257,9 @@ pub fn on_window_event<R: Runtime>(window: &tauri::Window<R>, event: &WindowEven
 /// Window starts hidden (tauri.conf.json) so "start minimized" doesn't flash.
 pub fn initial_show<R: Runtime>(app: &AppHandle<R>, p: &DesktopPrefs) {
     let Some(w) = main_window(app) else { return };
-    if !p.start_minimized {
+    // "start minimized" is for the login autostart only; a manual start always shows the window
+    let autostarted = std::env::args().any(|a| a == AUTOSTART_ARG);
+    if !(p.start_minimized && autostarted) {
         show_main(app);
     } else if !p.tray_icon {
         let _ = w.show();
@@ -273,7 +293,8 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
         }
     }
     let autolaunch = app.autolaunch();
-    if autolaunch.is_enabled().unwrap_or(false) != prefs.autostart {
+    // enable() also rewrites entries from older versions that lack AUTOSTART_ARG
+    if prefs.autostart || autolaunch.is_enabled().unwrap_or(false) {
         let r = if prefs.autostart { autolaunch.enable() } else { autolaunch.disable() };
         if let Err(e) = r {
             problems.push(format!("autostart:{e}"));
