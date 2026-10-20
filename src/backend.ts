@@ -54,6 +54,7 @@ export interface Backend {
   moveToVault(src: string, id: string, dst: string, folder: string | null): Promise<[VaultData, VaultData]>;
   duplicate(vault: string, id: string, suffix: string): Promise<[string, VaultData]>;
   copyText(text: string, clearAfter: number | null): Promise<void>;
+  readText(): Promise<string>;
   trash(vault: string, id: string): Promise<VaultData>;
   restore(vault: string, id: string): Promise<VaultData>;
   remove(vault: string, id: string): Promise<VaultData>;
@@ -81,6 +82,7 @@ const desktop: Backend = {
   moveToVault: (src, id, dst, folder) => invoke('entry_move_to_vault', { src, id, dst, folder }),
   duplicate: (vault, id, suffix) => invoke('entry_duplicate', { vault, id, suffix }),
   copyText: (text, clearAfter) => invoke('clipboard_copy_text', { text, clearAfter }),
+  readText: () => invoke('clipboard_read_text'),
   trash: (vault, id) => invoke('entry_trash', { vault, id }),
   restore: (vault, id) => invoke('entry_restore', { vault, id }),
   remove: (vault, id) => invoke('entry_delete', { vault, id }),
@@ -182,6 +184,7 @@ const demo: Backend = {
     clearTimeout(clipTimer);
     if (clearAfter) clipTimer = setTimeout(() => navigator.clipboard.writeText('').catch(() => {}), clearAfter * 1000);
   },
+  readText: () => navigator.clipboard.readText(),
   async trash(vault, id) { const v = get(vault); item(v, id).trashed = true; return out(v); },
   async restore(vault, id) { const v = get(vault); item(v, id).trashed = false; return out(v); },
   async remove(vault, id) { const v = get(vault); v.data.items = v.data.items.filter(i => i.id !== id); return out(v); },

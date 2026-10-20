@@ -13,6 +13,7 @@ import SettingsPage from './SettingsPage';
 import VaultDialog, { fileName, type Known } from './VaultDialog';
 import { Icon } from './Icon';
 import { TotpSetup } from './TotpSetup';
+import { ContextMenuProvider, useContextMenu, type MenuItem } from './ContextMenu';
 
 type Theme = 'dark' | 'light';
 type Settings = Prefs;
@@ -106,9 +107,14 @@ export default function App() {
   }, []);
 
   if (!settings) return <Setup onDone={s => update({ ...DEFAULTS, ...s })} />;
-  if (!Object.keys(open).length) return <VaultDialog t={t} known={known} onOpened={opened} />;
-  return <Vaults t={t} settings={settings} onSettings={update} open={open} known={known}
-    onOpened={opened} onUpdate={onUpdate} onClosed={onClosed} onLock={lock} />;
+  return (
+    <ContextMenuProvider t={t}>
+      {!Object.keys(open).length
+        ? <VaultDialog t={t} known={known} onOpened={opened} />
+        : <Vaults t={t} settings={settings} onSettings={update} open={open} known={known}
+          onOpened={opened} onUpdate={onUpdate} onClosed={onClosed} onLock={lock} />}
+    </ContextMenuProvider>
+  );
 }
 
 type Confirm = { title: string; body: string; label: string; icon: string; action: () => void };
@@ -126,7 +132,8 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const [pending, setPending] = useState<Item | null>(null); // new entry, not saved yet
   const [newMenu, setNewMenu] = useState(false);
   const [showGen, setShowGen] = useState(false);
-  const [folderDialog, setFolderDialog] = useState<{ mode: 'create' | 'rename'; vault?: string; id?: string; name?: string } | null>(null);
+  const [folderDialog, setFolderDialog] = useState<{ mode: 'create' | 'rename'; vault?: string; id?: string; name?: string; parent?: string } | null>(null);
+  const openMenu = useContextMenu();
   const [vaultDialog, setVaultDialog] = useState<{ path?: string } | null>(null);
   const [keyDialog, setKeyDialog] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
@@ -333,6 +340,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
     const field = (raw: string) => current?.fields.find(f => f.raw === raw);
     const totpField = current?.fields.find(f => f.kind === 'totp');
     const run1 = (fn: () => void) => { e.preventDefault(); fn(); };
+    if (e.key === 'F5' || (mod && ['r', 'p', 'j', 'h', 'g', 's', 'o'].includes(e.key.toLowerCase()))) { e.preventDefault(); return; }
     if (e.key === 'F1' || (mod && e.key === '/')) return run1(() => setShowKeys(s => !s));
     if (e.key === 'Escape') { window.dispatchEvent(new Event('akp:cancel')); setShowKeys(false); return; }
     if (mod && e.key.toLowerCase() === 'f') return run1(() => searchRef.current?.focus());
@@ -358,6 +366,43 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, []);
+
+  const itemMenu = (it: Item): MenuItem[] => {
+    const f = (raw: string) => it.fields.find(x => x.raw === raw && (x.value || x.protected));
+    const totpF = it.fields.find(x => x.kind === 'totp');
+    const edit = () => { setSelected(it.id); setTimeout(() => window.dispatchEvent(new Event('akp:edit')), 50); };
+    if (it.trashed) return [
+      { icon: 'restore_from_trash', label: t.restore, action: () => restoreItem(it) },
+      { icon: 'delete_forever', label: t.deleteForever, danger: true, action: () => deleteForever(it) },
+    ];
+    return [
+      ...(f('UserName') ? [{ icon: 'person', label: t.scCopyUser, kbd: 'Ctrl+B', action: () => copyField(it, f('UserName')!, t.username) }] : []),
+      ...(f('Password') ? [{ icon: 'key', label: t.scCopyPw, kbd: 'Ctrl+C', action: () => copyField(it, f('Password')!, t.password) }] : []),
+      ...(totpF ? [{ icon: 'timer', label: t.scCopyTotp, kbd: 'Ctrl+T', action: () => copyField(it, totpF, t.totp) }] : []),
+      ...(f('URL')?.value ? [{ icon: 'open_in_new', label: t.scOpenUrl, kbd: 'Ctrl+U', action: () => openExternal(f('URL')!.value) }] : []),
+      'sep',
+      { icon: 'edit', label: t.edit, kbd: 'Ctrl+E', action: edit },
+      { icon: 'content_copy', label: t.duplicate, kbd: 'Ctrl+D', action: () => duplicate(it) },
+      { icon: 'push_pin', label: it.pinned ? t.unpinItem : t.pinItem, action: () => togglePin(it) },
+      'sep',
+      { icon: 'delete', label: ts.ui.moveToTrash, kbd: 'Entf', danger: true, action: () => requestTrash(it) },
+    ];
+  };
+  const folderMenu = (f: Folder): MenuItem[] => [
+    { icon: 'create_new_folder', label: t.newSubfolder, action: () => setFolderDialog({ mode: 'create', vault: f.vault, parent: f.id }) },
+    { icon: 'drive_file_rename_outline', label: t.renameFolder, action: () => setFolderDialog({ mode: 'rename', vault: f.vault, id: f.id, name: f.name }) },
+    'sep',
+    { icon: 'delete', label: t.deleteFolder, danger: true, action: () => setConfirm({ title: t.deleteFolder, body: ts.ui.trashBody, label: ts.ui.moveToTrash, icon: 'delete',
+      action: async () => { if (apply(await run(backend.folderTrash(f.vault, f.id)))) setFolder(null); } }) },
+  ];
+  const vaultMenu = (v: VaultInfo): MenuItem[] => v.locked
+    ? [{ icon: 'lock_open', label: t.unlockVault, action: () => setVaultDialog({ path: v.id }) }]
+    : [
+      { icon: 'create_new_folder', label: t.newFolder, action: () => setFolderDialog({ mode: 'create', vault: v.id, parent: '' }) },
+      { icon: 'key', label: t.changeMasterKey, action: () => setKeyDialog(v.id) },
+      'sep',
+      { icon: 'lock', label: t.closeVault, action: () => closeVault(v.id) },
+    ];
 
   const historyRestore = async (item: Item, index: number) => apply(await run(backend.historyRestore(item.vault, item.id, index)));
   const download = async (item: Item, a: Attachment) => {
@@ -444,11 +489,13 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
               <NavItem active={vault === v.id && !folder} onClick={() => selectVault(v.id)} icon={v.locked ? 'lock' : v.icon} bg={v.color}
                 name={v.name} sub={v.locked ? `${t.locked} · ${v.file}` : v.file} locked={v.locked}
                 drop={v.locked ? undefined : dropProps('v:' + v.id, v.id, null)} over={dragOver === 'v:' + v.id}
+                onContextMenu={e => openMenu(e, vaultMenu(v))}
                 count={v.locked ? undefined : items.filter(i => i.vault === v.id && !i.trashed).length} />
               {vault === v.id && folders.filter(f => f.vault === v.id).map(f => (
                 <div key={f.id} className={'folder-row' + (folder === f.id ? ' active' : '')} style={{ '--depth': depth(f) } as React.CSSProperties}>
                   <button className={'nav-item folder' + (folder === f.id ? ' active' : '') + (dragOver === 'f:' + f.id ? ' drop-over' : '')}
-                    onClick={() => setFolder(f.id)} title={f.name} {...dropProps('f:' + f.id, f.vault, f.id)}>
+                    onClick={() => setFolder(f.id)} title={f.name} {...dropProps('f:' + f.id, f.vault, f.id)}
+                    onContextMenu={e => openMenu(e, folderMenu(f))}>
                     <Icon n={folder === f.id ? 'folder_open' : 'folder'} fill={folder === f.id} />
                     <span>{f.name}</span>
                     <span className="count">{items.filter(i => i.folder === f.id && !i.trashed).length}</span>
@@ -525,9 +572,11 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
         <div className="items">
           {visible.length === 0 && <div className="empty"><Icon n="eco" />{t.noItems}</div>}
           {pinned.length > 0 && <span className="label group-label">{t.pinned}</span>}
-          {pinned.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} dragRef={dragItem} onDragEnd={() => setDragOver(null)} />)}
+          {pinned.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} dragRef={dragItem} onDragEnd={() => setDragOver(null)}
+            onContextMenu={e => { if (!i.id.startsWith('new:')) { setSelected(i.id); openMenu(e, itemMenu(i)); } }} />)}
           {rest.length > 0 && pinned.length > 0 && <span className="label group-label">{t.others}</span>}
-          {rest.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} dragRef={dragItem} onDragEnd={() => setDragOver(null)} />)}
+          {rest.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} dragRef={dragItem} onDragEnd={() => setDragOver(null)}
+            onContextMenu={e => { if (!i.id.startsWith('new:')) { setSelected(i.id); openMenu(e, itemMenu(i)); } }} />)}
         </div>
       </section>
 
@@ -559,7 +608,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
       {showKeys && <ShortcutsDialog t={t} onClose={() => setShowKeys(false)} />}
       {folderDialog && (
         <FolderDialog t={t} mode={folderDialog.mode} name={folderDialog.name ?? ''} vault={folderDialog.vault ?? targetVault}
-          folders={folders} parent={folderDialog.mode === 'create' && folder && folders.some(f => f.id === folder && f.vault === (folderDialog.vault ?? targetVault)) ? folder : ''}
+          folders={folders} parent={folderDialog.parent ?? (folderDialog.mode === 'create' && folder && folders.some(f => f.id === folder && f.vault === (folderDialog.vault ?? targetVault)) ? folder : '')}
           vaults={vaultList.filter(v => !v.locked)} onClose={() => setFolderDialog(null)}
           onSubmit={async (vid, name, parent) => {
             const res = folderDialog.mode === 'rename'
@@ -726,10 +775,11 @@ function KeyDialog({ t, onClose, onSubmit }: { t: Strings; onClose: () => void; 
 function NavItem(p: {
   active: boolean; onClick: () => void; icon: string; bg: string; name: string; sub?: string; count?: number; locked?: boolean;
   drop?: Pick<React.HTMLAttributes<HTMLButtonElement>, 'onDragOver' | 'onDragLeave' | 'onDrop'>; over?: boolean;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   return (
     <button className={'nav-item' + (p.active ? ' active' : '') + (p.locked ? ' locked' : '') + (p.over ? ' drop-over' : '')}
-      onClick={p.onClick} title={p.sub ? `${p.name} · ${p.sub}` : p.name} {...p.drop}>
+      onClick={p.onClick} title={p.sub ? `${p.name} · ${p.sub}` : p.name} {...p.drop} onContextMenu={p.onContextMenu}>
       <span className="vi" style={{ background: `var(${p.bg})`, color: p.bg.startsWith('--v-') ? 'var(--v-on)' : 'inherit' }}>
         <Icon n={p.icon} fill={p.active} />
       </span>
@@ -741,13 +791,13 @@ function NavItem(p: {
 
 const isExpired = (i: Item) => !!i.expires && i.expires < today();
 
-function Row({ t, item, active, onClick, dragRef, onDragEnd }: {
+function Row({ t, item, active, onClick, dragRef, onDragEnd, onContextMenu }: {
   t: Strings; item: Item; active: boolean; onClick: () => void;
-  dragRef: React.MutableRefObject<Item | null>; onDragEnd: () => void;
+  dragRef: React.MutableRefObject<Item | null>; onDragEnd: () => void; onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const saved = !item.id.startsWith('new:');
   return (
-    <button className={'item' + (active ? ' active' : '')} onClick={onClick} draggable={saved} title={saved ? t.dragHint : undefined}
+    <button className={'item' + (active ? ' active' : '')} onClick={onClick} onContextMenu={onContextMenu} draggable={saved} title={saved ? t.dragHint : undefined}
       onDragStart={e => { dragRef.current = item; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', item.title); }}
       onDragEnd={() => { dragRef.current = null; onDragEnd(); }}>
       <span className={'avatar ' + item.type}><Icon n={TYPE_ICON[item.type]} /></span>
@@ -811,6 +861,14 @@ function FieldRow({ t, f, prefs, onCopy, reveal, totp, onEdit }: {
     if (shown && secret === null && reveal) reveal().then(setSecret).catch(() => setSecret(''));
   }, [shown, secret, reveal]);
   const otp = useTotp(totp, f.kind === 'totp' && !(maskable && !shown));
+  const openMenu = useContextMenu();
+  const menu = (e: React.MouseEvent) => openMenu(e, [
+    { icon: 'content_copy', label: t.copy, action: onCopy },
+    ...(maskable ? [{ icon: shown ? 'visibility_off' : 'visibility', label: shown ? t.hide : t.show, action: () => setShown(s => !s) }] : []),
+    ...(f.kind === 'url' && f.value ? [{ icon: 'open_in_new', label: t.scOpenUrl, action: () => openExternal(f.value) }] : []),
+    'sep',
+    { icon: 'edit', label: t.edit, kbd: 'Ctrl+E', action: onEdit },
+  ]);
   const name = fieldName(t, f);
   const masked = maskable && !shown;
   const value = secret ?? '';
@@ -838,7 +896,7 @@ function FieldRow({ t, f, prefs, onCopy, reveal, totp, onEdit }: {
   return (
     // whole row copies (click or double-click per settings); inner controls stop propagation
     <div className="field copyable" role="button" tabIndex={0} title={prefs.copyOnDoubleClick ? undefined : t.clickToCopy}
-      aria-label={`${t.copy}: ${name}`}
+      aria-label={`${t.copy}: ${name}`} onContextMenu={menu}
       onClick={prefs.copyOnDoubleClick ? undefined : onCopy}
       onDoubleClick={f.kind === 'url' ? urlAction : prefs.copyOnDoubleClick ? onCopy : undefined}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCopy(); } }}>

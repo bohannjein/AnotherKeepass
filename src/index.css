@@ -825,3 +825,13 @@ kbd {
 .shortcut-list { display: grid; gap: 2px; max-height: 60vh; overflow-y: auto; }
 .shortcut-list > div { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 12px; padding: 8px 4px; border-bottom: 1px solid var(--outline-var); }
 .shortcut-list dd { font-size: 14px; }
+
+/* ---------- app context menu (replaces the WebView's) ---------- */
+.menu.context-menu { position: fixed; top: 0; left: 0; z-index: 50; min-width: 240px; max-width: 320px; padding: 6px 0; }
+.menu button.danger, .menu button.danger .ms { color: #ffb4ab; }
+:root[data-theme='light'] .menu button.danger, :root[data-theme='light'] .menu button.danger .ms { color: #ba1a1a; }
+.menu button:disabled { opacity: .38; cursor: default; }
+.menu button:disabled:hover { background: none; }
+.menu button:focus-visible { outline: none; background: color-mix(in srgb, var(--on-surface) 12%, transparent); }
+.context-menu button { padding: 10px 16px; font-size: 14px; }
+.context-menu hr { margin: 4px 0; }

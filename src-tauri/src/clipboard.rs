@@ -41,3 +41,9 @@ fn set_excluded(cb: &mut Clipboard, value: &str) -> Result<(), String> {
 fn set_excluded(cb: &mut Clipboard, value: &str) -> Result<(), String> {
     cb.set_text(value).map_err(|e| format!("clipboard:{e}"))
 }
+
+/// Text for the app's own "Paste" menu entry (the WebView would ask for clipboard permission).
+#[tauri::command]
+pub fn clipboard_read_text() -> Result<String, String> {
+    Clipboard::new().and_then(|mut cb| cb.get_text()).map_err(|e| format!("clipboard:{e}"))
+}

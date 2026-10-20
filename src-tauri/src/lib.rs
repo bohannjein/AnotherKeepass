@@ -31,6 +31,7 @@ pub fn run() {
       vault::folder_rename,
       vault::folder_trash,
       clipboard::clipboard_copy_text,
+      clipboard::clipboard_read_text,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
