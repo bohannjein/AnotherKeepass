@@ -788,8 +788,6 @@ textarea.val.edit { resize: vertical; display: block; }
 .set-row.wip { opacity: .6; }
 
 /* ================= M3: drag & drop, tags, TOTP setup, shortcuts ================= */
-.item[draggable=true] { cursor: grab; }
-.item[draggable=true]:active { cursor: grabbing; }
 .nav-item.drop-over {
   background: var(--primary-container); color: var(--on-primary-container);
   outline: 2px dashed var(--primary); outline-offset: -2px;

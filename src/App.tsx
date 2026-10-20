@@ -797,7 +797,7 @@ function Row({ t, item, active, onClick, dragRef, onDragEnd, onContextMenu }: {
 }) {
   const saved = !item.id.startsWith('new:');
   return (
-    <button className={'item' + (active ? ' active' : '')} onClick={onClick} onContextMenu={onContextMenu} draggable={saved} title={saved ? t.dragHint : undefined}
+    <button className={'item' + (active ? ' active' : '')} onClick={onClick} onContextMenu={onContextMenu} draggable={saved}
       onDragStart={e => { dragRef.current = item; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', item.title); }}
       onDragEnd={() => { dragRef.current = null; onDragEnd(); }}>
       <span className={'avatar ' + item.type}><Icon n={TYPE_ICON[item.type]} /></span>
