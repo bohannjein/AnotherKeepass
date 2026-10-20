@@ -6,6 +6,7 @@ pub mod proxy;
 use tauri::Manager;
 mod clipboard;
 mod desktop;
+mod health;
 mod vault;
 
 
@@ -37,6 +38,9 @@ pub fn run() {
       vault::vault_rename,
       vault::entry_save,
       vault::entry_import,
+      health::health_report,
+      health::health_breach_prefixes,
+      health::health_breach_match,
       vault::entry_secrets,
       vault::entry_totp,
       vault::entry_copy,

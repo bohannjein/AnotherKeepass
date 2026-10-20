@@ -93,6 +93,7 @@ dependencies = [
  "rust-argon2",
  "serde",
  "serde_json",
+ "sha1",
  "sha2 0.10.9",
  "tauri",
  "tauri-build",

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { backend, demoAttachment, type AutoTypePick, type BrowserAsk, type Totp, type VaultData } from './backend';
+import { backend, demoAttachment, type AutoTypePick, type BrowserAsk, type Health, type Totp, type VaultData } from './backend';
 import { draftToInput, rawToItem, type Attachment, type Draft, type Field, type FieldKind, type Folder, type Item, type ItemType, type VaultInfo } from './model';
 import { DEMO_VAULTS } from './mock';
 import { openExternal, openOptions } from './open';
@@ -48,6 +48,9 @@ const NEW_TYPES: ItemType[] = ['login', 'card', 'note', 'identity', 'other'];
 
 const ALL = 'all';
 const TRASH = 'trash';
+const HEALTH = 'health';
+type Issue = 'breached' | 'weak' | 'reused' | 'old' | 'expired';
+const ISSUES: Issue[] = ['breached', 'weak', 'reused', 'old', 'expired'];
 const SETTINGS_KEY = 'anotherkeepass.settings';
 // options Rust needs before/without the UI (tray, autostart, window behaviour, auto-type)
 const DESKTOP_KEYS = [
@@ -184,6 +187,16 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const [keyDialog, setKeyDialog] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [tag, setTag] = useState<string | null>(null);
+  // password health view: report from the backend, optional breach counts (HIBP), issue filter
+  const [health, setHealth] = useState<Record<string, Health>>({});
+  const [breaches, setBreaches] = useState<Record<string, number> | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [issue, setIssue] = useState<Issue | null>(null);
+  useEffect(() => {
+    if (vault !== HEALTH) return;
+    backend.healthReport().then(r => setHealth(Object.fromEntries(r.map(h => [h.id, h])))).catch(() => {});
+  }, [vault, open]);
+  useEffect(() => { setBreaches(null); }, [open]);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const dragItem = useRef<Item | null>(null);
   const [showKeys, setShowKeys] = useState(false);
@@ -300,15 +313,28 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
     catch (e) { notify(`${t.saveError}: ${String(e)}`, true); }
   };
 
+  const issuesOf = useCallback((id: string): Issue[] => {
+    const h = health[id];
+    if (!h) return [];
+    return ISSUES.filter(k => k === 'breached' ? (breaches?.[id] ?? 0) > 0 : k === 'reused' ? h.reused > 0 : h[k]);
+  }, [health, breaches]);
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
+    if (vault === HEALTH) {
+      const rank = (i: Item) => issuesOf(i.id).reduce((s, k) => s + (5 - ISSUES.indexOf(k)) ** 2, 0);
+      return allItems
+        .filter(i => !i.trashed && (issue ? issuesOf(i.id).includes(issue) : issuesOf(i.id).length > 0))
+        .filter(i => !q || (i.title + ' ' + i.subtitle).toLowerCase().includes(q))
+        .sort((a, b) => rank(b) - rank(a) || a.title.localeCompare(b.title))
+        .map(i => ({ ...i, pinned: false, subtitle: issuesOf(i.id).map(k => issueLabel(k, i.id)).join(' · ') }));
+    }
     let list = allItems.filter(i => vault === TRASH ? i.trashed
       : !i.trashed && (vault === ALL || i.vault === vault) && (!folder || i.folder === folder));
     if (q) list = list.filter(i => (i.title + ' ' + i.subtitle + ' ' + (i.tags ?? []).join(' ')).toLowerCase().includes(q));
     if (tag) list = list.filter(i => i.tags?.includes(tag));
     return [...list].sort((a, b) =>
       tab === 'recent' ? b.modified.localeCompare(a.modified) : a.title.localeCompare(b.title));
-  }, [allItems, vault, folder, query, tab, tag]);
+  }, [allItems, vault, folder, query, tab, tag, issue, issuesOf]); // eslint-disable-line react-hooks/exhaustive-deps
   // tags present in the current vault/folder scope, for the filter chips
   const scopeTags = useMemo(() => [...new Set(allItems
     .filter(i => vault === TRASH ? i.trashed : !i.trashed && (vault === ALL || i.vault === vault) && (!folder || i.folder === folder))
@@ -497,6 +523,34 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
     if (isNarrow) setRail(true);
   };
 
+  // declarations (hoisted): visible above already uses them
+  function issueName(k: Issue) { return ({ breached: t.hBreached, weak: t.hWeak, reused: t.hReused, old: t.hOld, expired: t.hExpired })[k]; }
+  function issueLabel(k: Issue, id: string) {
+    if (k === 'breached') return `${(breaches?.[id] ?? 0).toLocaleString()} ${t.hBreachedN}`;
+    if (k === 'reused') return `${t.hReused} (${(health[id]?.reused ?? 0) + 1}×)`;
+    return issueName(k);
+  }
+  // HIBP range API with k-anonymity: only 5 hex chars of each SHA-1 leave the machine
+  const checkBreaches = async () => {
+    setChecking(true);
+    try {
+      const prefixes = await backend.breachPrefixes();
+      const ranges: Record<string, string> = {};
+      for (let i = 0; i < prefixes.length; i += 6) {
+        await Promise.all(prefixes.slice(i, i + 6).map(async p => {
+          const r = await fetch(`https://api.pwnedpasswords.com/range/${p}`, { headers: { 'Add-Padding': 'true' } });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          ranges[p] = await r.text();
+        }));
+      }
+      const found = await backend.breachMatch(ranges);
+      setBreaches(found);
+      if (!Object.keys(found).length) notify(t.hNoBreaches);
+      else setIssue('breached');
+    } catch (e) { notify(`${t.hCheck}: ${String(e)}`, true); }
+    setChecking(false);
+  };
+
   const current = allItems.find(i => i.id === selected) ?? null;
   const pinned = visible.filter(i => i.pinned);
   const rest = visible.filter(i => !i.pinned);
@@ -589,6 +643,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
             <span>{t.addVault}</span>
           </button>
           <hr />
+          <NavItem active={vault === HEALTH} onClick={() => selectVault(HEALTH)} icon="health_and_safety" bg="--surface-highest" name={t.health} />
           <NavItem active={vault === TRASH} onClick={() => selectVault(TRASH)} icon="delete" bg="--surface-highest"
             name={t.trash} count={items.filter(i => i.trashed).length} />
         </nav>
@@ -623,6 +678,30 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
             <button className="btn text" onClick={emptyTrash}><Icon n="delete_forever" />{t.emptyTrash}</button>
           </div>
         )}
+        {vault === HEALTH && (
+          <div className="health-head">
+            <div className="health-score">
+              <b>{Object.keys(health).length - Object.keys(health).filter(id => issuesOf(id).length).length} / {Object.keys(health).length}</b>
+              <span>{t.hSummary}</span>
+            </div>
+            <button className="btn tonal" disabled={checking || !backend.desktop} title={t.hCheckHint} onClick={checkBreaches}>
+              <Icon n="travel_explore" />{checking ? t.hChecking : t.hCheck}
+            </button>
+          </div>
+        )}
+        {vault === HEALTH ? (
+          <div className="tag-filter" role="toolbar" aria-label={t.health}>
+            <button className={'chip' + (!issue ? ' on' : '')} onClick={() => setIssue(null)}>{!issue && <Icon n="check" />}{t.hAll}</button>
+            {ISSUES.filter(k => k !== 'breached' || breaches).map(k => {
+              const n = Object.keys(health).filter(id => issuesOf(id).includes(k)).length;
+              return n > 0 && (
+                <button key={k} className={'chip' + (issue === k ? ' on' : '')} onClick={() => setIssue(x => x === k ? null : k)}>
+                  {issue === k && <Icon n="check" />}{issueName(k)} · {n}
+                </button>
+              );
+            })}
+          </div>
+        ) : <>
         <div className="seg">
           <button className={'chip' + (tab === 'all' ? ' on' : '')} onClick={() => setTab('all')}>
             {tab === 'all' && <Icon n="check" />}{t.all} · {visible.length}
@@ -640,8 +719,9 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
             ))}
           </div>
         )}
+        </>}
         <div className="items">
-          {visible.length === 0 && <div className="empty"><Icon n="eco" />{t.noItems}</div>}
+          {visible.length === 0 && <div className="empty"><Icon n={vault === HEALTH ? 'verified_user' : 'eco'} />{vault === HEALTH ? t.hOk : t.noItems}</div>}
           {pinned.length > 0 && <span className="label group-label">{t.pinned}</span>}
           {pinned.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} dragRef={dragItem} onDragEnd={() => setDragOver(null)}
             onContextMenu={e => { if (!i.id.startsWith('new:')) { setSelected(i.id); openMenu(e, itemMenu(i)); } }} />)}

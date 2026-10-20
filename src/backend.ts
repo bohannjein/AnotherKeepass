@@ -38,6 +38,7 @@ export interface ItemInput {
   addAttachments: { name: string; base64: string }[];
 }
 export interface ImportInput { path: string[]; item: ItemInput }
+export interface Health { vault: string; id: string; bits: number; weak: boolean; reused: number; ageDays: number; old: boolean; expired: boolean }
 export interface Totp { code: string; remaining: number; period: number }
 export interface AutoTypeCandidate { vault: string; id: string; title: string; username: string; sequence: string }
 export interface AutoTypePick { windowTitle: string; candidates: AutoTypeCandidate[] }
@@ -60,6 +61,11 @@ export interface Backend {
   /** many new entries, folders by name path below parent (null = root); one file write */
   importItems(vault: string, parent: string | null, items: ImportInput[]): Promise<[number, VaultData]>;
   secrets(vault: string, id: string): Promise<Record<string, string>>;
+  /** password health of all open vaults (flags only, passwords stay in the backend) */
+  healthReport(): Promise<Health[]>;
+  /** HIBP k-anonymity: hash prefixes to ask for, then entry id → breach count */
+  breachPrefixes(): Promise<string[]>;
+  breachMatch(ranges: Record<string, string>): Promise<Record<string, number>>;
   totp(vault: string, id: string, field: string): Promise<Totp>;
   copy(vault: string, id: string, field: string, asTotp: boolean, clearAfter: number | null): Promise<void>;
   move(vault: string, id: string, folder: string | null): Promise<VaultData>;
@@ -105,6 +111,9 @@ const desktop: Backend = {
   save: (vault, item) => invoke('entry_save', { vault, item }),
   importItems: (vault, parent, items) => invoke('entry_import', { vault, parent, items }),
   secrets: (vault, id) => invoke('entry_secrets', { vault, id }),
+  healthReport: () => invoke('health_report'),
+  breachPrefixes: () => invoke('health_breach_prefixes'),
+  breachMatch: ranges => invoke('health_breach_match', { ranges }),
   totp: (vault, id, field) => invoke('entry_totp', { vault, id, field }),
   copy: (vault, id, field, asTotp, clearAfter) => invoke('entry_copy', { vault, id, field, asTotp, clearAfter }),
   move: (vault, id, folder) => invoke('entry_move', { vault, id, folder }),
@@ -218,6 +227,20 @@ const demo: Backend = {
     }
     return [items.length, out(v)];
   },
+  async healthReport() {
+    const rows: (Health & { pw: string })[] = [];
+    for (const [vid, v] of demoVaults) for (const i of v.data.items) {
+      const pw = v.secrets.get(i.id)?.Password ?? '';
+      if (!pw || i.trashed) continue;
+      const pool = (/[a-z]/.test(pw) ? 26 : 0) + (/[A-Z]/.test(pw) ? 26 : 0) + (/\d/.test(pw) ? 10 : 0) + (/[^a-zA-Z\d]/.test(pw) ? 33 : 0);
+      const bits = Math.round(pw.length * Math.log2(pool || 1));
+      const ageDays = Math.floor((Date.now() - Date.parse(i.modified ?? '')) / 86_400_000) || 0;
+      rows.push({ pw, vault: vid, id: i.id, bits, weak: bits < 50, reused: 0, ageDays, old: ageDays > 365, expired: !!i.expires && i.expires < now() });
+    }
+    return rows.map(({ pw, ...r }) => ({ ...r, reused: rows.filter(x => x.pw === pw).length - 1 }));
+  },
+  breachPrefixes: async () => [],
+  breachMatch: async () => ({}),
   async secrets(vault, id) { return { ...(get(vault).secrets.get(id) ?? {}) }; },
   async totp(vault, id, field) {
     const s = get(vault).secrets.get(id)?.[field] ?? '';

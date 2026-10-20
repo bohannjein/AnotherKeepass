@@ -876,3 +876,9 @@ kbd {
 .import-preview li small { margin-left: auto; color: var(--on-surface-var); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
 .import-preview li .ms { color: var(--primary); font-size: 20px; }
 .import-preview .more { color: var(--on-surface-var); padding-left: 30px; }
+
+/* ---------- password health ---------- */
+.health-head { display: flex; align-items: center; gap: 12px; padding: 4px 4px 0; flex-wrap: wrap; }
+.health-score { display: grid; line-height: 1.2; margin-right: auto; }
+.health-score b { font-size: 22px; font-weight: 700; color: var(--primary); }
+.health-score span { font-size: 13px; color: var(--on-surface-var); }
