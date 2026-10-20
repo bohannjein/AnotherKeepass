@@ -424,15 +424,18 @@ button { cursor: pointer; border: 0; background: none; }
 .field.copyable:active { transform: scale(.985); background: var(--primary-container); color: var(--on-primary-container); }
 .field .copy-hint { width: 40px; height: 40px; display: grid; place-items: center; color: var(--on-surface-var); opacity: .45; transition: opacity .2s, color .2s; }
 .field.copyable:hover .copy-hint { opacity: 1; color: var(--primary); }
-.fields.editing .field { grid-template-columns: 40px 1fr auto; background: var(--surface-high); }
+/* edit mode like Proton: no boxes, the whole row lights up when focused */
+.fields.editing .field { grid-template-columns: 40px 1fr auto; transition: background .2s var(--ease); }
+.fields.editing .field:hover { background: var(--surface-high); }
+.fields.editing .field:focus-within { background: var(--surface-high); }
+.fields.editing .field:focus-within > .ms, .fields.editing .field:focus-within .label { color: var(--primary); }
 .val.edit {
-  width: 100%; margin-top: 4px; padding: 8px 12px;
-  border: 0; border-bottom: 2px solid var(--outline);
-  border-radius: var(--r-xs) var(--r-xs) 0 0;
-  background: var(--surface-highest);
-  transition: border-color .2s;
+  width: 100%; margin-top: 2px; padding: 2px 0;
+  border: 0; border-radius: 0; background: none;
+  color: var(--on-surface); font-size: 16px; line-height: 1.5;
 }
-.val.edit:focus { outline: none; border-bottom-color: var(--primary); }
+.val.edit::placeholder { color: var(--on-surface-var); opacity: .6; }
+.val.edit:focus { outline: none; }
 textarea.val.edit { resize: vertical; display: block; }
 
 /* ---------- custom fields, add-more menu, note, attachments ---------- */
@@ -521,11 +524,12 @@ textarea.val.edit { resize: vertical; display: block; }
   font-size: 32px; font-weight: 700; letter-spacing: -.02em;
   width: 100%; min-width: 0;
   padding: 4px 12px; margin-left: -12px;
-  border: 0; border-bottom: 2px solid var(--outline);
-  border-radius: var(--r-s) var(--r-s) 0 0;
-  background: var(--surface-c);
+  border: 0; border-radius: var(--r-m);
+  background: none;
+  transition: background .2s var(--ease);
 }
-.title-edit:focus { outline: none; border-bottom-color: var(--primary); }
+.title-edit::placeholder { color: var(--on-surface-var); opacity: .5; }
+.title-edit:hover, .title-edit:focus { outline: none; background: var(--surface-c); }
 .hero > div { min-width: 0; flex: 1; }
 .badge.select { padding-right: 4px; cursor: pointer; }
 .badge.select select { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }

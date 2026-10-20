@@ -80,7 +80,6 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
             <button key={s.id} className={'nav-item' + (s.id === current.id && !q ? ' active' : '')} onClick={() => { setSection(s.id); setQuery(''); }}>
               <span className="vi" style={{ background: 'var(--surface-highest)' }}><Icon n={s.icon} fill={s.id === current.id && !q} /></span>
               <span>{ts.sections[s.id as keyof SettingsStrings['sections']]}</span>
-              <span />
             </button>
           ))}
         </nav>
