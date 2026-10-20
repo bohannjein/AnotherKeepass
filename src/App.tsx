@@ -16,6 +16,7 @@ const Generator = lazy(() => import('./GeneratorDialog'));
 const ImportDialog = lazy(() => import('./ImportDialog'));
 import VaultDialog, { fileName, type Known } from './VaultDialog';
 import { Icon } from './Icon';
+import { HealthOverview, HealthRow, ISSUE_ICON, ISSUES, issueName as issueNameOf, type Issue } from './HealthOverview';
 import { TotpSetup } from './TotpSetup';
 import { ContextMenuProvider, useContextMenu, type MenuItem } from './ContextMenu';
 
@@ -49,8 +50,6 @@ const NEW_TYPES: ItemType[] = ['login', 'card', 'note', 'identity', 'other'];
 const ALL = 'all';
 const TRASH = 'trash';
 const HEALTH = 'health';
-type Issue = 'breached' | 'weak' | 'reused' | 'old' | 'expired';
-const ISSUES: Issue[] = ['breached', 'weak', 'reused', 'old', 'expired'];
 const SETTINGS_KEY = 'anotherkeepass.settings';
 // options Rust needs before/without the UI (tray, autostart, window behaviour, auto-type)
 const DESKTOP_KEYS = [
@@ -326,7 +325,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
         .filter(i => !i.trashed && (issue ? issuesOf(i.id).includes(issue) : issuesOf(i.id).length > 0))
         .filter(i => !q || (i.title + ' ' + i.subtitle).toLowerCase().includes(q))
         .sort((a, b) => rank(b) - rank(a) || a.title.localeCompare(b.title))
-        .map(i => ({ ...i, pinned: false, subtitle: issuesOf(i.id).map(k => issueLabel(k, i.id)).join(' · ') }));
+        .map(i => ({ ...i, pinned: false }));
     }
     let list = allItems.filter(i => vault === TRASH ? i.trashed
       : !i.trashed && (vault === ALL || i.vault === vault) && (!folder || i.folder === folder));
@@ -524,7 +523,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   };
 
   // declarations (hoisted): visible above already uses them
-  function issueName(k: Issue) { return ({ breached: t.hBreached, weak: t.hWeak, reused: t.hReused, old: t.hOld, expired: t.hExpired })[k]; }
+  function issueName(k: Issue) { return issueNameOf(t, k); }
   function issueLabel(k: Issue, id: string) {
     if (k === 'breached') return `${(breaches?.[id] ?? 0).toLocaleString()} ${t.hBreachedN}`;
     if (k === 'reused') return `${t.hReused} (${(health[id]?.reused ?? 0) + 1}×)`;
@@ -551,6 +550,10 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
     setChecking(false);
   };
 
+  const healthCounts = {
+    ok: Object.keys(health).filter(id => !issuesOf(id).length).length,
+    ...Object.fromEntries(ISSUES.map(k => [k, Object.keys(health).filter(id => issuesOf(id).includes(k)).length])),
+  } as Record<Issue | 'ok', number>;
   const current = allItems.find(i => i.id === selected) ?? null;
   const pinned = visible.filter(i => i.pinned);
   const rest = visible.filter(i => !i.pinned);
@@ -678,25 +681,19 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
             <button className="btn text" onClick={emptyTrash}><Icon n="delete_forever" />{t.emptyTrash}</button>
           </div>
         )}
-        {vault === HEALTH && (
-          <div className="health-head">
-            <div className="health-score">
-              <b>{Object.keys(health).length - Object.keys(health).filter(id => issuesOf(id).length).length} / {Object.keys(health).length}</b>
-              <span>{t.hSummary}</span>
-            </div>
-            <button className="btn tonal" disabled={checking || !backend.desktop} title={t.hCheckHint} onClick={checkBreaches}>
-              <Icon n="travel_explore" />{checking ? t.hChecking : t.hCheck}
-            </button>
-          </div>
-        )}
         {vault === HEALTH ? (
           <div className="tag-filter" role="toolbar" aria-label={t.health}>
             <button className={'chip' + (!issue ? ' on' : '')} onClick={() => setIssue(null)}>{!issue && <Icon n="check" />}{t.hAll}</button>
+            {!breaches && (
+              <button className="chip" disabled={checking || !backend.desktop} title={t.hCheckHint} onClick={checkBreaches}>
+                <Icon n="travel_explore" />{checking ? t.hChecking : t.hCheck}
+              </button>
+            )}
             {ISSUES.filter(k => k !== 'breached' || breaches).map(k => {
               const n = Object.keys(health).filter(id => issuesOf(id).includes(k)).length;
               return n > 0 && (
-                <button key={k} className={'chip' + (issue === k ? ' on' : '')} onClick={() => setIssue(x => x === k ? null : k)}>
-                  {issue === k && <Icon n="check" />}{issueName(k)} · {n}
+                <button key={k} className={'chip issue-chip ' + k + (issue === k ? ' on' : '')} onClick={() => setIssue(x => x === k ? null : k)}>
+                  <Icon n={issue === k ? 'check' : ISSUE_ICON[k]} />{issueName(k)} · {n}
                 </button>
               );
             })}
@@ -726,7 +723,9 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
           {pinned.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} dragRef={dragItem} onDragEnd={() => setDragOver(null)}
             onContextMenu={e => { if (!i.id.startsWith('new:')) { setSelected(i.id); openMenu(e, itemMenu(i)); } }} />)}
           {rest.length > 0 && pinned.length > 0 && <span className="label group-label">{t.others}</span>}
-          {rest.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} dragRef={dragItem} onDragEnd={() => setDragOver(null)}
+          {vault === HEALTH && rest.map(i => <HealthRow key={i.id} t={t} item={i} issues={issuesOf(i.id)} label={k => issueLabel(k, i.id)}
+            active={i.id === selected} onClick={() => setSelected(i.id)} />)}
+          {vault !== HEALTH && rest.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} dragRef={dragItem} onDragEnd={() => setDragOver(null)}
             onContextMenu={e => { if (!i.id.startsWith('new:')) { setSelected(i.id); openMenu(e, itemMenu(i)); } }} />)}
         </div>
       </section>
@@ -751,7 +750,10 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
             onHistoryRestore={i => historyRestore(current, i)}
             onDownload={a => download(current, a)} />
         ) : (
-          <div className="placeholder"><div><div className="blob"><Icon n="eco" fill /></div>{t.selectItem}</div></div>
+          vault === HEALTH ? (
+            <HealthOverview t={t} total={Object.keys(health).length} counts={healthCounts} breachesChecked={!!breaches} checking={checking}
+              canCheck={backend.desktop} onCheck={checkBreaches} active={issue} onPick={setIssue} />
+          ) : <div className="placeholder"><div><div className="blob"><Icon n="eco" fill /></div>{t.selectItem}</div></div>
         )}
       </main>
 

@@ -878,7 +878,68 @@ kbd {
 .import-preview .more { color: var(--on-surface-var); padding-left: 30px; }
 
 /* ---------- password health ---------- */
-.health-head { display: flex; align-items: center; gap: 12px; padding: 4px 4px 0; flex-wrap: wrap; }
-.health-score { display: grid; line-height: 1.2; margin-right: auto; }
-.health-score b { font-size: 22px; font-weight: 700; color: var(--primary); }
-.health-score span { font-size: 13px; color: var(--on-surface-var); }
+/* issue colors: breach = alarm red, weak = clay, reused = ochre, old = moss, expired = neutral */
+:root { --i-breached: #8c1d18; --on-i-breached: #ffdad6; --ring-good: #a6c48a; --ring-ok: #e8c35a; --ring-bad: #ff8a65; }
+:root[data-theme='light'] { --i-breached: #ffdad6; --on-i-breached: #410002; --ring-good: #4f7a33; --ring-ok: #8a6a00; --ring-bad: #b3261e; }
+.issue-breached, .health-tile.breached .health-icon, .issue-pill.breached { background: var(--i-breached); color: var(--on-i-breached); }
+.issue-weak, .health-tile.weak .health-icon, .issue-pill.weak { background: var(--primary-container); color: var(--on-primary-container); }
+.issue-reused, .health-tile.reused .health-icon, .issue-pill.reused { background: var(--tertiary-container); color: var(--on-tertiary-container); }
+.issue-old, .health-tile.old .health-icon, .issue-pill.old { background: var(--secondary-container); color: var(--on-secondary-container); }
+.issue-expired, .health-tile.expired .health-icon, .issue-pill.expired { background: var(--surface-highest); color: var(--on-surface-var); }
+.avatar.issue-breached { border-radius: 30%; animation: pulse 1.6s var(--ease) infinite alternate; }
+.avatar.issue-weak { border-radius: 50% 50% var(--r-s) 50%; }
+.avatar.issue-reused { border-radius: var(--r-full); }
+.avatar.issue-old { border-radius: var(--r-s); }
+@keyframes pulse { to { box-shadow: 0 0 0 6px rgb(255 138 101 / .18); } }
+
+.issue-pills { display: flex !important; gap: 4px; flex-wrap: wrap; opacity: 1 !important; white-space: normal !important; margin-top: 4px; }
+.issue-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 6px; border-radius: var(--r-full); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.issue-pill .ms { font-size: 14px; }
+.health-item { grid-template-columns: 44px 1fr; }
+.issue-chip .ms { font-size: 18px; }
+
+.health { height: 100%; overflow-y: auto; padding: clamp(16px, 4vw, 40px); display: grid; align-content: start; gap: 28px; }
+.health-hero { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+.health-ring { position: relative; width: 168px; height: 168px; flex: none; }
+.health-ring::before { content: ''; position: absolute; inset: 10px; background: var(--surface-high); border-radius: 46% 54% 60% 40% / 52% 40% 60% 48%; animation: morph 8s ease-in-out infinite alternate; }
+.health-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.health-ring circle { fill: none; stroke-width: 12; stroke-linecap: round; }
+.health-ring .track { stroke: var(--surface-highest); }
+.health-ring .value { transition: stroke-dashoffset 1s var(--spring); animation: ring-in 1.2s var(--spring); }
+.good .health-ring .value { stroke: var(--ring-good); }
+.ok .health-ring .value { stroke: var(--ring-ok); }
+.bad .health-ring .value { stroke: var(--ring-bad); }
+@keyframes ring-in { from { stroke-dashoffset: 339.3; } }
+.health-ring > div { position: absolute; inset: 0; display: flex; align-items: baseline; justify-content: center; padding-top: 52px; }
+.health-ring b { font-size: 52px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
+.health-ring span { font-size: 20px; font-weight: 700; color: var(--on-surface-var); }
+.health-mood { flex: 1; min-width: 200px; display: grid; gap: 8px; }
+.health-mood h2 { font-size: clamp(26px, 3vw, 34px); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+.health-mood p { color: var(--on-surface-var); font-size: 15px; }
+.health-mood p b { color: var(--on-surface); }
+
+.health-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.health-tile {
+  display: grid; justify-items: start; gap: 6px; padding: 18px; text-align: left;
+  background: var(--surface-c); border: 2px solid transparent; border-radius: var(--r-l);
+  transition: border-radius .4s var(--spring), transform .4s var(--spring), background .2s var(--ease);
+  animation: pop .5s var(--spring) backwards;
+}
+.health-tile:nth-child(2) { animation-delay: .05s; } .health-tile:nth-child(3) { animation-delay: .1s; }
+.health-tile:nth-child(4) { animation-delay: .15s; } .health-tile:nth-child(5) { animation-delay: .2s; }
+.health-tile:not(:disabled):hover { background: var(--surface-high); border-radius: var(--r-m); transform: translateY(-2px); }
+.health-tile.on { border-color: var(--primary); border-radius: var(--r-m); }
+.health-tile.clear { opacity: .6; }
+.health-tile.clear .health-icon { background: var(--surface-highest); color: var(--secondary); }
+.health-icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: var(--r-m); margin-bottom: 4px; }
+.health-tile.breached .health-icon { border-radius: 30%; }
+.health-tile.weak .health-icon { border-radius: 50% 50% var(--r-s) 50%; }
+.health-tile.reused .health-icon { border-radius: var(--r-full); }
+.health-icon .ms { font-size: 26px; }
+.health-tile > b { font-size: 34px; font-weight: 800; line-height: 1; letter-spacing: -.03em; }
+.health-name { font-weight: 700; font-size: 15px; }
+.health-tile small { font-size: 13px; color: var(--on-surface-var); line-height: 1.35; }
+.health-note { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--on-surface-var); }
+@media (prefers-reduced-motion: reduce) {
+  .health-ring::before, .avatar.issue-breached, .health-tile, .health-ring .value { animation: none; }
+}
