@@ -107,6 +107,8 @@ dependencies = [
  "ureq",
  "url",
  "uuid",
+ "windows 0.61.3",
+ "windows-future 0.2.1",
  "windows-sys 0.61.2",
  "winreg 0.55.0",
  "zeroize",

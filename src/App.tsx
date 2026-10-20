@@ -58,7 +58,7 @@ const DESKTOP_KEYS = [
   'atShortcut', 'atStartDelay', 'atCharDelay', 'atAlwaysAsk', 'atMatchTitle', 'atMatchUrl', 'atHideExpired',
   'browserEnabled', 'bChrome', 'bFirefox', 'bChromium', 'bEdge', 'bBrave', 'bVivaldi', 'bTor', 'bUnlock', 'bMatchScheme',
   'bBestMatch', 'bAllowExpired', 'bSearchAll', 'bNoAccessConfirm', 'bUpdateNoConfirm', 'bKph', 'bUpdateManifests',
-  'bCustomProxy', 'bProxyPath', 'backupBeforeSave', 'backupPath', 'autoReload', 'atRelock', 'atRemember', 'trayStyle',
+  'bCustomProxy', 'bProxyPath', 'backupBeforeSave', 'backupPath', 'autoReload', 'atRelock', 'atRemember', 'trayStyle', 'quickUnlock',
 ] as const;
 const KNOWN_KEY = 'anotherkeepass.vaults';
 const today = () => new Date().toISOString().slice(0, 10);

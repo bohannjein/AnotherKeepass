@@ -99,6 +99,7 @@ const en = {
     ksSigner: 'Signer name', ksFingerprint: 'Certificate fingerprint', ksGenerate: 'Generate new certificate',
   },
   hints: {
+    quickUnlock: "After locking, unlock again with face, fingerprint or PIN instead of the master password. The key stays in memory until you close the vault or quit the app.",
     faviconTimeout: "How long to wait for a website when loading its icon (right-click an entry or vault → Load website icons).",
     ddgFavicons: "Icons come from DuckDuckGo instead of the sites themselves, so the sites don't see the request.",
     autoReload: "If the file changes elsewhere (Dropbox, Nextcloud, KeePassXC on another PC), the vault is re-read automatically.",
@@ -281,6 +282,7 @@ const de: SettingsStrings = {
     ksSigner: 'Name des Unterzeichners', ksFingerprint: 'Fingerabdruck des Zertifikats', ksGenerate: 'Neues Zertifikat generieren',
   },
   hints: {
+    quickUnlock: "Nach dem Sperren mit Gesicht, Fingerabdruck oder PIN statt Master-Passwort entsperren. Der Schlüssel bleibt im Speicher, bis du den Tresor schließt oder die App beendest.",
     faviconTimeout: "Wie lange auf eine Website gewartet wird, wenn ihr Symbol geladen wird (Rechtsklick auf Eintrag oder Tresor → Website-Symbole laden).",
     ddgFavicons: "Symbole kommen von DuckDuckGo statt von den Websites selbst – die Websites sehen die Anfrage nicht.",
     autoReload: "Ändert sich die Datei woanders (Dropbox, Nextcloud, KeePassXC auf einem anderen PC), wird der Tresor automatisch neu eingelesen.",
@@ -461,6 +463,7 @@ const fr: SettingsStrings = {
     ksSigner: 'Nom du signataire', ksFingerprint: 'Empreinte du certificat', ksGenerate: 'Générer un nouveau certificat',
   },
   hints: {
+    quickUnlock: "Après le verrouillage, déverrouiller avec visage, empreinte ou PIN au lieu du mot de passe maître. La clé reste en mémoire jusqu’à la fermeture du coffre ou de l’application.",
     faviconTimeout: "Délai d’attente d’un site pour charger son icône (clic droit sur une entrée ou un coffre → Charger les icônes).",
     ddgFavicons: "Les icônes viennent de DuckDuckGo plutôt que des sites eux-mêmes, qui ne voient donc pas la requête.",
     autoReload: "Si le fichier change ailleurs (Dropbox, Nextcloud, KeePassXC sur un autre PC), le coffre est relu automatiquement.",
@@ -641,6 +644,7 @@ const es: SettingsStrings = {
     ksSigner: 'Nombre del firmante', ksFingerprint: 'Huella del certificado', ksGenerate: 'Generar nuevo certificado',
   },
   hints: {
+    quickUnlock: "Tras bloquear, desbloquear con cara, huella o PIN en lugar de la contraseña maestra. La clave queda en memoria hasta cerrar la bóveda o salir de la app.",
     faviconTimeout: "Cuánto esperar a un sitio al cargar su icono (clic derecho en una entrada o bóveda → Cargar iconos).",
     ddgFavicons: "Los iconos vienen de DuckDuckGo en lugar de los propios sitios, que así no ven la petición.",
     autoReload: "Si el archivo cambia en otro sitio (Dropbox, Nextcloud, KeePassXC en otro PC), la bóveda se vuelve a leer sola.",

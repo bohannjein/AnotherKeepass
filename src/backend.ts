@@ -55,6 +55,9 @@ export interface Backend {
   desktop: boolean;
   create(path: string, name: string, password: string, keyfile?: string): Promise<VaultData>;
   open(path: string, password: string, keyfile?: string): Promise<VaultData>;
+  /** quick unlock: key kept since the last lock + Windows Hello available */
+  quickAvailable(path: string): Promise<boolean>;
+  quickUnlock(path: string, message: string): Promise<VaultData>;
   close(id: string): Promise<void>;
   /** which remembered vault files still exist */
   pathsExist(paths: string[]): Promise<boolean[]>;
@@ -111,6 +114,8 @@ const desktop: Backend = {
   desktop: true,
   create: (path, name, password, keyfile) => invoke('vault_create', { path, name, password, keyfile }),
   open: (path, password, keyfile) => invoke('vault_open', { path, password, keyfile }),
+  quickAvailable: path => invoke('quick_unlock_available', { path }),
+  quickUnlock: (path, message) => invoke('vault_quick_unlock', { path, message }),
   close: id => invoke('vault_close', { id }),
   pathsExist: paths => invoke('paths_exist', { paths }),
   lockAll: () => invoke('vault_lock_all'),
@@ -194,6 +199,8 @@ const demo: Backend = {
     return out(v);
   },
   async close(id) { demoVaults.delete(id); },
+  quickAvailable: async () => false,
+  quickUnlock: async () => { throw new Error('no_quick'); },
   async pathsExist(paths) { return paths.map(() => true); },
   async lockAll() { demoVaults.clear(); },
   async changeKey() {},

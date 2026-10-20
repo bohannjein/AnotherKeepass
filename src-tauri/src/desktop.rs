@@ -38,6 +38,7 @@ pub struct DesktopPrefs {
     pub at_match_url: bool,
     pub at_hide_expired: bool,
     pub at_relock: bool,
+    pub quick_unlock: bool,
     pub tray_style: String,
     pub at_remember: u64,
     pub auto_reload: bool,
@@ -86,6 +87,7 @@ impl Default for DesktopPrefs {
             at_match_url: true,
             at_hide_expired: false,
             at_relock: false,
+            quick_unlock: false,
             tray_style: "colorful".into(),
             at_remember: 10,
             auto_reload: true,
@@ -183,6 +185,16 @@ pub fn window_after_unlock(app: AppHandle) {
     }
 }
 
+/// Native window handle for system dialogs (Windows Hello) that should sit on our window.
+pub fn main_hwnd<R: Runtime>(app: &AppHandle<R>) -> isize {
+    #[cfg(windows)]
+    if let Some(h) = main_window(app).and_then(|w| w.hwnd().ok()) {
+        return h.0 as isize;
+    }
+    let _ = app;
+    0
+}
+
 pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
     if let Some(w) = main_window(app) {
         let _ = w.unminimize();
@@ -194,7 +206,7 @@ pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
 /// Drop every open vault (zeroizes keys and protected values) and tell the UI.
 pub fn lock_all<R: Runtime>(app: &AppHandle<R>) {
     if let Ok(mut v) = app.state::<Vaults>().0.lock() {
-        v.clear();
+        crate::vault::lock_vaults(&mut v);
     }
     crate::browser_server::notify("database-locked");
     let _ = app.emit("akp-locked", ());
@@ -329,6 +341,7 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
     );
     save_prefs(&prefs).inspect_err(|e| log::error!("desktop.json: {e}"))?;
     apply_backup(&prefs);
+    crate::vault::quick_unlock_enable(prefs.quick_unlock);
     let mut problems = Vec::new();
 
     if let Some(tray) = app.tray_by_id(TRAY_ID) {

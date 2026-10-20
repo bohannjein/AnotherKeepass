@@ -29,6 +29,23 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
   const [keyfile, setKeyfile] = useState('');
   // remembered key file of the selected vault (only stored when "remember key files" is on)
   useEffect(() => { setKeyfile(known.find(k => k.path === path)?.keyfile ?? ''); }, [path, known]);
+  // quick unlock offered when this vault was locked (not closed) with the option on
+  const [quick, setQuick] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setQuick(false);
+    if (mode === 'open' && path && backend.desktop) backend.quickAvailable(path).then(ok => { if (live) setQuick(ok); }).catch(() => {});
+    return () => { live = false; };
+  }, [mode, path]);
+  const hello = async () => {
+    setError(''); setBusy(true);
+    try {
+      const data = await backend.quickUnlock(path, t.helloPrompt);
+      onOpened(data, { ...meta(path, data.name), name: data.name, keyfile: keyfile || undefined });
+    } catch (err) {
+      setError(errorCode(err) === 'hello_cancel' ? t.helloFailed : explain(err));
+    } finally { setBusy(false); }
+  };
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -155,6 +172,12 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
 
       {error && <p className="form-error" role="alert"><Icon n="error" />{error}</p>}
       {!backend.desktop && <span className="label">{t.demoMode} · {t.masterHint}</span>}
+
+      {quick && (
+        <button type="button" className="btn tonal hello-btn" disabled={busy} onClick={hello} autoFocus>
+          <Icon n="fingerprint" />{t.helloUnlock}
+        </button>
+      )}
 
       <div className="row">
         {onClose ? <button type="button" className="btn text" onClick={onClose}>{t.cancel}</button> : <span />}

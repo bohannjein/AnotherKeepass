@@ -212,7 +212,7 @@ export const SECTIONS: Section[] = [
       },
       {
         id: 'lock', items: [
-          { key: 'quickUnlock', type: 'toggle', planned: true },
+          { key: 'quickUnlock', type: 'toggle' },
           { key: 'lockOnSession', type: 'toggle' },
           { key: 'lockOnUserSwitch', type: 'toggle' },
           { key: 'lockOnMinimize', type: 'toggle' },

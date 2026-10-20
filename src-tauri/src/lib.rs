@@ -8,6 +8,7 @@ mod clipboard;
 mod desktop;
 mod favicon;
 mod health;
+mod hello;
 mod vault;
 
 
@@ -15,6 +16,7 @@ mod vault;
 pub fn run() {
   let prefs = desktop::load_prefs();
   desktop::apply_backup(&prefs);
+  vault::quick_unlock_enable(prefs.quick_unlock);
   let mut builder = tauri::Builder::default();
   // must be the first plugin: a second start only focuses the running window
   if prefs.single_instance {
@@ -39,6 +41,8 @@ pub fn run() {
       vault::vault_rename,
       vault::entry_save,
       vault::entry_import,
+      vault::quick_unlock_available,
+      vault::vault_quick_unlock,
       vault::entry_icons_set,
       favicon::favicon_fetch,
       health::health_report,

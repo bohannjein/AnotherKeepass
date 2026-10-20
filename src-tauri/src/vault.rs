@@ -508,6 +508,10 @@ pub async fn vault_open(
     keyfile: Option<String>,
 ) -> R<VaultDto> {
     let key = make_key(password.as_deref(), keyfile.as_deref())?;
+    open_with(app, state, path, key).await
+}
+
+async fn open_with(app: tauri::AppHandle, state: tauri::State<'_, Vaults>, path: String, key: DatabaseKey) -> R<VaultDto> {
     // Argon2 takes ~1 s: run it off the main thread
     let p = path.clone();
     let k = key.clone();
@@ -545,13 +549,68 @@ pub fn paths_exist(paths: Vec<String>) -> Vec<bool> {
 #[tauri::command]
 pub fn vault_close(state: tauri::State<'_, Vaults>, id: String) -> R<()> {
     state.0.lock().map_err(|_| "lock")?.remove(&id); // drop zeroizes key + protected values
+    if let Some(keys) = QUICK_KEYS.lock().map_err(|_| "lock")?.as_mut() {
+        keys.remove(&id); // closing on purpose = no quick unlock for it
+    }
     Ok(())
 }
 
 #[tauri::command]
 pub fn vault_lock_all(state: tauri::State<'_, Vaults>) -> R<()> {
-    state.0.lock().map_err(|_| "lock")?.clear();
+    lock_vaults(&mut *state.0.lock().map_err(|_| "lock")?);
     Ok(())
+}
+
+// ---------------------------------------------------------------- quick unlock (Windows Hello)
+
+/// Set from the settings ("Quick unlock").
+pub static QUICK_UNLOCK: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// ponytail: keys of locked vaults stay in this process (zeroized on drop/quit) and Windows Hello
+/// only gates their use — like KeePassXC's quick unlock; a TPM-bound key would need KeyCredentialManager.
+static QUICK_KEYS: Mutex<Option<HashMap<String, DatabaseKey>>> = Mutex::new(None);
+
+/// Lock = drop every open vault; with quick unlock on, keep the keys for Windows Hello.
+pub fn lock_vaults(map: &mut HashMap<String, OpenVault>) {
+    if let Ok(mut q) = QUICK_KEYS.lock() {
+        if QUICK_UNLOCK.load(std::sync::atomic::Ordering::Relaxed) {
+            let keys = q.get_or_insert_with(HashMap::new);
+            for (id, v) in map.iter() {
+                keys.insert(id.clone(), v.key.clone());
+            }
+        } else {
+            *q = None;
+        }
+    }
+    map.clear();
+}
+
+/// Turning the option off forgets every kept key at once.
+pub fn quick_unlock_enable(on: bool) {
+    QUICK_UNLOCK.store(on, std::sync::atomic::Ordering::Relaxed);
+    if !on {
+        if let Ok(mut q) = QUICK_KEYS.lock() {
+            *q = None;
+        }
+    }
+}
+
+fn quick_key(path: &str) -> Option<DatabaseKey> {
+    QUICK_KEYS.lock().ok()?.as_ref()?.get(path).cloned()
+}
+
+#[tauri::command]
+pub async fn quick_unlock_available(path: String) -> bool {
+    quick_key(&path).is_some() && tauri::async_runtime::spawn_blocking(crate::hello::available).await.unwrap_or(false)
+}
+
+#[tauri::command]
+pub async fn vault_quick_unlock(app: tauri::AppHandle, state: tauri::State<'_, Vaults>, path: String, message: String) -> R<VaultDto> {
+    let key = quick_key(&path).ok_or("no_quick")?;
+    let hwnd = crate::desktop::main_hwnd(&app);
+    if !tauri::async_runtime::spawn_blocking(move || crate::hello::verify(hwnd, &message)).await.unwrap_or(false) {
+        return Err("hello_cancel".into());
+    }
+    open_with(app, state, path, key).await
 }
 
 #[tauri::command]
