@@ -38,6 +38,8 @@ pub struct DesktopPrefs {
     pub at_match_url: bool,
     pub at_hide_expired: bool,
     pub at_relock: bool,
+    pub ks_import: bool,
+    pub ks_export: bool,
     pub ssh_enabled: bool,
     pub ssh_auth_sock: String,
     pub quick_unlock: bool,
@@ -90,6 +92,8 @@ impl Default for DesktopPrefs {
             at_match_url: true,
             at_hide_expired: false,
             at_relock: false,
+            ks_import: true,
+            ks_export: true,
             ssh_enabled: false,
             ssh_auth_sock: String::new(),
             quick_unlock: false,
@@ -159,6 +163,12 @@ fn save_prefs(p: &DesktopPrefs) -> Result<(), String> {
         fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
     fs::write(path, serde_json::to_vec_pretty(p).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+}
+
+pub fn apply_keeshare(p: &DesktopPrefs) {
+    use std::sync::atomic::Ordering;
+    crate::keeshare::IMPORT_ON.store(p.ks_import, Ordering::Relaxed);
+    crate::keeshare::EXPORT_ON.store(p.ks_export, Ordering::Relaxed);
 }
 
 pub fn apply_ssh(p: &DesktopPrefs) {
@@ -354,6 +364,7 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
     save_prefs(&prefs).inspect_err(|e| log::error!("desktop.json: {e}"))?;
     apply_backup(&prefs);
     apply_ssh(&prefs);
+    apply_keeshare(&prefs);
     crate::vault::quick_unlock_enable(prefs.quick_unlock);
     let mut problems = Vec::new();
 

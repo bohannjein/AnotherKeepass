@@ -39,7 +39,7 @@ export interface Item {
   icon?: string;
 }
 
-export interface Folder { id: string; vault: string; name: string; parent?: string | null }
+export interface Folder { id: string; vault: string; name: string; parent?: string | null; share?: 'sync' | 'export' | 'import' | null }
 
 /** A vault in the sidebar: open (data loaded) or locked (only remembered). */
 export interface VaultInfo { id: string; name: string; file: string; color: string; icon: string; locked: boolean }

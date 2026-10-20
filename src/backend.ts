@@ -26,7 +26,7 @@ export interface VaultData {
   root: string;
   recycleBin: string | null;
   format: string; // "KDBX 3.1" is upgraded to KDBX 4 on the next save (backup kept)
-  folders: { id: string; name: string; parent: string | null }[];
+  folders: { id: string; name: string; parent: string | null; share?: Share['kind'] | null }[];
   items: RawItem[];
   /** custom icon id → image bytes (base64) */
   icons?: Record<string, string>;
@@ -45,6 +45,8 @@ export interface ImportInput { path: string[]; item: ItemInput }
 export interface Health { vault: string; id: string; bits: number; weak: boolean; reused: number; ageDays: number; old: boolean; expired: boolean }
 /** KeeAgent settings of an entry (same file KeePassXC uses) */
 export interface KeeAgent { allow: boolean; addAtOpen: boolean; removeAtClose: boolean; confirm: boolean; lifetime: number; attachment: string }
+/** KeeShare setting of a folder */
+export interface Share { kind: 'sync' | 'export' | 'import'; path: string; password: string }
 export interface Totp { code: string; remaining: number; period: number }
 export interface AutoTypeCandidate { vault: string; id: string; title: string; username: string; sequence: string }
 export interface AutoTypePick { windowTitle: string; candidates: AutoTypeCandidate[] }
@@ -113,6 +115,8 @@ export interface Backend {
   historyRestore(vault: string, id: string, index: number): Promise<VaultData>;
   attachmentSave(vault: string, id: string, name: string, dest: string): Promise<void>;
   folderCreate(vault: string, parent: string | null, name: string): Promise<VaultData>;
+  keeshareGet(vault: string, folder: string): Promise<Share | null>;
+  keeshareSet(vault: string, folder: string, share: Share | null): Promise<VaultData>;
   folderRename(vault: string, id: string, name: string): Promise<VaultData>;
   folderTrash(vault: string, id: string): Promise<VaultData>;
 }
@@ -164,6 +168,8 @@ const desktop: Backend = {
   historyRestore: (vault, id, index) => invoke('entry_history_restore', { vault, id, index }),
   attachmentSave: (vault, id, name, dest) => invoke('attachment_save', { vault, id, name, dest }),
   folderCreate: (vault, parent, name) => invoke('folder_create', { vault, parent, name }),
+  keeshareGet: (vault, group) => invoke('keeshare_get', { vault, group }),
+  keeshareSet: (vault, group, share) => invoke('keeshare_set', { vault, group, share }),
   folderRename: (vault, id, name) => invoke('folder_rename', { vault, id, name }),
   folderTrash: (vault, id) => invoke('folder_trash', { vault, id }),
 };
@@ -352,6 +358,8 @@ const demo: Backend = {
     return [copy.id, out(v)];
   },
   async attachmentSave() { /* demo: the UI downloads from memory instead */ },
+  keeshareGet: async () => null,
+  keeshareSet: async vault => out(get(vault)),
   async folderCreate(vault, parent, name) {
     const v = get(vault);
     v.data.folders.push({ id: crypto.randomUUID(), name, parent: parent ?? null });

@@ -961,3 +961,13 @@ kbd {
 .set-info.ok { color: var(--secondary); }
 .set-info.bad { color: #ffb4ab; }
 :root[data-theme='light'] .set-info.bad { color: #ba1a1a; }
+
+/* ---------- KeeShare dialog ---------- */
+.share-dialog { width: min(480px, calc(100vw - 32px)); }
+.share-modes { display: grid; gap: 8px; }
+.share-modes .choice { gap: 14px; padding: 12px 16px; }
+.share-modes .choice .ms { margin-left: 0; }
+.share-modes .choice span { display: grid; gap: 2px; }
+.share-modes .choice small { font-weight: 400; font-size: 13px; opacity: .8; }
+.btn.text.danger { color: #ffb4ab; }
+:root[data-theme='light'] .btn.text.danger { color: #ba1a1a; }

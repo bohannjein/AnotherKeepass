@@ -89,6 +89,8 @@ pub struct FolderDto {
     id: String,
     name: String,
     parent: Option<String>,
+    /// KeeShare kind ("import" | "export" | "sync") when the folder is shared
+    share: Option<String>,
 }
 
 /// One entry string. `value` is None for protected strings (fetch via reveal).
@@ -230,6 +232,7 @@ fn write_db(v: &mut OpenVault) -> R<()> {
     fs::write(&tmp, &buf).map_err(|e| format!("io:{e}"))?;
     fs::rename(&tmp, &v.path).map_err(|e| format!("io:{e}"))?;
     stamp(&v.path);
+    crate::keeshare::export_all(&v.db, &v.path);
     Ok(())
 }
 
@@ -242,7 +245,7 @@ fn mtime(p: &Path) -> Option<std::time::SystemTime> {
     fs::metadata(p).and_then(|m| m.modified()).ok()
 }
 
-fn stamp(p: &Path) {
+pub(crate) fn stamp(p: &Path) {
     if let (Ok(mut s), Some(t)) = (STAMPS.lock(), mtime(p)) {
         s.get_or_insert_with(HashMap::new).insert(p.to_path_buf(), t);
     }
@@ -257,6 +260,30 @@ pub fn watch_files(app: tauri::AppHandle) {
         std::thread::sleep(std::time::Duration::from_secs(2));
         if !crate::desktop::prefs(&app).auto_reload {
             continue;
+        }
+        // KeeShare containers changed by others → import into the vault that shares them
+        let containers: Vec<(String, PathBuf)> = {
+            let state = app.state::<Vaults>();
+            let Ok(map) = state.0.lock() else { continue };
+            let stamps = STAMPS.lock().ok().and_then(|s| s.clone()).unwrap_or_default();
+            map.iter()
+                .flat_map(|(id, v)| crate::keeshare::watched(&v.db, &v.path).into_iter().map(move |c| (id.clone(), c)))
+                .filter(|(_, c)| matches!((mtime(c), stamps.get(c)), (Some(now), Some(seen)) if now != *seen))
+                .collect()
+        };
+        for (id, c) in containers {
+            stamp(&c);
+            let state = app.state::<Vaults>();
+            let Ok(mut map) = state.0.lock() else { continue };
+            let Some(v) = map.get_mut(&id) else { continue };
+            if crate::keeshare::import_all(&mut v.db, &v.path.clone()) {
+                if let Err(e) = write_db(v) {
+                    log::warn!("keeshare save: {e}");
+                    continue;
+                }
+                log::info!("keeshare: imported changes");
+                let _ = app.emit("akp-vault-updated", dto(&id, v));
+            }
         }
         let changed: Vec<(String, PathBuf, DatabaseKey)> = {
             let state = app.state::<Vaults>();
@@ -313,6 +340,7 @@ fn dto(id: &str, v: &OpenVault) -> VaultDto {
             id: g.id().to_string(),
             name: g.name.clone(),
             parent: g.parent().filter(|p| p.id() != root).map(|p| p.id().to_string()),
+            share: crate::keeshare::group_share(db, g.id()).map(|s| s.kind),
         })
         .collect();
 
@@ -413,6 +441,31 @@ fn with_vault<T>(state: &Vaults, id: &str, f: impl FnOnce(&mut OpenVault) -> R<T
 }
 
 /// Mutate, persist, and return the fresh listing.
+/// KeeShare setting of a folder (None = not shared).
+#[tauri::command]
+pub fn keeshare_get(state: tauri::State<'_, Vaults>, vault: String, group: String) -> R<Option<crate::keeshare::Share>> {
+    with_vault(&state, &vault, |v| Ok(crate::keeshare::group_share(&v.db, crate::keeshare::parse_group(&group)?)))
+}
+
+/// Share / unshare a folder. Import and sync pull the container right away (wrong password
+/// or missing file for an import-only share is an error); the save afterwards exports.
+#[tauri::command]
+pub fn keeshare_set(state: tauri::State<'_, Vaults>, vault: String, group: String, share: Option<crate::keeshare::Share>) -> R<VaultDto> {
+    with_vault(&state, &vault, |v| {
+        let g = crate::keeshare::parse_group(&group)?;
+        crate::keeshare::set_group_share(&mut v.db, g, share.as_ref())?;
+        if let Some(s) = share.as_ref().filter(|s| s.kind != "export") {
+            let path = crate::keeshare::container_path(&v.path, s);
+            if path.is_file() || s.kind == "import" {
+                crate::keeshare::import_one(&mut v.db, g, &v.path, s)?;
+            }
+            stamp(&path);
+        }
+        write_db(v)?;
+        Ok(dto(&vault, v))
+    })
+}
+
 /// Change one entry (no history version), persist, return the listing.
 pub fn mutate_entry(state: &Vaults, vault: &str, id: &str, f: impl FnOnce(&mut keepass::db::EntryMut<'_>)) -> R<VaultDto> {
     mutate(state, vault, |db| {
@@ -475,7 +528,7 @@ fn parse_expiry(s: &str) -> Option<NaiveDateTime> {
 // ---------------------------------------------------------------- commands: vaults
 
 /// Strong defaults for new files (the crate default uses only 1 MiB Argon2 memory).
-fn new_config() -> DatabaseConfig {
+pub(crate) fn new_config() -> DatabaseConfig {
     let mut c = DatabaseConfig::default();
     c.kdf_config = KdfConfig::Argon2id {
         iterations: 10,
@@ -525,17 +578,25 @@ async fn open_with(app: tauri::AppHandle, state: tauri::State<'_, Vaults>, path:
     let p = path.clone();
     let k = key.clone();
     let started = std::time::Instant::now();
-    let db = tauri::async_runtime::spawn_blocking(move || -> R<Database> {
+    let (db, shared) = tauri::async_runtime::spawn_blocking(move || -> R<(Database, bool)> {
         let mut f = fs::File::open(&p).map_err(|e| format!("io:{e}"))?;
-        Database::open(&mut f, k).map_err(|e| match e {
+        let mut db = Database::open(&mut f, k).map_err(|e| match e {
             keepass::db::DatabaseOpenError::Key(_) => "wrong_key".to_string(),
             other => format!("open:{other}"),
-        })
+        })?;
+        let shared = crate::keeshare::import_all(&mut db, Path::new(&p));
+        for c in crate::keeshare::watched(&db, Path::new(&p)) {
+            stamp(&c);
+        }
+        Ok((db, shared))
     })
     .await
     .map_err(|e| format!("open:{e}"))??;
     log::info!("vault opened: {} entries, {} ms (key derivation + decrypt)", db.num_entries(), started.elapsed().as_millis());
-    let v = OpenVault { path: PathBuf::from(&path), db, key };
+    let mut v = OpenVault { path: PathBuf::from(&path), db, key };
+    if shared {
+        write_db(&mut v)?; // KeeShare import changed the folder
+    }
     stamp(&v.path);
     let d = dto(&path, &v);
     state.0.lock().map_err(|_| "lock")?.insert(path.clone(), v);
@@ -869,16 +930,16 @@ pub fn entry_copy(
 }
 
 /// Everything that makes up an entry's content, detached from its database.
-struct EntryCopy {
+pub(crate) struct EntryCopy {
     fields: HashMap<String, Value<String>>,
     tags: Vec<String>,
     custom_data: HashMap<String, keepass::db::CustomDataItem>,
-    times: Times,
+    pub(crate) times: Times,
     autotype: Option<keepass::db::AutoType>,
     attachments: Vec<(String, Value<Vec<u8>>)>,
 }
 
-fn copy_entry(db: &Database, id: EntryId) -> R<EntryCopy> {
+pub(crate) fn copy_entry(db: &Database, id: EntryId) -> R<EntryCopy> {
     let e = db.entry(id).ok_or("not_found")?;
     Ok(EntryCopy {
         fields: e.fields.clone(),
@@ -890,7 +951,30 @@ fn copy_entry(db: &Database, id: EntryId) -> R<EntryCopy> {
     })
 }
 
-fn paste_entry(db: &mut Database, group: GroupId, id: Option<EntryId>, c: EntryCopy) -> R<EntryId> {
+/// Replace an entry's content with a copy (KeeShare import); the previous state goes to history.
+pub(crate) fn overwrite_entry(db: &mut Database, id: EntryId, c: EntryCopy) -> R<()> {
+    let mut e = db.entry_mut(id).ok_or("not_found")?;
+    let mut t = e.track_changes();
+    let mut m = t.as_mut();
+    m.fields = c.fields;
+    m.tags = c.tags;
+    m.custom_data = c.custom_data;
+    m.autotype = c.autotype;
+    let names: Vec<String> = m.as_ref().attachments_named().map(|(n, _)| n.to_string()).collect();
+    for n in names {
+        m.remove_attachment_by_name(&n);
+    }
+    for (name, data) in c.attachments {
+        m.add_attachment(name, data);
+    }
+    drop(t);
+    if let Some(mut e) = db.entry_mut(id) {
+        e.times = c.times;
+    }
+    Ok(())
+}
+
+pub(crate) fn paste_entry(db: &mut Database, group: GroupId, id: Option<EntryId>, c: EntryCopy) -> R<EntryId> {
     // keep the UUID when possible (KeePass treats it as the entry's identity)
     let keep_id = id.filter(|i| db.entry(*i).is_none());
     let mut g = db.group_mut(group).ok_or("not_found")?;

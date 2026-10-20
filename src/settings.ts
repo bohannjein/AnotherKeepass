@@ -297,16 +297,8 @@ export const SECTIONS: Section[] = [
     id: 'keeshare', icon: 'share', groups: [
       {
         id: 'ksActivation', items: [
-          { key: 'ksImport', type: 'toggle', planned: true },
-          { key: 'ksExport', type: 'toggle', planned: true },
-          { key: 'ksQuiet', type: 'toggle', planned: true },
-        ],
-      },
-      {
-        id: 'ksCert', items: [
-          { key: 'ksSigner', type: 'text', planned: true },
-          { key: 'ksFingerprint', type: 'info', value: '—' },
-          { key: 'ksGenerate', type: 'action', planned: true },
+          { key: 'ksImport', type: 'toggle' },
+          { key: 'ksExport', type: 'toggle' },
         ],
       },
     ],

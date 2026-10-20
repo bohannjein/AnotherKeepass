@@ -99,6 +99,8 @@ const en = {
     ksSigner: 'Signer name', ksFingerprint: 'Certificate fingerprint', ksGenerate: 'Generate new certificate',
   },
   hints: {
+    ksImport: "Folders shared as Import or Synchronize are updated from their shared file (right-click a folder → Share).",
+    ksExport: "Folders shared as Export or Synchronize are written to their shared file on every save.",
     quickUnlock: "After locking, unlock again with face, fingerprint or PIN instead of the master password. The key stays in memory until you close the vault or quit the app.",
     faviconTimeout: "How long to wait for a website when loading its icon (right-click an entry or vault → Load website icons).",
     ddgFavicons: "Icons come from DuckDuckGo instead of the sites themselves, so the sites don't see the request.",
@@ -282,6 +284,8 @@ const de: SettingsStrings = {
     ksSigner: 'Name des Unterzeichners', ksFingerprint: 'Fingerabdruck des Zertifikats', ksGenerate: 'Neues Zertifikat generieren',
   },
   hints: {
+    ksImport: "Als „Importieren“ oder „Synchronisieren“ geteilte Ordner werden aus ihrer Datei aktualisiert (Rechtsklick auf Ordner → Teilen).",
+    ksExport: "Als „Exportieren“ oder „Synchronisieren“ geteilte Ordner werden bei jedem Speichern in ihre Datei geschrieben.",
     quickUnlock: "Nach dem Sperren mit Gesicht, Fingerabdruck oder PIN statt Master-Passwort entsperren. Der Schlüssel bleibt im Speicher, bis du den Tresor schließt oder die App beendest.",
     faviconTimeout: "Wie lange auf eine Website gewartet wird, wenn ihr Symbol geladen wird (Rechtsklick auf Eintrag oder Tresor → Website-Symbole laden).",
     ddgFavicons: "Symbole kommen von DuckDuckGo statt von den Websites selbst – die Websites sehen die Anfrage nicht.",
@@ -463,6 +467,8 @@ const fr: SettingsStrings = {
     ksSigner: 'Nom du signataire', ksFingerprint: 'Empreinte du certificat', ksGenerate: 'Générer un nouveau certificat',
   },
   hints: {
+    ksImport: "Les dossiers partagés en Import ou Synchronisation sont mis à jour depuis leur fichier (clic droit sur un dossier → Partager).",
+    ksExport: "Les dossiers partagés en Export ou Synchronisation sont écrits dans leur fichier à chaque enregistrement.",
     quickUnlock: "Après le verrouillage, déverrouiller avec visage, empreinte ou PIN au lieu du mot de passe maître. La clé reste en mémoire jusqu’à la fermeture du coffre ou de l’application.",
     faviconTimeout: "Délai d’attente d’un site pour charger son icône (clic droit sur une entrée ou un coffre → Charger les icônes).",
     ddgFavicons: "Les icônes viennent de DuckDuckGo plutôt que des sites eux-mêmes, qui ne voient donc pas la requête.",
@@ -644,6 +650,8 @@ const es: SettingsStrings = {
     ksSigner: 'Nombre del firmante', ksFingerprint: 'Huella del certificado', ksGenerate: 'Generar nuevo certificado',
   },
   hints: {
+    ksImport: "Las carpetas compartidas como Importar o Sincronizar se actualizan desde su archivo (clic derecho en una carpeta → Compartir).",
+    ksExport: "Las carpetas compartidas como Exportar o Sincronizar se escriben en su archivo en cada guardado.",
     quickUnlock: "Tras bloquear, desbloquear con cara, huella o PIN en lugar de la contraseña maestra. La clave queda en memoria hasta cerrar la bóveda o salir de la app.",
     faviconTimeout: "Cuánto esperar a un sitio al cargar su icono (clic derecho en una entrada o bóveda → Cargar iconos).",
     ddgFavicons: "Los iconos vienen de DuckDuckGo en lugar de los propios sitios, que así no ven la petición.",

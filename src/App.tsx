@@ -17,6 +17,7 @@ const ImportDialog = lazy(() => import('./ImportDialog'));
 import VaultDialog, { fileName, type Known } from './VaultDialog';
 import { Icon } from './Icon';
 import { SshPanel } from './SshPanel';
+import { ShareDialog } from './ShareDialog';
 import { HealthOverview, HealthRow, ISSUE_ICON, ISSUES, issueName as issueNameOf, type Issue } from './HealthOverview';
 import { TotpSetup } from './TotpSetup';
 import { ContextMenuProvider, useContextMenu, type MenuItem } from './ContextMenu';
@@ -59,7 +60,7 @@ const DESKTOP_KEYS = [
   'atShortcut', 'atStartDelay', 'atCharDelay', 'atAlwaysAsk', 'atMatchTitle', 'atMatchUrl', 'atHideExpired',
   'browserEnabled', 'bChrome', 'bFirefox', 'bChromium', 'bEdge', 'bBrave', 'bVivaldi', 'bTor', 'bUnlock', 'bMatchScheme',
   'bBestMatch', 'bAllowExpired', 'bSearchAll', 'bNoAccessConfirm', 'bUpdateNoConfirm', 'bKph', 'bUpdateManifests',
-  'bCustomProxy', 'bProxyPath', 'bSkipBasicAuth', 'backupBeforeSave', 'backupPath', 'autoReload', 'atRelock', 'atRemember', 'trayStyle', 'quickUnlock', 'sshEnabled', 'sshAuthSock',
+  'bCustomProxy', 'bProxyPath', 'bSkipBasicAuth', 'backupBeforeSave', 'backupPath', 'autoReload', 'atRelock', 'atRemember', 'trayStyle', 'quickUnlock', 'sshEnabled', 'sshAuthSock', 'ksImport', 'ksExport',
 ] as const;
 const KNOWN_KEY = 'anotherkeepass.vaults';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -180,7 +181,8 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const [pending, setPending] = useState<Item | null>(null); // new entry, not saved yet
   const [newMenu, setNewMenu] = useState(false);
   const [showGen, setShowGen] = useState(false);
-  const [importFor, setImportFor] = useState<string | null>(null); // target vault of the import dialog
+  const [importFor, setImportFor] = useState<string | null>(null);
+  const [shareFor, setShareFor] = useState<Folder | null>(null); // target vault of the import dialog
   const [folderDialog, setFolderDialog] = useState<{ mode: 'create' | 'rename'; vault?: string; id?: string; name?: string; parent?: string } | null>(null);
   const openMenu = useContextMenu();
   const [vaultDialog, setVaultDialog] = useState<{ path?: string } | null>(null);
@@ -249,7 +251,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const items = useMemo(() => Object.values(open).flatMap(v => v.items.map(r => rawToItemCached(r, v))), [open]);
   const allItems = pending ? [...items, pending] : items;
   const folders: Folder[] = useMemo(() => Object.values(open).flatMap(v =>
-    v.folders.map(f => ({ id: f.id, vault: v.id, name: f.name, parent: f.parent }))), [open]);
+    v.folders.map(f => ({ id: f.id, vault: v.id, name: f.name, parent: f.parent, share: f.share }))), [open]);
   const vaultList: VaultInfo[] = useMemo(() => {
     const ids = [...known.map(k => k.path), ...Object.keys(open).filter(id => !known.some(k => k.path === id))];
     return ids.map(id => {
@@ -505,6 +507,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const folderMenu = (f: Folder): MenuItem[] => [
     { icon: 'create_new_folder', label: t.newSubfolder, action: () => setFolderDialog({ mode: 'create', vault: f.vault, parent: f.id }) },
     { icon: 'drive_file_rename_outline', label: t.renameFolder, action: () => setFolderDialog({ mode: 'rename', vault: f.vault, id: f.id, name: f.name }) },
+    ...(backend.desktop ? [{ icon: 'folder_shared', label: t.shareFolder, action: () => setShareFor(f) }] : []),
     'sep',
     { icon: 'delete', label: t.deleteFolder, danger: true, action: () => setConfirm({ title: t.deleteFolder, body: ts.ui.trashBody, label: ts.ui.moveToTrash, icon: 'delete',
       action: async () => { if (apply(await run(backend.folderTrash(f.vault, f.id)))) setFolder(null); } }) },
@@ -649,7 +652,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
                   <button className={'nav-item folder' + (folder === f.id ? ' active' : '') + (dragOver === 'f:' + f.id ? ' drop-over' : '')}
                     onClick={() => setFolder(f.id)} title={f.name} {...dropProps('f:' + f.id, f.vault, f.id)}
                     onContextMenu={e => openMenu(e, folderMenu(f))}>
-                    <Icon n={folder === f.id ? 'folder_open' : 'folder'} fill={folder === f.id} />
+                    <Icon n={f.share ? 'folder_shared' : folder === f.id ? 'folder_open' : 'folder'} fill={folder === f.id} />
                     <span>{f.name}</span>
                     <span className="count">{items.filter(i => i.folder === f.id && !i.trashed).length}</span>
                   </button>
@@ -794,6 +797,10 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
           vaultName={id => vaultList.find(v => v.id === id)?.name ?? ''}
           onClose={() => setPick(null)}
           onPick={(vault, id, sequence) => { setPick(null); run(backend.autotypePerform(vault, id, sequence)); }} />
+      )}
+      {shareFor && (
+        <ShareDialog t={t} vault={shareFor.vault} folder={shareFor.id} name={shareFor.name} onClose={() => setShareFor(null)}
+          onSaved={(d, msg) => { onUpdate(d); notify(msg); }} />
       )}
       {importFor !== null && (
         <Suspense fallback={null}>

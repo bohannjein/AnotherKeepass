@@ -69,7 +69,6 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
     if (key === 'export') exportPrefs();
     else if (key === 'import') fileInput.current?.click();
     else if (key === 'reset') setConfirmReset(true);
-    else if (key === 'ksGenerate') onSnack(ts.ui.generated); // ponytail: mock; backend generates the KeeShare key pair
   };
 
   return (

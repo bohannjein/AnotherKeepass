@@ -8,6 +8,7 @@ mod clipboard;
 mod desktop;
 mod favicon;
 mod health;
+mod keeshare;
 mod ssh;
 mod hello;
 mod vault;
@@ -18,6 +19,7 @@ pub fn run() {
   let prefs = desktop::load_prefs();
   desktop::apply_backup(&prefs);
   desktop::apply_ssh(&prefs);
+  desktop::apply_keeshare(&prefs);
   vault::quick_unlock_enable(prefs.quick_unlock);
   let mut builder = tauri::Builder::default();
   // must be the first plugin: a second start only focuses the running window
@@ -43,6 +45,8 @@ pub fn run() {
       vault::vault_rename,
       vault::entry_save,
       vault::entry_import,
+      vault::keeshare_get,
+      vault::keeshare_set,
       ssh::ssh_settings,
       ssh::ssh_status,
       ssh::ssh_settings_set,
