@@ -16,6 +16,7 @@ const Generator = lazy(() => import('./GeneratorDialog'));
 const ImportDialog = lazy(() => import('./ImportDialog'));
 import VaultDialog, { fileName, type Known } from './VaultDialog';
 import { Icon } from './Icon';
+import { SshPanel } from './SshPanel';
 import { HealthOverview, HealthRow, ISSUE_ICON, ISSUES, issueName as issueNameOf, type Issue } from './HealthOverview';
 import { TotpSetup } from './TotpSetup';
 import { ContextMenuProvider, useContextMenu, type MenuItem } from './ContextMenu';
@@ -58,7 +59,7 @@ const DESKTOP_KEYS = [
   'atShortcut', 'atStartDelay', 'atCharDelay', 'atAlwaysAsk', 'atMatchTitle', 'atMatchUrl', 'atHideExpired',
   'browserEnabled', 'bChrome', 'bFirefox', 'bChromium', 'bEdge', 'bBrave', 'bVivaldi', 'bTor', 'bUnlock', 'bMatchScheme',
   'bBestMatch', 'bAllowExpired', 'bSearchAll', 'bNoAccessConfirm', 'bUpdateNoConfirm', 'bKph', 'bUpdateManifests',
-  'bCustomProxy', 'bProxyPath', 'backupBeforeSave', 'backupPath', 'autoReload', 'atRelock', 'atRemember', 'trayStyle', 'quickUnlock',
+  'bCustomProxy', 'bProxyPath', 'backupBeforeSave', 'backupPath', 'autoReload', 'atRelock', 'atRemember', 'trayStyle', 'quickUnlock', 'sshEnabled', 'sshAuthSock',
 ] as const;
 const KNOWN_KEY = 'anotherkeepass.vaults';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -774,7 +775,8 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
             onHistoryRestore={i => historyRestore(current, i)}
             onDownload={a => download(current, a)}
             onLoadIcon={backend.desktop && current.fields.some(f => f.raw === 'URL' && f.value) ? () => loadIcons([current]) : undefined}
-            onRemoveIcon={current.icon ? () => removeIcon(current) : undefined} />
+            onRemoveIcon={current.icon ? () => removeIcon(current) : undefined}
+            onSshChanged={settings.sshEnabled && backend.desktop ? d => onUpdate(d) : undefined} onMessage={notify} />
         ) : (
           vault === HEALTH ? (
             <HealthOverview t={t} total={Object.keys(health).length} counts={healthCounts} breachesChecked={!!breaches} checking={checking}
@@ -1286,7 +1288,7 @@ function EditRow({ t, f, prefs, title, onChange, onRemove, onCopy }: {
 }
 
 function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyText, loadSecrets, getTotp, onDuplicate, onSave, onDiscard,
-  onTrash, onRestore, onDeleteForever, onTogglePin, onHistoryRestore, onDownload, onLoadIcon, onRemoveIcon }: {
+  onTrash, onRestore, onDeleteForever, onTogglePin, onHistoryRestore, onDownload, onLoadIcon, onRemoveIcon, onSshChanged, onMessage }: {
   t: Strings; item: Item; vault: VaultInfo; folders: Folder[]; isNew: boolean; prefs: Prefs;
   onCopyField: (f: Field, what: string) => void; onCopyText: (text: string, what: string) => void;
   loadSecrets: () => Promise<Record<string, string>>; getTotp: (field: string) => Promise<Totp>; onDuplicate: () => void;
@@ -1294,6 +1296,7 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
   onTrash: () => void; onRestore: () => void; onDeleteForever: () => void; onTogglePin: () => void;
   onHistoryRestore: (index: number) => void; onDownload: (a: Attachment) => void;
   onLoadIcon?: () => void; onRemoveIcon?: () => void;
+  onSshChanged?: (d: VaultData) => void; onMessage: (msg: string, error?: boolean) => void;
 }) {
   const [moreMenu, setMoreMenu] = useState(false);
   const fromItem = (): Draft => ({
@@ -1528,6 +1531,10 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
             </label>
           )}
         </div>
+      )}
+
+      {!draft && !isNew && onSshChanged && d.attachments.length > 0 && (
+        <SshPanel t={t} vault={item.vault} id={item.id} files={d.attachments.map(a => a.name)} onChanged={onSshChanged} onMessage={onMessage} />
       )}
 
       {!isNew && (

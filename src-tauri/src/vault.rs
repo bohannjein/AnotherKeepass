@@ -413,6 +413,15 @@ fn with_vault<T>(state: &Vaults, id: &str, f: impl FnOnce(&mut OpenVault) -> R<T
 }
 
 /// Mutate, persist, and return the fresh listing.
+/// Change one entry (no history version), persist, return the listing.
+pub fn mutate_entry(state: &Vaults, vault: &str, id: &str, f: impl FnOnce(&mut keepass::db::EntryMut<'_>)) -> R<VaultDto> {
+    mutate(state, vault, |db| {
+        let mut e = db.entry_mut(EntryId::from(parse_uuid(id)?)).ok_or("not_found")?;
+        f(&mut e);
+        Ok(())
+    })
+}
+
 fn mutate(state: &Vaults, id: &str, f: impl FnOnce(&mut Database) -> R<()>) -> R<VaultDto> {
     with_vault(state, id, |v| {
         f(&mut v.db)?;
@@ -529,11 +538,16 @@ async fn open_with(app: tauri::AppHandle, state: tauri::State<'_, Vaults>, path:
     let v = OpenVault { path: PathBuf::from(&path), db, key };
     stamp(&v.path);
     let d = dto(&path, &v);
-    state.0.lock().map_err(|_| "lock")?.insert(path, v);
+    state.0.lock().map_err(|_| "lock")?.insert(path.clone(), v);
     crate::browser_server::notify("database-unlocked");
-    // after the UI got the listing: an Auto-Type may be waiting for this unlock
+    // after the UI got the listing: SSH keys to the agent, an Auto-Type may be waiting for this unlock
     let app2 = app.clone();
     std::thread::spawn(move || {
+        use tauri::Manager;
+        let state = app2.state::<Vaults>();
+        if let Some(v) = state.0.lock().ok().as_ref().and_then(|m| m.get(&path)) {
+            crate::ssh::on_unlock(&path, v);
+        }
         std::thread::sleep(std::time::Duration::from_millis(300));
         crate::autotype::after_unlock(&app2);
     });
@@ -549,6 +563,7 @@ pub fn paths_exist(paths: Vec<String>) -> Vec<bool> {
 #[tauri::command]
 pub fn vault_close(state: tauri::State<'_, Vaults>, id: String) -> R<()> {
     state.0.lock().map_err(|_| "lock")?.remove(&id); // drop zeroizes key + protected values
+    crate::ssh::on_lock(&id);
     if let Some(keys) = QUICK_KEYS.lock().map_err(|_| "lock")?.as_mut() {
         keys.remove(&id); // closing on purpose = no quick unlock for it
     }
@@ -580,6 +595,9 @@ pub fn lock_vaults(map: &mut HashMap<String, OpenVault>) {
         } else {
             *q = None;
         }
+    }
+    for id in map.keys() {
+        crate::ssh::on_lock(id);
     }
     map.clear();
 }

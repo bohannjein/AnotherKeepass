@@ -43,6 +43,8 @@ export interface ItemInput {
 }
 export interface ImportInput { path: string[]; item: ItemInput }
 export interface Health { vault: string; id: string; bits: number; weak: boolean; reused: number; ageDays: number; old: boolean; expired: boolean }
+/** KeeAgent settings of an entry (same file KeePassXC uses) */
+export interface KeeAgent { allow: boolean; addAtOpen: boolean; removeAtClose: boolean; confirm: boolean; lifetime: number; attachment: string }
 export interface Totp { code: string; remaining: number; period: number }
 export interface AutoTypeCandidate { vault: string; id: string; title: string; username: string; sequence: string }
 export interface AutoTypePick { windowTitle: string; candidates: AutoTypeCandidate[] }
@@ -68,6 +70,11 @@ export interface Backend {
   /** many new entries, folders by name path below parent (null = root); one file write */
   importItems(vault: string, parent: string | null, items: ImportInput[]): Promise<[number, VaultData]>;
   secrets(vault: string, id: string): Promise<Record<string, string>>;
+  sshSettings(vault: string, id: string): Promise<KeeAgent | null>;
+  sshStatus(configured: string): Promise<{ path: string; reachable: boolean }>;
+  sshSettingsSet(vault: string, id: string, settings: KeeAgent | null): Promise<VaultData>;
+  sshAdd(vault: string, id: string): Promise<void>;
+  sshRemove(vault: string, id: string): Promise<void>;
   /** set (PNG base64) or clear (null) entry icons, one write */
   iconsSet(vault: string, icons: [string, string | null][]): Promise<VaultData>;
   /** website icon bytes (base64), downloaded by the backend */
@@ -124,6 +131,11 @@ const desktop: Backend = {
   save: (vault, item) => invoke('entry_save', { vault, item }),
   importItems: (vault, parent, items) => invoke('entry_import', { vault, parent, items }),
   secrets: (vault, id) => invoke('entry_secrets', { vault, id }),
+  sshSettings: (vault, id) => invoke('ssh_settings', { vault, id }),
+  sshStatus: configured => invoke('ssh_status', { configured }),
+  sshSettingsSet: (vault, id, settings) => invoke('ssh_settings_set', { vault, id, settings }),
+  sshAdd: (vault, id) => invoke('ssh_agent_add', { vault, id }),
+  sshRemove: (vault, id) => invoke('ssh_agent_remove', { vault, id }),
   iconsSet: (vault, icons) => invoke('entry_icons_set', { vault, icons }),
   faviconFetch: (url, ddg, timeout) => invoke('favicon_fetch', { url, ddg, timeout }),
   healthReport: () => invoke('health_report'),
@@ -269,6 +281,11 @@ const demo: Backend = {
   },
   // demo: no network access from the browser preview (CSP); DuckDuckGo icons work in the desktop app
   faviconFetch: async () => { throw new Error('no_icon'); },
+  sshSettings: async () => null,
+  sshStatus: async () => ({ path: '—', reachable: false }),
+  sshSettingsSet: async vault => out(get(vault)),
+  sshAdd: async () => { throw new Error('ssh_agent'); },
+  sshRemove: async () => { throw new Error('ssh_agent'); },
   async secrets(vault, id) { return { ...(get(vault).secrets.get(id) ?? {}) }; },
   async totp(vault, id, field) {
     const s = get(vault).secrets.get(id)?.[field] ?? '';

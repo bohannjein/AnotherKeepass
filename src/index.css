@@ -955,3 +955,9 @@ kbd {
 .hero .avatar.favicon { padding: 14px; }
 .hello-btn { justify-self: stretch; justify-content: center; height: 48px; }
 .hello-btn .ms { font-size: 24px; }
+.ssh .attach-head .switch { margin-left: auto; }
+.ssh .opt { padding: 0 4px 0 54px; }
+.ssh .row { padding-left: 54px; justify-content: flex-start; }
+.set-info.ok { color: var(--secondary); }
+.set-info.bad { color: #ffb4ab; }
+:root[data-theme='light'] .set-info.bad { color: #ba1a1a; }

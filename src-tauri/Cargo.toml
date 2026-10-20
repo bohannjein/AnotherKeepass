@@ -42,6 +42,8 @@ tokio = { version = "1", features = ["net", "io-util", "io-std", "sync", "time",
 url = "2"
 sha1 = "0.10"
 ureq = "2"
+ssh-key = { version = "0.6", features = ["encryption", "ed25519", "rsa", "ecdsa", "p256", "p384"] }
+ssh-encoding = { version = "0.2", features = ["alloc"] }
 
 [target."cfg(windows)".dependencies]
 windows = { version = "0.61", features = ["Security_Credentials_UI", "Win32_System_WinRT", "Win32_Foundation", "Foundation"] }

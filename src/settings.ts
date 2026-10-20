@@ -274,13 +274,10 @@ export const SECTIONS: Section[] = [
     id: 'ssh', icon: 'terminal', groups: [
       {
         id: 'ssh', items: [
-          { key: 'sshEnabled', type: 'toggle', planned: true },
+          { key: 'sshEnabled', type: 'toggle' },
           { key: 'sshStatus', type: 'info', value: '—' },
-          { key: 'sshAgent', type: 'select', options: ['pageant', 'openssh', 'bothAgents'], dependsOn: 'sshEnabled', platform: 'windows', planned: true },
           { key: 'sshAuthSockCurrent', type: 'info', value: '—' },
-          { key: 'sshAuthSock', type: 'path', dependsOn: 'sshEnabled', planned: true },
-          { key: 'skProviderCurrent', type: 'info', value: '—' },
-          { key: 'skProvider', type: 'path', dependsOn: 'sshEnabled', planned: true },
+          { key: 'sshAuthSock', type: 'path', dependsOn: 'sshEnabled' },
         ],
       },
     ],

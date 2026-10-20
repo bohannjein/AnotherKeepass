@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULTS, SECTIONS, clamp, mergePrefs, type PrefKey, type Prefs, type Setting } from './settings';
 import { settingsStrings, type SettingsStrings } from './i18n-settings';
 import { LANGS, type Strings } from './i18n';
 
 import { Icon } from './Icon';
+import { backend } from './backend';
 
 const SCHEMA = new Map(SECTIONS.flatMap(s => s.groups.flatMap(g => g.items)).map(i => [i.key, i] as const));
 
@@ -14,6 +15,12 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
   const [section, setSection] = useState(SECTIONS[0].id);
   const [confirmReset, setConfirmReset] = useState(false);
   const [query, setQuery] = useState('');
+  // live SSH agent status for the SSH section
+  const [ssh, setSsh] = useState<{ path: string; reachable: boolean } | null>(null);
+  useEffect(() => {
+    if (section !== 'ssh' || !prefs.sshEnabled) { setSsh(null); return; }
+    backend.sshStatus(prefs.sshAuthSock).then(setSsh).catch(() => setSsh(null));
+  }, [section, prefs.sshEnabled, prefs.sshAuthSock]);
   const fileInput = useRef<HTMLInputElement>(null);
 
   // planned (not built) options stay hidden unless asked for; sections without visible options disappear
@@ -98,7 +105,7 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
               <section className="set-group" key={sec.id + g.id}>
                 <span className="label">{ts.sections[sec.id as keyof SettingsStrings['sections']]} · {ts.groups[g.id as keyof SettingsStrings['groups']]}</span>
                 <div className="set-card">
-                  {items.map(s => <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} onAction={runAction} />)}
+                  {items.map(s => <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} onAction={runAction} t={t} ssh={ssh} />)}
                 </div>
               </section>
             ))}
@@ -111,7 +118,7 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
                 <span className="label">{ts.groups[g.id as keyof SettingsStrings['groups']]}</span>
                 <div className="set-card">
                   {g.items.map(s => (
-                    <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} onAction={runAction} />
+                    <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} onAction={runAction} t={t} ssh={ssh} />
                   ))}
                 </div>
               </section>
@@ -144,8 +151,8 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
   );
 }
 
-function Row({ s, ts, prefs, disabled, set, onAction }: {
-  s: Setting; ts: SettingsStrings; prefs: Prefs; disabled: boolean;
+function Row({ s, ts, prefs, disabled, set, onAction, t, ssh }: {
+  s: Setting; ts: SettingsStrings; prefs: Prefs; disabled: boolean; t: Strings; ssh: { path: string; reachable: boolean } | null;
   set: (key: PrefKey, value: Prefs[PrefKey]) => void; onAction: (key: string) => void;
 }) {
   const label = ts.labels[s.key as keyof SettingsStrings['labels']];
@@ -175,10 +182,11 @@ function Row({ s, ts, prefs, disabled, set, onAction }: {
   }
 
   if (s.type === 'info') {
+    const live = s.key === 'sshStatus' ? (ssh ? (ssh.reachable ? t.sshOk : t.sshDown) : '—') : s.key === 'sshAuthSockCurrent' ? ssh?.path ?? '—' : s.value;
     return (
       <div className={'set-row' + (indent ? ' indent' : '')}>
         <div className="set-text"><span className="set-label">{label}</span></div>
-        <code className="set-info">{s.value}</code>
+        <code className={'set-info' + (s.key === 'sshStatus' && ssh ? (ssh.reachable ? ' ok' : ' bad') : '')}>{live}</code>
       </div>
     );
   }
