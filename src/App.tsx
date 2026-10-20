@@ -50,7 +50,7 @@ const TRASH = 'trash';
 const SETTINGS_KEY = 'anotherkeepass.settings';
 // options Rust needs before/without the UI (tray, autostart, window behaviour, auto-type)
 const DESKTOP_KEYS = [
-  'singleInstance', 'autostart', 'startMinimized', 'trayIcon', 'minimizeOnClose', 'hideToTray',
+  'singleInstance', 'autostart', 'startMinimized', 'trayIcon', 'hideToTray',
   'lockOnMinimize', 'lockOnSession', 'lockOnUserSwitch',
   'atShortcut', 'atStartDelay', 'atCharDelay', 'atAlwaysAsk', 'atMatchTitle', 'atMatchUrl', 'atHideExpired',
   'browserEnabled', 'bChrome', 'bFirefox', 'bChromium', 'bEdge', 'bBrave', 'bVivaldi', 'bTor', 'bUnlock', 'bMatchScheme',

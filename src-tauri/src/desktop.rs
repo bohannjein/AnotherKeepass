@@ -24,7 +24,6 @@ pub struct DesktopPrefs {
     pub autostart: bool,
     pub start_minimized: bool,
     pub tray_icon: bool,
-    pub minimize_on_close: bool,
     pub hide_to_tray: bool,
     pub lock_on_minimize: bool,
     pub lock_on_session: bool,
@@ -69,7 +68,6 @@ impl Default for DesktopPrefs {
             autostart: false,
             start_minimized: false,
             tray_icon: true,
-            minimize_on_close: false,
             hide_to_tray: false,
             lock_on_minimize: false,
             lock_on_session: true,
@@ -220,11 +218,11 @@ pub fn on_window_event<R: Runtime>(window: &tauri::Window<R>, event: &WindowEven
     let app = window.app_handle();
     let p = prefs(app);
     match event {
-        // "hide to tray" also covers the × button: people expect × to land in the tray once that is on
-        WindowEvent::CloseRequested { api, .. } if p.minimize_on_close || (p.hide_to_tray && p.tray_icon) => {
-            log::info!("close -> {}", if p.tray_icon { "tray" } else { "minimize" });
+        // with a tray icon × only hides the window (like Proton Pass); quitting goes through the tray menu
+        WindowEvent::CloseRequested { api, .. } if p.tray_icon => {
+            log::info!("close -> tray");
             api.prevent_close();
-            if p.tray_icon { let _ = window.hide(); } else { let _ = window.minimize(); }
+            let _ = window.hide();
         }
         WindowEvent::Resized(_) if window.is_minimized().unwrap_or(false) => {
             if p.lock_on_minimize {
@@ -259,8 +257,8 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
         std::mem::replace(&mut *cur, prefs.clone())
     };
     log::info!(
-        "desktop_apply tray={} close_to_tray={} hide_to_tray={} start_minimized={} browser={}",
-        prefs.tray_icon, prefs.minimize_on_close, prefs.hide_to_tray, prefs.start_minimized, prefs.browser_enabled
+        "desktop_apply tray={} hide_to_tray={} start_minimized={} browser={}",
+        prefs.tray_icon, prefs.hide_to_tray, prefs.start_minimized, prefs.browser_enabled
     );
     save_prefs(&prefs).inspect_err(|e| log::error!("desktop.json: {e}"))?;
     apply_backup(&prefs);
