@@ -54,7 +54,7 @@ const NAME: Partial<Record<keyof Strings, string>> = {
   noteBody: 'Note',
 };
 const KEY_BY_NAME = Object.fromEntries(Object.entries(NAME).map(([k, v]) => [v, k])) as Record<string, keyof Strings>;
-const DEFAULT_KIND: Partial<Record<keyof Strings, FieldKind>> = {
+export const DEFAULT_KIND: Partial<Record<keyof Strings, FieldKind>> = {
   password: 'hidden', number: 'hidden', cvc: 'hidden', pin: 'hidden', website: 'url', totp: 'totp', birthdate: 'date',
 };
 const ORDER = Object.keys(NAME);

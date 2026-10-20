@@ -574,6 +574,57 @@ pub fn entry_save(state: tauri::State<'_, Vaults>, vault: String, item: ItemInpu
     Ok((saved, d))
 }
 
+#[derive(Deserialize)]
+pub struct ImportInput {
+    /// folder names below the import target, created when missing (e.g. ["Work", "Mail"])
+    path: Vec<String>,
+    item: ItemInput,
+}
+
+/// Find or create the folder path below parent.
+fn ensure_path(db: &mut Database, parent: GroupId, path: &[String]) -> R<GroupId> {
+    let mut cur = parent;
+    for name in path.iter().map(|n| n.trim()).filter(|n| !n.is_empty()) {
+        let found = db.iter_all_groups().find(|g| g.name == name && g.parent().map(|p| p.id()) == Some(cur)).map(|g| g.id());
+        cur = match found {
+            Some(id) => id,
+            None => {
+                let mut parent = db.group_mut(cur).ok_or("not_found")?;
+                let mut g = parent.add_group();
+                g.name = name.to_string();
+                g.id()
+            }
+        };
+    }
+    Ok(cur)
+}
+
+/// Many new entries in one go: a single write instead of one (with key derivation) per entry.
+fn import_items(db: &mut Database, parent: Option<&str>, items: Vec<ImportInput>) -> R<usize> {
+    let parent = match parent {
+        Some(p) => GroupId::from_uuid(parse_uuid(p)?),
+        None => db.root().id(),
+    };
+    let n = items.len();
+    for ImportInput { path, mut item } in items {
+        item.id = None;
+        item.folder = ensure_path(db, parent, &path)?.to_string();
+        save_item(db, &item)?;
+    }
+    Ok(n)
+}
+
+#[tauri::command]
+pub fn entry_import(state: tauri::State<'_, Vaults>, vault: String, parent: Option<String>, items: Vec<ImportInput>) -> R<(usize, VaultDto)> {
+    let mut n = 0;
+    let d = mutate(&state, &vault, |db| {
+        n = import_items(db, parent.as_deref(), items)?;
+        Ok(())
+    })?;
+    log::info!("imported {n} entries");
+    Ok((n, d))
+}
+
 /// Protected values of one entry, for edit mode or reveal.
 #[tauri::command]
 pub fn entry_secrets(state: tauri::State<'_, Vaults>, vault: String, id: String) -> R<HashMap<String, String>> {
@@ -1025,6 +1076,24 @@ mod tests {
             keep_attachments: vec![],
             add_attachments: vec![NewAttachment { name: "f.txt".into(), base64: B64.encode(b"data") }],
         }
+    }
+
+    #[test]
+    fn import_creates_folders_once() {
+        let mut db = Database::new();
+        let item = |title: &str| ItemInput {
+            id: Some("ignored".into()), folder: String::new(),
+            fields: vec![FieldDto { name: "Title".into(), value: Some(title.into()), protected: false }],
+            tags: vec![], custom_data: HashMap::new(), expires: None, keep_attachments: vec![], add_attachments: vec![],
+        };
+        let items = vec![
+            ImportInput { path: vec!["Work".into(), "Mail".into()], item: item("a") },
+            ImportInput { path: vec!["Work".into(), "Mail".into()], item: item("b") },
+            ImportInput { path: vec![], item: item("c") },
+        ];
+        assert_eq!(import_items(&mut db, None, items).unwrap(), 3);
+        assert_eq!(db.iter_all_groups().filter(|g| g.name == "Mail").count(), 1);
+        assert_eq!(db.iter_all_entries().count(), 3);
     }
 
     #[test]

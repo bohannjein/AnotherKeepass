@@ -36,6 +36,7 @@ pub fn run() {
       vault::vault_change_key,
       vault::vault_rename,
       vault::entry_save,
+      vault::entry_import,
       vault::entry_secrets,
       vault::entry_totp,
       vault::entry_copy,

@@ -867,3 +867,12 @@ kbd {
 .planned-toggle > span { flex: 1; display: grid; gap: 2px; min-width: 0; }
 .planned-toggle b { font-size: 13px; }
 .planned-toggle small { font-size: 12px; color: var(--on-surface-var); line-height: 1.35; }
+
+/* ---------- import ---------- */
+.import-dialog { width: min(480px, calc(100vw - 32px)); }
+.import-preview { list-style: none; display: grid; gap: 4px; padding: 8px; border-radius: var(--r-m); background: var(--surface-c); max-height: 220px; overflow-y: auto; }
+.import-preview li { display: flex; align-items: center; gap: 10px; min-height: 32px; font-size: 14px; min-width: 0; }
+.import-preview li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-preview li small { margin-left: auto; color: var(--on-surface-var); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+.import-preview li .ms { color: var(--primary); font-size: 20px; }
+.import-preview .more { color: var(--on-surface-var); padding-left: 30px; }

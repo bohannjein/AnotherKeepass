@@ -37,6 +37,7 @@ export interface ItemInput {
   keepAttachments: string[];
   addAttachments: { name: string; base64: string }[];
 }
+export interface ImportInput { path: string[]; item: ItemInput }
 export interface Totp { code: string; remaining: number; period: number }
 export interface AutoTypeCandidate { vault: string; id: string; title: string; username: string; sequence: string }
 export interface AutoTypePick { windowTitle: string; candidates: AutoTypeCandidate[] }
@@ -56,6 +57,8 @@ export interface Backend {
   changeKey(id: string, password: string, keyfile?: string): Promise<void>;
   rename(id: string, name: string): Promise<VaultData>;
   save(vault: string, item: ItemInput): Promise<[string, VaultData]>;
+  /** many new entries, folders by name path below parent (null = root); one file write */
+  importItems(vault: string, parent: string | null, items: ImportInput[]): Promise<[number, VaultData]>;
   secrets(vault: string, id: string): Promise<Record<string, string>>;
   totp(vault: string, id: string, field: string): Promise<Totp>;
   copy(vault: string, id: string, field: string, asTotp: boolean, clearAfter: number | null): Promise<void>;
@@ -100,6 +103,7 @@ const desktop: Backend = {
   changeKey: (id, password, keyfile) => invoke('vault_change_key', { id, password, keyfile }),
   rename: (id, name) => invoke('vault_rename', { id, name }),
   save: (vault, item) => invoke('entry_save', { vault, item }),
+  importItems: (vault, parent, items) => invoke('entry_import', { vault, parent, items }),
   secrets: (vault, id) => invoke('entry_secrets', { vault, id }),
   totp: (vault, id, field) => invoke('entry_totp', { vault, id, field }),
   copy: (vault, id, field, asTotp, clearAfter) => invoke('entry_copy', { vault, id, field, asTotp, clearAfter }),
@@ -200,6 +204,19 @@ const demo: Backend = {
     };
     v.data.items = prev ? v.data.items.map(i => i.id === id ? next : i) : [...v.data.items, next];
     return [id, out(v)];
+  },
+  async importItems(vault, parent, items) {
+    const v = get(vault);
+    for (const { path, item: input } of items) {
+      let cur = parent;
+      for (const name of path.map(n => n.trim()).filter(Boolean)) {
+        let f = v.data.folders.find(x => x.name === name && x.parent === cur);
+        if (!f) v.data.folders.push(f = { id: crypto.randomUUID(), name, parent: cur });
+        cur = f.id;
+      }
+      await demo.save(vault, { ...input, id: null, folder: cur ?? v.data.root });
+    }
+    return [items.length, out(v)];
   },
   async secrets(vault, id) { return { ...(get(vault).secrets.get(id) ?? {}) }; },
   async totp(vault, id, field) {

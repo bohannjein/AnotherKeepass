@@ -13,6 +13,7 @@ import { settingsStrings } from './i18n-settings';
 // rarely needed views load on first use (keeps startup lean)
 const SettingsPage = lazy(() => import('./SettingsPage'));
 const Generator = lazy(() => import('./GeneratorDialog'));
+const ImportDialog = lazy(() => import('./ImportDialog'));
 import VaultDialog, { fileName, type Known } from './VaultDialog';
 import { Icon } from './Icon';
 import { TotpSetup } from './TotpSetup';
@@ -176,6 +177,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const [pending, setPending] = useState<Item | null>(null); // new entry, not saved yet
   const [newMenu, setNewMenu] = useState(false);
   const [showGen, setShowGen] = useState(false);
+  const [importFor, setImportFor] = useState<string | null>(null); // target vault of the import dialog
   const [folderDialog, setFolderDialog] = useState<{ mode: 'create' | 'rename'; vault?: string; id?: string; name?: string; parent?: string } | null>(null);
   const openMenu = useContextMenu();
   const [vaultDialog, setVaultDialog] = useState<{ path?: string } | null>(null);
@@ -462,6 +464,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
     ? [{ icon: 'lock_open', label: t.unlockVault, action: () => setVaultDialog({ path: v.id }) }]
     : [
       { icon: 'create_new_folder', label: t.newFolder, action: () => setFolderDialog({ mode: 'create', vault: v.id, parent: '' }) },
+      { icon: 'upload_file', label: t.importItems, action: () => setImportFor(v.id) },
       { icon: 'key', label: t.changeMasterKey, action: () => setKeyDialog(v.id) },
       'sep',
       { icon: 'lock', label: t.closeVault, action: () => closeVault(v.id) },
@@ -540,6 +543,9 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
                 </button>
                 <button role="menuitem" onClick={() => { setFolderDialog({ mode: 'create', vault: targetVault }); setNewMenu(false); }}>
                   <span className="avatar sm other"><Icon n="create_new_folder" /></span>{t.folder}
+                </button>
+                <button role="menuitem" onClick={() => { setImportFor(targetVault); setNewMenu(false); }}>
+                  <span className="avatar sm note"><Icon n="upload_file" /></span>{t.importItems}
                 </button>
               </div>
             </>
@@ -678,6 +684,18 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
           vaultName={id => vaultList.find(v => v.id === id)?.name ?? ''}
           onClose={() => setPick(null)}
           onPick={(vault, id, sequence) => { setPick(null); run(backend.autotypePerform(vault, id, sequence)); }} />
+      )}
+      {importFor !== null && (
+        <Suspense fallback={null}>
+          <ImportDialog t={t} lang={settings.lang} vaults={vaultList.filter(v => !v.locked)} vault={importFor} typeIcon={TYPE_ICON}
+            onClose={() => setImportFor(null)}
+            onImport={async (vid, list, doneText) => {
+              const res = await run(backend.importItems(vid, null, list));
+              if (!res || !apply(res[1])) return false;
+              notify(doneText); setVault(vid); setFolder(null);
+              return true;
+            }} />
+        </Suspense>
       )}
       {folderDialog && (
         <FolderDialog t={t} mode={folderDialog.mode} name={folderDialog.name ?? ''} vault={folderDialog.vault ?? targetVault}
