@@ -1219,7 +1219,7 @@ function Generator({ t, onClose, onCopy, onUse }: {
         </output>
         <div className={'strength ' + strength} title={`≈ ${Math.round(bits)} bit`}>
           <Icon n={STRENGTH_ICON[strength]} fill />{strengthLabel}
-          <span className="meter"><i style={{ width: `${Math.min(100, bits / 1.2)}%` }} /></span>
+          <span className="meter"><i style={{ transform: `scaleX(${Math.min(1, bits / 120)})` }} /></span>
         </div>
 
         <div className="gen-opts">

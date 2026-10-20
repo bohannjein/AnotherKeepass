@@ -8,6 +8,12 @@
         "value": "var(--spring)",
         "createdAt": "2026-10-20T13:16:07.107Z",
         "reason": "Material 3 Expressive spring motion; user asked for the M3 Expressive style"
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(.34, 1.56, .64, 1)",
+        "createdAt": "2026-10-20T13:57:47.369Z",
+        "reason": "Definition of --spring token: Material 3 Expressive spring motion; user asked for the M3 Expressive style"
       }
     ]
   }

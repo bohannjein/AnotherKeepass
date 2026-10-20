@@ -699,7 +699,7 @@ textarea.val.edit { resize: vertical; display: block; }
 }
 .strength { display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; font-size: 14px; }
 .strength .meter { width: 120px; height: 6px; border-radius: var(--r-full); background: var(--surface-highest); overflow: hidden; }
-.strength .meter i { display: block; height: 100%; border-radius: inherit; background: currentColor; transition: width .4s var(--spring); }
+.strength .meter i { display: block; width: 100%; height: 100%; border-radius: inherit; background: currentColor; transform-origin: left; transition: transform .4s var(--spring); }
 .strength.weak { color: #ffb4ab; }
 .strength.medium { color: var(--on-tertiary-container); }
 :root[data-theme='light'] .strength.weak { color: #ba1a1a; }
