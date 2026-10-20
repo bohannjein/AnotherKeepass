@@ -12,6 +12,7 @@ mod vault;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let prefs = desktop::load_prefs();
+  desktop::apply_backup(&prefs);
   let mut builder = tauri::Builder::default();
   // must be the first plugin: a second start only focuses the running window
   if prefs.single_instance {
@@ -30,6 +31,7 @@ pub fn run() {
       vault::vault_create,
       vault::vault_open,
       vault::vault_close,
+      vault::paths_exist,
       vault::vault_lock_all,
       vault::vault_change_key,
       vault::vault_rename,
@@ -53,19 +55,23 @@ pub fn run() {
       clipboard::clipboard_read_text,
       desktop::desktop_apply,
       desktop::window_minimize,
+      desktop::ui_log,
       autotype::autotype_perform,
       autotype::autotype_entry,
       browser_server::browser_answer,
       browser_server::browser_set_active,
     ])
     .setup(move |app| {
-      if cfg!(debug_assertions) {
-        app.handle().plugin(
-          tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Info)
-            .build(),
-        )?;
-      }
+      // log file in the app log dir (release too): actions, timings and errors, never secrets
+      app.handle().plugin(
+        tauri_plugin_log::Builder::default()
+          .clear_targets()
+          .target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir { file_name: Some("anotherkeepass".into()) }))
+          .max_file_size(1_000_000)
+          .level(if cfg!(debug_assertions) { log::LevelFilter::Debug } else { log::LevelFilter::Info })
+          .build(),
+      )?;
+      log::info!("start v{} single_instance={} tray={}", env!("CARGO_PKG_VERSION"), prefs.single_instance, prefs.tray_icon);
       let handle = app.handle();
       let host = std::sync::Arc::new(browser_server::AppHost::new(handle.clone()));
       app.manage(host.clone());

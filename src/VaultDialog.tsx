@@ -1,13 +1,13 @@
 // Open / create / unlock a vault. Used as the lock screen and as the "add vault" dialog.
 // Server accounts (Bitwarden/Vaultwarden) are shown disabled as a reminder: not built yet.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { backend, errorCode, type VaultData } from './backend';
 import type { Strings } from './i18n';
 import { Icon } from './Icon';
 
-export interface Known { path: string; name: string; color: string; icon: string }
+export interface Known { path: string; name: string; color: string; icon: string; keyfile?: string }
 
 const COLORS = ['--v-clay', '--v-moss', '--v-ochre'];
 const ICONS = ['shield_lock', 'cottage', 'apartment', 'work_history', 'savings', 'school'];
@@ -15,8 +15,9 @@ export const fileName = (path: string) => path.replace(/^demo:/, '').split(/[\\/
 
 type Mode = 'open' | 'create';
 
-export default function VaultDialog({ t, known, initialPath, initialMode = 'open', modal, onOpened, onClose }: {
-  t: Strings; known: Known[]; initialPath?: string; initialMode?: Mode; modal?: boolean;
+export default function VaultDialog({ t, known, missing = [], onMissing, initialPath, initialMode = 'open', modal, onOpened, onClose }: {
+  t: Strings; known: Known[]; missing?: string[]; onMissing?: (path: string) => void;
+  initialPath?: string; initialMode?: Mode; modal?: boolean;
   onOpened: (data: VaultData, meta: Known) => void; onClose?: () => void;
 }) {
   const [mode, setMode] = useState<Mode>(initialMode);
@@ -26,6 +27,8 @@ export default function VaultDialog({ t, known, initialPath, initialMode = 'open
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [keyfile, setKeyfile] = useState('');
+  // remembered key file of the selected vault (only stored when "remember key files" is on)
+  useEffect(() => { setKeyfile(known.find(k => k.path === path)?.keyfile ?? ''); }, [path, known]);
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -63,8 +66,13 @@ export default function VaultDialog({ t, known, initialPath, initialMode = 'open
         ? await backend.open(target, password, keyfile || undefined)
         : await backend.create(target, name.trim() || fileName(target).replace(/\.kdbx$/, ''), password, keyfile || undefined);
       setPassword(''); setConfirm('');
-      onOpened(data, { ...meta(target, data.name), name: data.name });
+      onOpened(data, { ...meta(target, data.name), name: data.name, keyfile: keyfile || undefined });
     } catch (err) {
+      // file gone since last time: drop it from the remembered list
+      if (mode === 'open' && errorCode(err) === 'io' && /os error [23]/.test(String(err))) {
+        onMissing?.(target);
+        setPath('');
+      }
       setError(explain(err));
     } finally {
       setBusy(false);
@@ -90,6 +98,7 @@ export default function VaultDialog({ t, known, initialPath, initialMode = 'open
       {!modal && <h1>Another<span>Keepass</span></h1>}
       {modal && <h3><Icon n="add_moderator" />{t.addVault}</h3>}
       {!modal && <p>{known.length ? t.kdbxCompat : t.welcomeVaults}</p>}
+      {missing.length > 0 && <p className="form-note" role="status"><Icon n="info" />{t.missingFiles} {missing.join(', ')}</p>}
 
       <div className="seg vault-modes" role="tablist">
         <button type="button" role="tab" aria-selected={mode === 'open'} className={'chip' + (mode === 'open' ? ' on' : '')} onClick={() => { setMode('open'); setError(''); }}>

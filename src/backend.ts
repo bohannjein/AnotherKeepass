@@ -50,6 +50,8 @@ export interface Backend {
   create(path: string, name: string, password: string, keyfile?: string): Promise<VaultData>;
   open(path: string, password: string, keyfile?: string): Promise<VaultData>;
   close(id: string): Promise<void>;
+  /** which remembered vault files still exist */
+  pathsExist(paths: string[]): Promise<boolean[]>;
   lockAll(): Promise<void>;
   changeKey(id: string, password: string, keyfile?: string): Promise<void>;
   rename(id: string, name: string): Promise<VaultData>;
@@ -73,6 +75,8 @@ export interface Backend {
   browserAnswer(id: number, answer: unknown): Promise<void>;
   /** vault the browser extension talks to */
   browserSetActive(vault: string | null): Promise<void>;
+  /** write to the app log file (desktop) / console (browser) */
+  log(level: 'info' | 'warn' | 'error', message: string): void;
   trash(vault: string, id: string): Promise<VaultData>;
   restore(vault: string, id: string): Promise<VaultData>;
   remove(vault: string, id: string): Promise<VaultData>;
@@ -89,6 +93,7 @@ const desktop: Backend = {
   create: (path, name, password, keyfile) => invoke('vault_create', { path, name, password, keyfile }),
   open: (path, password, keyfile) => invoke('vault_open', { path, password, keyfile }),
   close: id => invoke('vault_close', { id }),
+  pathsExist: paths => invoke('paths_exist', { paths }),
   lockAll: () => invoke('vault_lock_all'),
   changeKey: (id, password, keyfile) => invoke('vault_change_key', { id, password, keyfile }),
   rename: (id, name) => invoke('vault_rename', { id, name }),
@@ -107,6 +112,7 @@ const desktop: Backend = {
   autotypeEntry: (vault, id) => invoke('autotype_entry', { vault, id }),
   browserAnswer: (id, answer) => invoke('browser_answer', { id, answer }),
   browserSetActive: vault => invoke('browser_set_active', { vault }),
+  log: (level, message) => { invoke('ui_log', { level, message }).catch(() => {}); },
   on: (event, cb) => { const p = listen(event, e => cb(e.payload as never)); return () => { p.then(f => f()); }; },
   trash: (vault, id) => invoke('entry_trash', { vault, id }),
   restore: (vault, id) => invoke('entry_restore', { vault, id }),
@@ -162,6 +168,7 @@ const demo: Backend = {
     return out(v);
   },
   async close(id) { demoVaults.delete(id); },
+  async pathsExist(paths) { return paths.map(() => true); },
   async lockAll() { demoVaults.clear(); },
   async changeKey() {},
   async rename(id, name) { const v = get(id); v.data.name = name; return out(v); },
@@ -217,6 +224,7 @@ const demo: Backend = {
   on: () => () => {},
   browserAnswer: async () => {},
   browserSetActive: async () => {},
+  log: (level, message) => console[level](message),
   async trash(vault, id) { const v = get(vault); item(v, id).trashed = true; return out(v); },
   async restore(vault, id) { const v = get(vault); item(v, id).trashed = false; return out(v); },
   async remove(vault, id) { const v = get(vault); v.data.items = v.data.items.filter(i => i.id !== id); return out(v); },

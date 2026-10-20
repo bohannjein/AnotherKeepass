@@ -1,15 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { backend, demoAttachment, type AutoTypePick, type BrowserAsk, type Totp, type VaultData } from './backend';
 import { draftToInput, rawToItem, type Attachment, type Draft, type Field, type FieldKind, type Folder, type Item, type ItemType, type VaultInfo } from './model';
 import { DEMO_VAULTS } from './mock';
-import { openExternal } from './open';
-import { clearHistory, generate, history, passphrase, phraseBits, randomBits, remember, strengthOf, type GenOpts, type PhraseOpts, type Strength } from './generator';
+import { openExternal, openOptions } from './open';
+import { clearHistory, generate } from './generator';
+import { colorize } from './colorize';
 import { LANGS, strings, type Lang, type Strings } from './i18n';
 import { DEFAULTS, mergePrefs, type Prefs } from './settings';
 import { settingsStrings } from './i18n-settings';
-import SettingsPage from './SettingsPage';
+// rarely needed views load on first use (keeps startup lean)
+const SettingsPage = lazy(() => import('./SettingsPage'));
+const Generator = lazy(() => import('./GeneratorDialog'));
 import VaultDialog, { fileName, type Known } from './VaultDialog';
 import { Icon } from './Icon';
 import { TotpSetup } from './TotpSetup';
@@ -52,7 +55,7 @@ const DESKTOP_KEYS = [
   'atShortcut', 'atStartDelay', 'atCharDelay', 'atAlwaysAsk', 'atMatchTitle', 'atMatchUrl', 'atHideExpired',
   'browserEnabled', 'bChrome', 'bFirefox', 'bChromium', 'bEdge', 'bBrave', 'bVivaldi', 'bTor', 'bUnlock', 'bMatchScheme',
   'bBestMatch', 'bAllowExpired', 'bSearchAll', 'bNoAccessConfirm', 'bUpdateNoConfirm', 'bKph', 'bUpdateManifests',
-  'bCustomProxy', 'bProxyPath',
+  'bCustomProxy', 'bProxyPath', 'backupBeforeSave', 'backupPath',
 ] as const;
 const KNOWN_KEY = 'anotherkeepass.vaults';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -84,6 +87,24 @@ export default function App() {
   const [settings, setSettings] = useState<Settings | null>(loadSettings);
   const [open, setOpen] = useState<Record<string, VaultData>>({});
   const [known, setKnown] = useState<Known[]>(loadKnown);
+  const [missing, setMissing] = useState<string[]>([]);
+  const forget = useCallback((paths: string[]) => setKnown(list => {
+    const next = list.filter(k => !paths.includes(k.path));
+    saveKnown(next);
+    return next;
+  }), []);
+  // once at start: drop remembered vault files that were deleted or moved
+  useEffect(() => {
+    const list = loadKnown();
+    if (!list.length) return;
+    backend.pathsExist(list.map(k => k.path)).then(ok => {
+      const gone = list.filter((_, i) => !ok[i]);
+      if (!gone.length) return;
+      forget(gone.map(g => g.path));
+      setMissing(gone.map(g => g.name));
+      backend.log('info', 'removed ' + gone.length + ' missing vault file(s) from the list');
+    }).catch(() => { /* keep the list if the check fails */ });
+  }, [forget]);
   const lang = settings?.lang ?? 'en';
   const theme = settings?.theme ?? 'dark';
   const t = strings[lang];
@@ -95,11 +116,13 @@ export default function App() {
     document.documentElement.style.setProperty('--zoom', String(zoom));
   }, [theme, lang, zoom]);
 
+  openOptions.minimize = !!settings?.minimizeOnUrl;
   const update = (s: Settings) => { setSettings(s); saveSettings(s); };
 
   const opened = (data: VaultData, meta: Known) => {
     setOpen(o => ({ ...o, [data.id]: data }));
     if (settings?.rememberRecent ?? true) {
+      if (!(settings?.rememberKeyfiles ?? true)) meta = { ...meta, keyfile: undefined };
       setKnown(list => {
         const next = [meta, ...list.filter(k => k.path !== meta.path)].slice(0, settings?.recentCount ?? 5);
         saveKnown(next);
@@ -112,7 +135,7 @@ export default function App() {
   useEffect(() => {
     if (!settings || !backend.desktop) return;
     const prefs = { ...Object.fromEntries(DESKTOP_KEYS.map(k => [k, settings[k]])), trayLabels: [t.trayShow, t.trayLockAll, t.trayQuit] };
-    backend.desktopApply(prefs).then(setDesktopProblems).catch(e => setDesktopProblems([String(e)]));
+    backend.desktopApply(prefs).then(setDesktopProblems).catch(e => { backend.log('error', 'desktopApply: ' + String(e)); setDesktopProblems([String(e)]); });
   }, [settings, t]);
   const onClosed = useCallback((id: string) => setOpen(o => { const n = { ...o }; delete n[id]; return n; }), []);
   const lock = useCallback(async () => {
@@ -129,7 +152,8 @@ export default function App() {
   return (
     <ContextMenuProvider t={t}>
       {!Object.keys(open).length
-        ? <VaultDialog t={t} known={known} onOpened={(d, meta) => { opened(d, meta); if (settings.minimizeAfterUnlock) backend.windowMinimize(); }} />
+        ? <VaultDialog t={t} known={known} missing={missing} onMissing={p => forget([p])}
+            onOpened={(d, meta) => { opened(d, meta); if (settings.minimizeAfterUnlock) backend.windowMinimize(); }} />
         : <Vaults t={t} settings={settings} onSettings={update} open={open} known={known}
           onOpened={opened} onUpdate={onUpdate} onClosed={onClosed} onLock={lock} desktopProblems={desktopProblems} />}
     </ContextMenuProvider>
@@ -260,6 +284,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const clearAfter = settings.clipboardClear ? settings.clipboardSeconds : null;
   const copied = (what: string) => {
     notify(`${what} ${t.copied}`);
+    if (settings.onCopy !== 'none') backend.windowMinimize();
     clearTimeout(clipTimer.current);
     if (clearAfter) clipTimer.current = setTimeout(() => notify(ts.ui.clipboardCleared), clearAfter * 1000);
   };
@@ -479,7 +504,9 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   if (page === 'settings') {
     return (
       <>
-        <SettingsPage t={t} prefs={settings} onChange={onSettings} onBack={() => setPage('vault')} onSnack={notify} />
+        <Suspense fallback={null}>
+          <SettingsPage t={t} prefs={settings} onChange={onSettings} onBack={() => setPage('vault')} onSnack={notify} />
+        </Suspense>
         {snackbar}
       </>
     );
@@ -642,7 +669,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
         )}
       </main>
 
-      {showGen && <Generator t={t} onClose={() => setShowGen(false)} onCopy={copyText} />}
+      {showGen && <Suspense fallback={null}><Generator t={t} onClose={() => setShowGen(false)} onCopy={copyText} /></Suspense>}
       {showKeys && <ShortcutsDialog t={t} onClose={() => setShowKeys(false)} />}
       {ask && <BrowserAskDialog t={t} ask={ask} vaultName={id => vaultList.find(v => v.id === id)?.name ?? ''}
         onAnswer={answer => { backend.browserAnswer(ask.id, answer); setAsk(null); }} />}
@@ -981,12 +1008,6 @@ function useTotp(get: (() => Promise<Totp>) | undefined, enabled: boolean) {
   return s;
 }
 
-// digits and symbols get their own colour, like KeePassXC's "colorize passwords"
-const colorize = (s: string) => [...s].map((c, i) =>
-  /\d/.test(c) ? <span key={i} className="pw-d">{c}</span>
-  : /[^\p{L}\p{N}]/u.test(c) ? <span key={i} className="pw-s">{c}</span>
-  : c);
-
 function FieldRow({ t, f, prefs, onCopy, reveal, totp, onEdit }: {
   t: Strings; f: Field; prefs: Prefs; onCopy: () => void; onEdit: () => void;
   reveal?: () => Promise<string>; totp?: () => Promise<Totp>;
@@ -1097,7 +1118,7 @@ function EditRow({ t, f, prefs, title, onChange, onRemove, onCopy }: {
             <Icon n="password" />
           </button>
         )}
-        {gen && <Generator t={t} onClose={() => setGen(false)} onCopy={onCopy} onUse={pw => onChange({ ...f, value: pw })} />}
+        {gen && <Suspense fallback={null}><Generator t={t} onClose={() => setGen(false)} onCopy={onCopy} onUse={(pw: string) => onChange({ ...f, value: pw })} /></Suspense>}
         {isSecret(f) && !(f.key && MULTILINE.has(f.key)) && (
           <button type="button" className="icon-btn" aria-label={shown ? t.hide : t.show} onClick={() => setShown(s => !s)}>
             <Icon n={shown ? 'visibility_off' : 'visibility'} />
@@ -1370,120 +1391,6 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
       )}
     </>
   );
-}
-
-type GenState = { mode: 'memorable' | 'random'; phrase: PhraseOpts; random: GenOpts };
-// last used generator settings, kept for the session
-let lastGen: GenState = {
-  mode: 'memorable',
-  phrase: { words: 5, capitalize: true, numbers: true, separator: '-' },
-  random: { length: 20, upper: true, digits: true, symbols: true },
-};
-const SEPARATORS = ['-', '.', '_', ',', ' '];
-const STRENGTH_ICON: Record<Strength, string> = { weak: 'gpp_bad', medium: 'gpp_maybe', strong: 'verified_user' };
-
-/** Password generator dialog. With `onUse` it fills a field (entry editing), otherwise it copies. */
-function Generator({ t, onClose, onCopy, onUse }: {
-  t: Strings; onClose: () => void; onCopy: (text: string, what: string) => void; onUse?: (pw: string) => void;
-}) {
-  const [g, setG] = useState<GenState>(lastGen);
-  const make = (s: GenState) => s.mode === 'memorable' ? passphrase(s.phrase) : generate(s.random);
-  const [pw, setPw] = useState(() => make(g));
-  const [showHistory, setShowHistory] = useState(false);
-  const update = (s: GenState) => { lastGen = s; setG(s); setPw(make(s)); };
-  const bits = g.mode === 'memorable' ? phraseBits(g.phrase) : randomBits(g.random);
-  const strength = strengthOf(bits);
-  const strengthLabel = { weak: t.strengthWeak, medium: t.strengthMedium, strong: t.strengthStrong }[strength];
-  const use = () => { remember(pw); if (onUse) { onUse(pw); onClose(); } else onCopy(pw, t.password); };
-  const p = g.phrase, r = g.random;
-
-  // portal: the detail pane is a CSS container, which would trap a fixed dialog inside it
-  return createPortal(
-    <div className="scrim" onClick={onClose}>
-      <div className="dialog gen-dialog" role="dialog" aria-label={t.generator} onClick={e => e.stopPropagation()}>
-        <div className="gen-top">
-          <button className="icon-btn" onClick={onClose} aria-label={t.close}><Icon n="close" /></button>
-          <span className="gen-title">{t.generator}</span>
-          <button className="icon-btn tonal" onClick={() => setPw(make(g))} title={t.regenerate} aria-label={t.regenerate}><Icon n="refresh" /></button>
-          <button className="btn filled" onClick={use}>
-            <Icon n={onUse ? 'input' : 'content_copy'} />{onUse ? t.genUse : t.copy}
-          </button>
-        </div>
-
-        <output className="gen-output" aria-live="polite">
-          {g.mode === 'memorable' && p.separator
-            // allow line breaks only after a separator, never inside a word
-            ? pw.split(p.separator).map((w, i) => <span key={i}>{i > 0 && <><span className="pw-s">{p.separator}</span><wbr /></>}{colorize(w)}</span>)
-            : colorize(pw)}
-        </output>
-        <div className={'strength ' + strength} title={`≈ ${Math.round(bits)} bit`}>
-          <Icon n={STRENGTH_ICON[strength]} fill />{strengthLabel}
-          <span className="meter"><i style={{ transform: `scaleX(${Math.min(1, bits / 120)})` }} /></span>
-        </div>
-
-        <div className="gen-opts">
-          <label className="opt">{t.genType}
-            <select className="set-select" value={g.mode} onChange={e => update({ ...g, mode: e.target.value as GenState['mode'] })}>
-              <option value="memorable">{t.genMemorable}</option>
-              <option value="random">{t.genRandom}</option>
-            </select>
-          </label>
-          {g.mode === 'memorable' ? (
-            <>
-              <label className="opt">{p.words} {t.genWords}
-                <input type="range" min={3} max={10} value={p.words} onChange={e => update({ ...g, phrase: { ...p, words: +e.target.value } })} />
-              </label>
-              <label className="opt">{t.genCapitalize}
-                <input className="switch" type="checkbox" checked={p.capitalize} onChange={e => update({ ...g, phrase: { ...p, capitalize: e.target.checked } })} />
-              </label>
-              <label className="opt">{t.genNumbers}
-                <input className="switch" type="checkbox" checked={p.numbers} onChange={e => update({ ...g, phrase: { ...p, numbers: e.target.checked } })} />
-              </label>
-              <div className="opt">{t.genSeparator}
-                <span className="sep-chips">
-                  {SEPARATORS.map(s => (
-                    <button key={s} className={'chip' + (p.separator === s ? ' on' : '')} title={s === ' ' ? t.genSpace : s}
-                      onClick={() => update({ ...g, phrase: { ...p, separator: s } })}>{s === ' ' ? '␣' : s}</button>
-                  ))}
-                </span>
-              </div>
-            </>
-          ) : (
-            <>
-              <label className="opt">{t.length}: {r.length}
-                <input type="range" min={8} max={64} value={r.length} onChange={e => update({ ...g, random: { ...r, length: +e.target.value } })} />
-              </label>
-              <label className="opt">{t.uppercase}
-                <input className="switch" type="checkbox" checked={r.upper} onChange={e => update({ ...g, random: { ...r, upper: e.target.checked } })} />
-              </label>
-              <label className="opt">{t.digits}
-                <input className="switch" type="checkbox" checked={r.digits} onChange={e => update({ ...g, random: { ...r, digits: e.target.checked } })} />
-              </label>
-              <label className="opt">{t.symbols}
-                <input className="switch" type="checkbox" checked={r.symbols} onChange={e => update({ ...g, random: { ...r, symbols: e.target.checked } })} />
-              </label>
-            </>
-          )}
-        </div>
-
-        <button className="gen-history-toggle" onClick={() => setShowHistory(h => !h)} aria-expanded={showHistory}>
-          {t.genHistory}<Icon n={showHistory ? 'expand_less' : 'chevron_right'} />
-        </button>
-        {showHistory && (
-          <div className="gen-history">
-            {history.length === 0 && <span className="label">{t.genHistoryEmpty}</span>}
-            {history.map(h => (
-              <button key={h.at + h.value} className="gen-history-row" onClick={() => onCopy(h.value, t.password)} title={t.copy}>
-                <span className="mono">{h.value}</span>
-                <small>{new Date(h.at).toLocaleTimeString(document.documentElement.lang, { hour: '2-digit', minute: '2-digit' })}</small>
-                <Icon n="content_copy" />
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-    , document.body);
 }
 
 function Setup({ onDone }: { onDone: (s: { lang: Lang; theme: Theme }) => void }) {

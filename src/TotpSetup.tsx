@@ -1,13 +1,13 @@
 // TOTP setup inside the edit form: read a QR code image (pick, drop or paste) and
 // preview the current code so the user sees the key works before saving.
 import { useEffect, useRef, useState } from 'react';
-import jsQR from 'jsqr';
 import { normalizeTotp } from './model';
 import { totp } from './totp';
 import type { Strings } from './i18n';
 import { Icon } from './Icon';
 
 async function decodeQr(file: Blob): Promise<string | null> {
+  const { default: jsQR } = await import('jsqr'); // only loaded when someone scans a QR code
   const bmp = await createImageBitmap(file);
   const canvas = new OffscreenCanvas(bmp.width, bmp.height);
   const ctx = canvas.getContext('2d')!;

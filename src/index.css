@@ -1,5 +1,14 @@
 /* Material 3 Expressive, earthy tonal palette (seed: terracotta / moss / ochre).
    Dark is the default; light applies via [data-theme='light']. */
+/* icon font reduced to the icons in use (scripts/subset-icons.mjs) */
+@font-face {
+  font-family: "Material Symbols Rounded";
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: block;
+  src: url("./assets/material-symbols-subset.woff2") format("woff2");
+}
+
 :root {
   --primary: #ffb68b;
   --on-primary: #522300;
@@ -847,3 +856,14 @@ kbd {
 .browser-ask-entry { display: grid; min-width: 0; }
 .browser-ask-entry b, .browser-ask-entry small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .browser-ask-entry small { color: var(--on-surface-var); font-size: 12px; }
+.form-note { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--on-surface-var); background: var(--surface-c); padding: 10px 12px; border-radius: var(--r-m); }
+
+/* long vaults: the browser skips layout/paint for rows outside the viewport */
+.items .item { content-visibility: auto; contain-intrinsic-size: auto 64px; }
+
+/* settings: search + planned toggle */
+.settings-search { margin: 0 4px 12px; height: 48px; }
+.planned-toggle { display: flex; align-items: center; gap: 12px; margin: 8px 4px 0; padding: 12px 14px; border-radius: var(--r-l); background: var(--surface-c); cursor: pointer; }
+.planned-toggle > span { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.planned-toggle b { font-size: 13px; }
+.planned-toggle small { font-size: 12px; color: var(--on-surface-var); line-height: 1.35; }

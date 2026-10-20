@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { DEFAULTS, SECTIONS, clamp, mergePrefs, type PrefKey, type Prefs, type Setting } from './settings';
 import { settingsStrings, type SettingsStrings } from './i18n-settings';
 import { LANGS, type Strings } from './i18n';
@@ -13,8 +13,22 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
   const ts = settingsStrings[prefs.lang];
   const [section, setSection] = useState(SECTIONS[0].id);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [query, setQuery] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
-  const current = SECTIONS.find(s => s.id === section)!;
+
+  // planned (not built) options stay hidden unless asked for; sections without visible options disappear
+  const visible = (it: Setting) => !('planned' in it && it.planned) || prefs.showPlanned;
+  const sections = useMemo(() => SECTIONS
+    .map(sec => ({ ...sec, groups: sec.groups.map(g => ({ ...g, items: g.items.filter(visible) })).filter(g => g.items.length) }))
+    .filter(sec => sec.groups.length), [prefs.showPlanned]); // eslint-disable-line react-hooks/exhaustive-deps
+  const current = sections.find(s => s.id === section) ?? sections[0];
+
+  // search over labels, explanations and group names in all sections
+  const q = query.trim().toLowerCase();
+  const results = useMemo(() => !q ? [] : sections.flatMap(sec => sec.groups.map(g => ({
+    sec, g, items: g.items.filter(it => [ts.labels[it.key as keyof SettingsStrings['labels']], ts.hints[it.key as keyof SettingsStrings['hints']],
+      ts.groups[g.id as keyof SettingsStrings['groups']]].some(x => x?.toLowerCase().includes(q))),
+  }))).filter(r => r.items.length), [q, sections, ts]);
 
   const set = (key: PrefKey, value: Prefs[PrefKey]) => onChange({ ...prefs, [key]: value });
 
@@ -56,29 +70,55 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
       <aside className="drawer settings-nav">
         <button className="btn text back" onClick={onBack}><Icon n="arrow_back" />{ts.ui.back}</button>
         <h1 className="settings-title"><Icon n="settings" fill />{ts.ui.settings}</h1>
+        <label className="searchbar settings-search">
+          <Icon n="search" />
+          <input placeholder={ts.ui.searchSettings} value={query} onChange={e => setQuery(e.target.value)} aria-label={ts.ui.searchSettings} />
+          {query && <button className="icon-btn" onClick={() => setQuery('')} aria-label={t.close}><Icon n="close" /></button>}
+        </label>
         <nav className="nav">
-          {SECTIONS.map(s => (
-            <button key={s.id} className={'nav-item' + (s.id === section ? ' active' : '')} onClick={() => setSection(s.id)}>
-              <span className="vi" style={{ background: 'var(--surface-highest)' }}><Icon n={s.icon} fill={s.id === section} /></span>
+          {sections.map(s => (
+            <button key={s.id} className={'nav-item' + (s.id === current.id && !q ? ' active' : '')} onClick={() => { setSection(s.id); setQuery(''); }}>
+              <span className="vi" style={{ background: 'var(--surface-highest)' }}><Icon n={s.icon} fill={s.id === current.id && !q} /></span>
               <span>{ts.sections[s.id as keyof SettingsStrings['sections']]}</span>
               <span />
             </button>
           ))}
         </nav>
+        <label className="planned-toggle">
+          <span><b>{ts.labels.showPlanned}</b><small>{ts.hints.showPlanned}</small></span>
+          <input className="switch" type="checkbox" checked={prefs.showPlanned} onChange={e => set('showPlanned', e.target.checked)} />
+        </label>
       </aside>
 
       <main className="pane settings-body">
-        <h2>{ts.sections[current.id as keyof SettingsStrings['sections']]}</h2>
-        {current.groups.map(g => (
-          <section className="set-group" key={g.id}>
-            <span className="label">{ts.groups[g.id as keyof SettingsStrings['groups']]}</span>
-            <div className="set-card">
-              {g.items.map(s => (
-                <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} onAction={runAction} />
-              ))}
-            </div>
-          </section>
-        ))}
+        {q ? (
+          <>
+            <h2>{ts.ui.searchSettings}</h2>
+            {!results.length && <div className="empty"><Icon n="search_off" />{ts.ui.noSettings}</div>}
+            {results.map(({ sec, g, items }) => (
+              <section className="set-group" key={sec.id + g.id}>
+                <span className="label">{ts.sections[sec.id as keyof SettingsStrings['sections']]} · {ts.groups[g.id as keyof SettingsStrings['groups']]}</span>
+                <div className="set-card">
+                  {items.map(s => <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} onAction={runAction} />)}
+                </div>
+              </section>
+            ))}
+          </>
+        ) : (
+          <>
+            <h2>{ts.sections[current.id as keyof SettingsStrings['sections']]}</h2>
+            {current.groups.map(g => (
+              <section className="set-group" key={g.id}>
+                <span className="label">{ts.groups[g.id as keyof SettingsStrings['groups']]}</span>
+                <div className="set-card">
+                  {g.items.map(s => (
+                    <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} onAction={runAction} />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </>
+        )}
       </main>
 
       <input ref={fileInput} type="file" accept="application/json,.json" hidden
@@ -116,7 +156,7 @@ function Row({ s, ts, prefs, disabled, set, onAction }: {
   const badges = (
     <>
       {'platform' in s && s.platform && <span className="pill">{s.platform === 'windows' ? ts.ui.windows : ts.ui.linuxMac}</span>}
-      {'desktop' in s && s.desktop && <span className="pill desk" title={ts.ui.desktopHint}><Icon n="desktop_windows" />{ts.ui.desktop}</span>}
+      {'planned' in s && s.planned && <span className="pill desk" title={ts.ui.plannedHint}><Icon n="schedule" />{ts.ui.planned}</span>}
     </>
   );
 

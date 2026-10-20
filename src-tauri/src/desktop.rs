@@ -58,6 +58,8 @@ pub struct DesktopPrefs {
     pub b_update_manifests: bool,
     pub b_custom_proxy: bool,
     pub b_proxy_path: String,
+    pub backup_before_save: bool,
+    pub backup_path: String,
 }
 
 impl Default for DesktopPrefs {
@@ -99,6 +101,8 @@ impl Default for DesktopPrefs {
             b_update_manifests: true,
             b_custom_proxy: false,
             b_proxy_path: String::new(),
+            backup_before_save: false,
+            backup_path: "{DB_FILENAME}.old.kdbx".into(),
         }
     }
 }
@@ -135,6 +139,12 @@ fn save_prefs(p: &DesktopPrefs) -> Result<(), String> {
         fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
     fs::write(path, serde_json::to_vec_pretty(p).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+}
+
+pub fn apply_backup(p: &DesktopPrefs) {
+    if let Ok(mut b) = crate::vault::BACKUP_PATTERN.lock() {
+        *b = (p.backup_before_save && !p.backup_path.trim().is_empty()).then(|| p.backup_path.trim().to_string());
+    }
 }
 
 pub fn prefs<R: Runtime>(app: &AppHandle<R>) -> DesktopPrefs {
@@ -242,7 +252,9 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
         let mut cur = state.prefs.lock().map_err(|_| "lock")?;
         std::mem::replace(&mut *cur, prefs.clone())
     };
-    save_prefs(&prefs)?;
+    log::info!("desktop_apply tray={} close_to_tray={} browser={}", prefs.tray_icon, prefs.minimize_on_close, prefs.browser_enabled);
+    save_prefs(&prefs).inspect_err(|e| log::error!("desktop.json: {e}"))?;
+    apply_backup(&prefs);
     let mut problems = Vec::new();
 
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
@@ -271,7 +283,20 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
             problems.push(format!("shortcut:{e}"));
         }
     }
+    if !problems.is_empty() {
+        log::warn!("desktop_apply problems: {problems:?}");
+    }
     Ok(problems)
+}
+
+/// UI errors and timings end up in the same log file.
+#[tauri::command]
+pub fn ui_log(level: String, message: String) {
+    match level.as_str() {
+        "error" => log::error!("ui: {message}"),
+        "warn" => log::warn!("ui: {message}"),
+        _ => log::info!("ui: {message}"),
+    }
 }
 
 #[tauri::command]

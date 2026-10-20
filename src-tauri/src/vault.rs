@@ -192,9 +192,34 @@ fn upgrade_to_kdbx4(v: &mut OpenVault) -> R<()> {
     }
 }
 
+/// "Backup before saving" pattern from the settings (None = off), e.g. "{DB_FILENAME}.old.kdbx".
+pub static BACKUP_PATTERN: Mutex<Option<String>> = Mutex::new(None);
+
+/// Resolve a KeePassXC-style backup pattern next to the vault: {DB_FILENAME}, {TIME:yyyyMMdd_HHmmss}.
+fn backup_target(vault: &Path, pattern: &str) -> Option<PathBuf> {
+    let stem = vault.file_stem()?.to_string_lossy();
+    let mut name = pattern.replace("{DB_FILENAME}", &stem);
+    while let Some(start) = name.find("{TIME:") {
+        let end = start + name[start..].find('}')?;
+        let fmt = name[start + 6..end]
+            .replace("yyyy", "%Y").replace("MM", "%m").replace("dd", "%d")
+            .replace("HH", "%H").replace("mm", "%M").replace("ss", "%S");
+        name.replace_range(start..=end, &chrono::Local::now().format(&fmt).to_string());
+    }
+    let name = name.replace("{TIME}", &chrono::Local::now().format("%Y%m%d%H%M%S").to_string());
+    let p = Path::new(&name);
+    Some(if p.is_absolute() { p.to_path_buf() } else { vault.parent()?.join(p) })
+}
+
 /// Write via temp file + rename so a crash never leaves a half-written database.
 fn write_db(v: &mut OpenVault) -> R<()> {
     upgrade_to_kdbx4(v)?;
+    let pattern = BACKUP_PATTERN.lock().ok().and_then(|p| p.clone());
+    if let Some(target) = pattern.and_then(|p| backup_target(&v.path, &p)).filter(|_| v.path.is_file()) {
+        if let Err(e) = fs::copy(&v.path, &target) {
+            log::warn!("backup before save failed: {e}");
+        }
+    }
     let mut buf = Vec::new();
     v.db.save(&mut buf, v.key.clone()).map_err(|e| format!("save:{e}"))?;
     let tmp = v.path.with_extension("kdbx.tmp");
@@ -398,6 +423,7 @@ pub async fn vault_open(
     // Argon2 takes ~1 s: run it off the main thread
     let p = path.clone();
     let k = key.clone();
+    let started = std::time::Instant::now();
     let db = tauri::async_runtime::spawn_blocking(move || -> R<Database> {
         let mut f = fs::File::open(&p).map_err(|e| format!("io:{e}"))?;
         Database::open(&mut f, k).map_err(|e| match e {
@@ -407,11 +433,18 @@ pub async fn vault_open(
     })
     .await
     .map_err(|e| format!("open:{e}"))??;
+    log::info!("vault opened: {} entries, {} ms (key derivation + decrypt)", db.num_entries(), started.elapsed().as_millis());
     let v = OpenVault { path: PathBuf::from(&path), db, key };
     let d = dto(&path, &v);
     state.0.lock().map_err(|_| "lock")?.insert(path, v);
     crate::browser_server::notify("database-unlocked");
     Ok(d)
+}
+
+/// Which remembered vault files still exist (moved/deleted ones are dropped from the list).
+#[tauri::command]
+pub fn paths_exist(paths: Vec<String>) -> Vec<bool> {
+    paths.iter().map(|p| Path::new(p).is_file()).collect()
 }
 
 #[tauri::command]
@@ -992,6 +1025,15 @@ mod tests {
             keep_attachments: vec![],
             add_attachments: vec![NewAttachment { name: "f.txt".into(), base64: B64.encode(b"data") }],
         }
+    }
+
+    #[test]
+    fn backup_pattern() {
+        let vault = Path::new("C:/vaults/work.kdbx");
+        assert_eq!(backup_target(vault, "{DB_FILENAME}.old.kdbx").unwrap(), Path::new("C:/vaults/work.old.kdbx"));
+        let t = backup_target(vault, "backup/{DB_FILENAME}_{TIME:yyyyMMdd}.kdbx").unwrap();
+        let name = t.file_name().unwrap().to_string_lossy().to_string();
+        assert!(name.starts_with("work_20") && name.len() == "work_20261020.kdbx".len(), "{name}");
     }
 
     #[test]

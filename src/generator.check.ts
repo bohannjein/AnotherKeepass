@@ -1,5 +1,6 @@
 // Self-check for the password generators. Run: node src/generator.check.ts
-import { generate, passphrase, phraseBits, randomBits, strengthOf } from './generator.ts';
+import { generate, randomBits, strengthOf } from './generator.ts';
+import { passphrase, phraseBits } from './passphrase.ts';
 
 for (let i = 0; i < 200; i++) {
   const p = passphrase({ words: 5, capitalize: true, numbers: true, separator: '-' });

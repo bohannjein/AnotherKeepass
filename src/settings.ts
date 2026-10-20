@@ -1,9 +1,10 @@
 // Application settings: one schema drives defaults, the settings page and import validation.
-// Defaults follow KeePassXC. `desktop: true` = stored now, takes effect once the Tauri backend exists.
+// Defaults follow KeePassXC. `planned: true` = stored, but the feature is not built yet (hidden unless "show planned").
 import type { Lang } from './i18n';
 
 export const DEFAULTS = {
   lang: 'en' as Lang,
+  showPlanned: false,
   theme: 'dark' as 'dark' | 'light',
 
   // General · startup
@@ -20,29 +21,19 @@ export const DEFAULTS = {
   showExpiring: true,
   expiryDays: 7,
   // General · files
-  autosaveChange: true,
-  autosaveLock: true,
-  saveNonData: false,
   autoReload: true,
   backupBeforeSave: false,
   backupPath: '{DB_FILENAME}.old.kdbx',
-  altSave: false,
-  altSaveMode: 'temp',
   // General · entries
   confirmTrash: true,
   generateForNew: true,
   copyOnDoubleClick: false,
   urlDoubleClick: 'open',
-  useGroupIcon: true,
   minimizeOnUrl: false,
   onCopy: 'none',
   faviconTimeout: 10,
   // General · interface
   fontSize: 100,
-  toolbarStyle: 'follow',
-  toolbarMovable: false,
-  showToolbar: true,
-  showMenubar: true,
   colorizePasswords: true,
   monospaceNotes: false,
   minimizeOnClose: false,
@@ -54,7 +45,6 @@ export const DEFAULTS = {
   atMatchTitle: true,
   atMatchUrl: true,
   atAlwaysAsk: true,
-  atSkipConfirmMain: false,
   atHideExpired: false,
   atRelock: false,
   atShortcut: '',
@@ -99,7 +89,6 @@ export const DEFAULTS = {
   bSkipBasicAuth: false,
   bKph: false,
   bLocalhostPasskeys: false,
-  bNoMigration: false,
   bUpdateManifests: true,
   bCustomProxy: false,
   bProxyPath: '',
@@ -124,17 +113,16 @@ export type Prefs = typeof DEFAULTS;
 export type PrefKey = keyof Prefs;
 
 export type Setting =
-  | { key: PrefKey; type: 'toggle' | 'text' | 'path' | 'shortcut'; desktop?: boolean; dependsOn?: PrefKey; platform?: Platform }
-  | { key: PrefKey; type: 'number'; min: number; max: number; unit: 's' | 'ms' | 'min' | 'd' | '%' | ''; step?: number; desktop?: boolean; dependsOn?: PrefKey; platform?: Platform }
-  | { key: PrefKey; type: 'select'; options: string[]; desktop?: boolean; dependsOn?: PrefKey; platform?: Platform }
+  | { key: PrefKey; type: 'toggle' | 'text' | 'path' | 'shortcut'; planned?: boolean; dependsOn?: PrefKey; platform?: Platform }
+  | { key: PrefKey; type: 'number'; min: number; max: number; unit: 's' | 'ms' | 'min' | 'd' | '%' | ''; step?: number; planned?: boolean; dependsOn?: PrefKey; platform?: Platform }
+  | { key: PrefKey; type: 'select'; options: string[]; planned?: boolean; dependsOn?: PrefKey; platform?: Platform }
   | { key: 'sshStatus' | 'sshAuthSockCurrent' | 'skProviderCurrent' | 'ksFingerprint'; type: 'info'; value: string; platform?: Platform }
-  | { key: 'reset' | 'import' | 'export' | 'ksGenerate' | 'bwConnect' | 'vwConnect'; type: 'action'; desktop?: boolean; wip?: boolean };
+  | { key: 'reset' | 'import' | 'export' | 'ksGenerate' | 'bwConnect' | 'vwConnect'; type: 'action'; planned?: boolean; wip?: boolean };
 
 export type Platform = 'windows' | 'linux-mac';
 export interface Group { id: string; items: Setting[] }
 export interface Section { id: string; icon: string; groups: Group[] }
 
-const d = true; // marker: needs desktop backend
 
 export const SECTIONS: Section[] = [
   {
@@ -145,26 +133,21 @@ export const SECTIONS: Section[] = [
           { key: 'autostart', type: 'toggle' },
           { key: 'startMinimized', type: 'toggle' },
           { key: 'minimizeAfterUnlock', type: 'toggle' },
-          { key: 'rememberRecent', type: 'toggle', desktop: d },
-          { key: 'recentCount', type: 'number', min: 1, max: 25, unit: '', dependsOn: 'rememberRecent', desktop: d },
-          { key: 'reopenLast', type: 'toggle', dependsOn: 'rememberRecent', desktop: d },
-          { key: 'rememberKeyfiles', type: 'toggle', dependsOn: 'rememberRecent', desktop: d },
-          { key: 'updateCheck', type: 'toggle', desktop: d },
-          { key: 'updateBeta', type: 'toggle', dependsOn: 'updateCheck', desktop: d },
-          { key: 'showExpiring', type: 'toggle', desktop: d },
-          { key: 'expiryDays', type: 'number', min: 0, max: 90, unit: 'd', dependsOn: 'showExpiring', desktop: d },
+          { key: 'rememberRecent', type: 'toggle' },
+          { key: 'recentCount', type: 'number', min: 1, max: 25, unit: '', dependsOn: 'rememberRecent' },
+          { key: 'reopenLast', type: 'toggle', dependsOn: 'rememberRecent' },
+          { key: 'rememberKeyfiles', type: 'toggle', dependsOn: 'rememberRecent' },
+          { key: 'updateCheck', type: 'toggle', planned: true },
+          { key: 'updateBeta', type: 'toggle', dependsOn: 'updateCheck', planned: true },
+          { key: 'showExpiring', type: 'toggle' },
+          { key: 'expiryDays', type: 'number', min: 0, max: 90, unit: 'd', dependsOn: 'showExpiring' },
         ],
       },
       {
         id: 'files', items: [
-          { key: 'autosaveChange', type: 'toggle', desktop: d },
-          { key: 'autosaveLock', type: 'toggle', desktop: d },
-          { key: 'saveNonData', type: 'toggle', dependsOn: 'autosaveLock', desktop: d },
-          { key: 'autoReload', type: 'toggle', desktop: d },
-          { key: 'backupBeforeSave', type: 'toggle', desktop: d },
-          { key: 'backupPath', type: 'path', dependsOn: 'backupBeforeSave', desktop: d },
-          { key: 'altSave', type: 'toggle', desktop: d },
-          { key: 'altSaveMode', type: 'select', options: ['temp', 'direct'], dependsOn: 'altSave', desktop: d },
+          { key: 'autoReload', type: 'toggle', planned: true },
+          { key: 'backupBeforeSave', type: 'toggle' },
+          { key: 'backupPath', type: 'path', dependsOn: 'backupBeforeSave' },
         ],
       },
       {
@@ -173,10 +156,9 @@ export const SECTIONS: Section[] = [
           { key: 'generateForNew', type: 'toggle' },
           { key: 'copyOnDoubleClick', type: 'toggle' },
           { key: 'urlDoubleClick', type: 'select', options: ['open', 'copy', 'edit'] },
-          { key: 'useGroupIcon', type: 'toggle', desktop: d },
-          { key: 'minimizeOnUrl', type: 'toggle', desktop: d },
-          { key: 'onCopy', type: 'select', options: ['none', 'minimize', 'background'], desktop: d },
-          { key: 'faviconTimeout', type: 'number', min: 1, max: 60, unit: 's', desktop: d },
+          { key: 'minimizeOnUrl', type: 'toggle' },
+          { key: 'onCopy', type: 'select', options: ['none', 'minimize', 'background'] },
+          { key: 'faviconTimeout', type: 'number', min: 1, max: 60, unit: 's', planned: true },
         ],
       },
       {
@@ -186,13 +168,9 @@ export const SECTIONS: Section[] = [
           { key: 'fontSize', type: 'number', min: 80, max: 150, step: 10, unit: '%' },
           { key: 'colorizePasswords', type: 'toggle' },
           { key: 'monospaceNotes', type: 'toggle' },
-          { key: 'toolbarStyle', type: 'select', options: ['follow', 'icons', 'text', 'both'], desktop: d },
-          { key: 'toolbarMovable', type: 'toggle', desktop: d },
-          { key: 'showToolbar', type: 'toggle', desktop: d },
-          { key: 'showMenubar', type: 'toggle', desktop: d },
           { key: 'minimizeOnClose', type: 'toggle' },
           { key: 'trayIcon', type: 'toggle' },
-          { key: 'trayStyle', type: 'select', options: ['colorful', 'monoLight', 'monoDark'], dependsOn: 'trayIcon', desktop: d },
+          { key: 'trayStyle', type: 'select', options: ['colorful', 'monoLight', 'monoDark'], dependsOn: 'trayIcon', planned: true },
           { key: 'hideToTray', type: 'toggle', dependsOn: 'trayIcon' },
         ],
       },
@@ -212,11 +190,10 @@ export const SECTIONS: Section[] = [
           { key: 'atMatchTitle', type: 'toggle' },
           { key: 'atMatchUrl', type: 'toggle' },
           { key: 'atAlwaysAsk', type: 'toggle' },
-          { key: 'atSkipConfirmMain', type: 'toggle', desktop: d },
           { key: 'atHideExpired', type: 'toggle' },
-          { key: 'atRelock', type: 'toggle', desktop: d },
+          { key: 'atRelock', type: 'toggle', planned: true },
           { key: 'atShortcut', type: 'shortcut' },
-          { key: 'atRemember', type: 'number', min: 0, max: 60, unit: 's', desktop: d },
+          { key: 'atRemember', type: 'number', min: 0, max: 60, unit: 's', planned: true },
           { key: 'atStartDelay', type: 'number', min: 100, max: 10000, step: 100, unit: 'ms' },
           { key: 'atCharDelay', type: 'number', min: 0, max: 1000, unit: 'ms' },
         ],
@@ -237,7 +214,7 @@ export const SECTIONS: Section[] = [
       },
       {
         id: 'lock', items: [
-          { key: 'quickUnlock', type: 'toggle', desktop: d },
+          { key: 'quickUnlock', type: 'toggle', planned: true },
           { key: 'lockOnSession', type: 'toggle' },
           { key: 'lockOnUserSwitch', type: 'toggle' },
           { key: 'lockOnMinimize', type: 'toggle' },
@@ -252,7 +229,7 @@ export const SECTIONS: Section[] = [
           { key: 'hideNotesPreview', type: 'toggle' },
         ],
       },
-      { id: 'privacy', items: [{ key: 'ddgFavicons', type: 'toggle', desktop: d }] },
+      { id: 'privacy', items: [{ key: 'ddgFavicons', type: 'toggle', planned: true }] },
     ],
   },
   {
@@ -278,10 +255,9 @@ export const SECTIONS: Section[] = [
         id: 'browserAdvanced', items: [
           { key: 'bNoAccessConfirm', type: 'toggle', dependsOn: 'browserEnabled' },
           { key: 'bUpdateNoConfirm', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bSkipBasicAuth', type: 'toggle', dependsOn: 'browserEnabled', desktop: d },
+          { key: 'bSkipBasicAuth', type: 'toggle', dependsOn: 'browserEnabled', planned: true },
           { key: 'bKph', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bLocalhostPasskeys', type: 'toggle', dependsOn: 'browserEnabled', desktop: d },
-          { key: 'bNoMigration', type: 'toggle', dependsOn: 'browserEnabled', desktop: d },
+          { key: 'bLocalhostPasskeys', type: 'toggle', dependsOn: 'browserEnabled', planned: true },
           { key: 'bUpdateManifests', type: 'toggle', dependsOn: 'browserEnabled' },
           { key: 'bCustomProxy', type: 'toggle', dependsOn: 'browserEnabled' },
           { key: 'bProxyPath', type: 'path', dependsOn: 'bCustomProxy' },
@@ -289,9 +265,9 @@ export const SECTIONS: Section[] = [
       },
       {
         id: 'browserCustom', items: [
-          { key: 'bCustomBrowser', type: 'toggle', dependsOn: 'browserEnabled', platform: 'linux-mac', desktop: d },
-          { key: 'bCustomType', type: 'select', options: ['firefox', 'chromium'], dependsOn: 'bCustomBrowser', platform: 'linux-mac', desktop: d },
-          { key: 'bCustomPath', type: 'path', dependsOn: 'bCustomBrowser', platform: 'linux-mac', desktop: d },
+          { key: 'bCustomBrowser', type: 'toggle', dependsOn: 'browserEnabled', platform: 'linux-mac', planned: true },
+          { key: 'bCustomType', type: 'select', options: ['firefox', 'chromium'], dependsOn: 'bCustomBrowser', platform: 'linux-mac', planned: true },
+          { key: 'bCustomPath', type: 'path', dependsOn: 'bCustomBrowser', platform: 'linux-mac', planned: true },
         ],
       },
     ],
@@ -300,13 +276,13 @@ export const SECTIONS: Section[] = [
     id: 'ssh', icon: 'terminal', groups: [
       {
         id: 'ssh', items: [
-          { key: 'sshEnabled', type: 'toggle', desktop: d },
+          { key: 'sshEnabled', type: 'toggle', planned: true },
           { key: 'sshStatus', type: 'info', value: '—' },
-          { key: 'sshAgent', type: 'select', options: ['pageant', 'openssh', 'bothAgents'], dependsOn: 'sshEnabled', platform: 'windows', desktop: d },
+          { key: 'sshAgent', type: 'select', options: ['pageant', 'openssh', 'bothAgents'], dependsOn: 'sshEnabled', platform: 'windows', planned: true },
           { key: 'sshAuthSockCurrent', type: 'info', value: '—' },
-          { key: 'sshAuthSock', type: 'path', dependsOn: 'sshEnabled', desktop: d },
+          { key: 'sshAuthSock', type: 'path', dependsOn: 'sshEnabled', planned: true },
           { key: 'skProviderCurrent', type: 'info', value: '—' },
-          { key: 'skProvider', type: 'path', dependsOn: 'sshEnabled', desktop: d },
+          { key: 'skProvider', type: 'path', dependsOn: 'sshEnabled', planned: true },
         ],
       },
     ],
@@ -326,16 +302,16 @@ export const SECTIONS: Section[] = [
     id: 'keeshare', icon: 'share', groups: [
       {
         id: 'ksActivation', items: [
-          { key: 'ksImport', type: 'toggle', desktop: d },
-          { key: 'ksExport', type: 'toggle', desktop: d },
-          { key: 'ksQuiet', type: 'toggle', desktop: d },
+          { key: 'ksImport', type: 'toggle', planned: true },
+          { key: 'ksExport', type: 'toggle', planned: true },
+          { key: 'ksQuiet', type: 'toggle', planned: true },
         ],
       },
       {
         id: 'ksCert', items: [
-          { key: 'ksSigner', type: 'text', desktop: d },
+          { key: 'ksSigner', type: 'text', planned: true },
           { key: 'ksFingerprint', type: 'info', value: '—' },
-          { key: 'ksGenerate', type: 'action', desktop: d },
+          { key: 'ksGenerate', type: 'action', planned: true },
         ],
       },
     ],
