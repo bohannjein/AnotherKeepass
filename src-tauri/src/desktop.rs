@@ -114,6 +114,10 @@ pub struct Desktop {
 
 /// Same folder Tauri uses for app config, resolved without an AppHandle so it works
 /// before the builder runs (needed for the single-instance decision).
+pub fn config_path() -> Option<PathBuf> {
+    config_file()
+}
+
 fn config_file() -> Option<PathBuf> {
     #[cfg(windows)]
     let base = std::env::var_os("APPDATA").map(PathBuf::from);
@@ -216,7 +220,9 @@ pub fn on_window_event<R: Runtime>(window: &tauri::Window<R>, event: &WindowEven
     let app = window.app_handle();
     let p = prefs(app);
     match event {
-        WindowEvent::CloseRequested { api, .. } if p.minimize_on_close => {
+        // "hide to tray" also covers the × button: people expect × to land in the tray once that is on
+        WindowEvent::CloseRequested { api, .. } if p.minimize_on_close || (p.hide_to_tray && p.tray_icon) => {
+            log::info!("close -> {}", if p.tray_icon { "tray" } else { "minimize" });
             api.prevent_close();
             if p.tray_icon { let _ = window.hide(); } else { let _ = window.minimize(); }
         }
@@ -252,7 +258,10 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
         let mut cur = state.prefs.lock().map_err(|_| "lock")?;
         std::mem::replace(&mut *cur, prefs.clone())
     };
-    log::info!("desktop_apply tray={} close_to_tray={} browser={}", prefs.tray_icon, prefs.minimize_on_close, prefs.browser_enabled);
+    log::info!(
+        "desktop_apply tray={} close_to_tray={} hide_to_tray={} start_minimized={} browser={}",
+        prefs.tray_icon, prefs.minimize_on_close, prefs.hide_to_tray, prefs.start_minimized, prefs.browser_enabled
+    );
     save_prefs(&prefs).inspect_err(|e| log::error!("desktop.json: {e}"))?;
     apply_backup(&prefs);
     let mut problems = Vec::new();

@@ -71,7 +71,7 @@ pub fn run() {
           .level(if cfg!(debug_assertions) { log::LevelFilter::Debug } else { log::LevelFilter::Info })
           .build(),
       )?;
-      log::info!("start v{} single_instance={} tray={}", env!("CARGO_PKG_VERSION"), prefs.single_instance, prefs.tray_icon);
+      log::info!("start v{} single_instance={} tray={} start_minimized={} config={:?}", env!("CARGO_PKG_VERSION"), prefs.single_instance, prefs.tray_icon, prefs.start_minimized, desktop::config_path());
       let handle = app.handle();
       let host = std::sync::Arc::new(browser_server::AppHost::new(handle.clone()));
       app.manage(host.clone());
