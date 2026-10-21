@@ -46,8 +46,22 @@ fn restrict_process_access() -> Result<(), String> {
     use windows_sys::Win32::Security::Authorization::{SetSecurityInfo, SE_KERNEL_OBJECT};
     use windows_sys::Win32::Security::{GetSecurityDescriptorDacl, DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION};
     use windows_sys::Win32::System::Threading::GetCurrentProcess;
-    // owner: SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE; SYSTEM: everything
-    let sd = security_descriptor("D:P(A;;0x101001;;;OW)(A;;GA;;;SY)")?;
+    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+    // our user: SYNCHRONIZE | PROCESS_QUERY_(LIMITED_)INFORMATION | PROCESS_TERMINATE (taskkill needs both); SYSTEM: everything.
+    // The user's SID, not OW: the process owner can be the Administrators group, and then
+    // nobody could end the process (Task Manager, taskkill).
+    let mut user = user_sid_of(unsafe { GetCurrentProcess() }).ok_or("token")?;
+    let sid = unsafe {
+        let mut p = std::ptr::null_mut();
+        if ConvertSidToStringSidW(user.as_mut_ptr() as _, &mut p) == 0 {
+            return Err("sid".into());
+        }
+        let n = (0..).take_while(|&i| *p.add(i) != 0).count();
+        let s = String::from_utf16_lossy(std::slice::from_raw_parts(p, n));
+        LocalFree(p as _);
+        s
+    };
+    let sd = security_descriptor(&format!("D:P(A;;0x101401;;;{sid})(A;;GA;;;SY)"))?;
     let (mut present, mut defaulted, mut dacl) = (0, 0, std::ptr::null_mut());
     let result = unsafe {
         if GetSecurityDescriptorDacl(sd, &mut present, &mut dacl, &mut defaulted) == 0 {
