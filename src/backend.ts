@@ -14,6 +14,7 @@ export interface RawItem {
   customData: Record<string, string>;
   attachments: { name: string; size: number }[];
   modified: string | null;
+  created?: string | null;
   expires: string | null;
   history: string[];
   /** custom icon id (see VaultData.icons) */

@@ -19,6 +19,7 @@ import { Icon } from './Icon';
 import { SshPanel } from './SshPanel';
 import { PasswordStrength } from './PasswordStrength';
 import { VaultSettingsDialog } from './VaultSettingsDialog';
+import { groupItems, sortItems, type GroupMode, type SortMode } from './listGroups';
 import { ShareDialog } from './ShareDialog';
 import { HealthOverview, HealthRow, ISSUE_ICON, ISSUES, issueName as issueNameOf, type Issue } from './HealthOverview';
 import { TotpSetup } from './TotpSetup';
@@ -183,7 +184,8 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const [vault, setVault] = useState(ALL);
   const [folder, setFolder] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<'all' | 'recent'>('all');
+  // multi-select (Ctrl/Shift+click) for bulk move / pin / trash
+  const [multi, setMulti] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [pending, setPending] = useState<Item | null>(null); // new entry, not saved yet
   const [newMenu, setNewMenu] = useState(false);
@@ -229,7 +231,8 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const searchRef = useRef<HTMLInputElement>(null);
   const [snack, setSnack] = useState('');
   const [snackError, setSnackError] = useState(false);
-  const notify = (msg: string, error = false) => { setSnack(msg); setSnackError(error); };
+  const [snackAction, setSnackAction] = useState<{ label: string; run: () => void } | null>(null);
+  const notify = (msg: string, error = false, action: { label: string; run: () => void } | null = null) => { setSnack(msg); setSnackError(error); setSnackAction(action); };
   useEffect(() => backend.on('akp-vault-reloaded', () => { setSnack(t.vaultReloaded); setSnackError(false); }), [t.vaultReloaded]);
   const [page, setPage] = useState<'vault' | 'settings'>('vault');
   // drawer collapses to an icon rail: automatically on narrow windows, or via the toggle
@@ -247,9 +250,9 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
 
   useEffect(() => {
     if (!snack) return;
-    const id = setTimeout(() => setSnack(""), snackError ? 5000 : Math.max(2000, snack.length * 60)); // longer text stays longer
+    const id = setTimeout(() => { setSnack(''); setSnackAction(null); }, snackError || snackAction ? 6000 : Math.max(2000, snack.length * 60)); // longer text stays longer
     return () => clearTimeout(id);
-  }, [snack, snackError]);
+  }, [snack, snackError, snackAction]);
 
   // auto-lock after inactivity
   useEffect(() => {
@@ -356,9 +359,8 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
       : !i.trashed && (vault === ALL || i.vault === vault) && (!folder || i.folder === folder));
     if (q) list = list.filter(i => (i.title + ' ' + i.subtitle + ' ' + (i.tags ?? []).join(' ')).toLowerCase().includes(q));
     if (tag) list = list.filter(i => i.tags?.includes(tag));
-    return [...list].sort((a, b) =>
-      tab === 'recent' ? b.modified.localeCompare(a.modified) : a.title.localeCompare(b.title));
-  }, [allItems, vault, folder, query, tab, tag, issue, issuesOf]); // eslint-disable-line react-hooks/exhaustive-deps
+    return sortItems(list, settings.listSort as SortMode);
+  }, [allItems, vault, folder, query, settings.listSort, tag, issue, issuesOf]); // eslint-disable-line react-hooks/exhaustive-deps
   // tags present in the current vault/folder scope, for the filter chips
   const scopeTags = useMemo(() => [...new Set(allItems
     .filter(i => vault === TRASH ? i.trashed : !i.trashed && (vault === ALL || i.vault === vault) && (!folder || i.folder === folder))
@@ -391,7 +393,10 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const discardNew = () => { setPending(null); setSelected(null); };
 
   const doTrash = async (item: Item) => {
-    if (apply(await run(backend.trash(item.vault, item.id)))) { setSelected(null); notify(ts.ui.movedToTrash); }
+    if (apply(await run(backend.trash(item.vault, item.id)))) {
+      setSelected(null);
+      notify(ts.ui.movedToTrash, false, { label: t.undo, run: async () => { if (apply(await run(backend.restore(item.vault, item.id)))) setSelected(item.id); } });
+    }
   };
   const requestTrash = (item: Item) => settings.confirmTrash
     ? setConfirm({ title: ts.ui.trashTitle, body: ts.ui.trashBody, label: ts.ui.moveToTrash, icon: 'delete', action: () => doTrash(item) })
@@ -455,7 +460,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
     const run1 = (fn: () => void) => { e.preventDefault(); fn(); };
     if (e.key === 'F5' || (mod && ['r', 'p', 'j', 'h', 'g', 's', 'o'].includes(e.key.toLowerCase()))) { e.preventDefault(); return; }
     if (e.key === 'F1' || (mod && e.key === '/')) return run1(() => setShowKeys(s => !s));
-    if (e.key === 'Escape') { window.dispatchEvent(new Event('akp:cancel')); setShowKeys(false); return; }
+    if (e.key === 'Escape') { window.dispatchEvent(new Event('akp:cancel')); setShowKeys(false); setMulti([]); return; }
     if (mod && e.key.toLowerCase() === 'f') return run1(() => searchRef.current?.focus());
     if (mod && e.key.toLowerCase() === 'l') return run1(onLock);
     if (mod && e.key.toLowerCase() === 'n' && targetVault) return run1(() => createItem('login'));
@@ -605,9 +610,62 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
     ...Object.fromEntries(ISSUES.map(k => [k, Object.keys(health).filter(id => issuesOf(id).includes(k)).length])),
   } as Record<Issue | 'ok', number>;
   const current = allItems.find(i => i.id === selected) ?? null;
+  const grouped = useMemo(() => vault === HEALTH || settings.listGroup === 'none' ? null : groupItems(visible, settings.listGroup as GroupMode, {
+    other: t.others, noFolder: t.noFolder, noWebsite: t.noWebsite, noTag: t.noTag,
+    today: t.today, yesterday: t.yesterday, week: t.thisWeek, month: t.thisMonth, older: t.older,
+    type: ty => t[ty], folder: id => folders.find(f => f.id === id)?.name ?? '—', vault: id => vaultList.find(v => v.id === id)?.name ?? '—',
+  }), [visible, settings.listGroup, vault, folders, vaultList, t]);
+  const order = grouped ? grouped.flatMap(g => g.items) : visible;
+  // click: select; Ctrl/⌘+click: toggle in selection; Shift+click: range from the current entry
+  const choose = (e: React.MouseEvent, id: string) => {
+    if (e.ctrlKey || e.metaKey) {
+      const base = multi.length ? multi : selected ? [selected] : [];
+      setMulti(base.includes(id) ? base.filter(x => x !== id) : [...base, id]);
+      return;
+    }
+    if (e.shiftKey && selected) {
+      const ids = order.map(i => i.id);
+      const [a, b] = [ids.indexOf(selected), ids.indexOf(id)].sort((x, y) => x - y);
+      if (a >= 0 && b >= 0) { setMulti(ids.slice(a, b + 1)); return; }
+    }
+    setMulti([]);
+    setSelected(id);
+  };
+  useEffect(() => { setMulti([]); }, [vault, folder]);
+  const row = (i: Item, group = '') => (
+    <Row key={group + i.id} t={t} item={i} active={multi.length > 1 ? multi.includes(i.id) : i.id === selected} onClick={e => choose(e, i.id)}
+      dragRef={dragItem} onDragEnd={() => setDragOver(null)}
+      onContextMenu={e => { if (!i.id.startsWith('new:')) { setSelected(i.id); openMenu(e, itemMenu(i)); } }} />
+  );
+  const chosen = multi.length > 1 ? allItems.filter(i => multi.includes(i.id)) : [];
+  const bulkTrash = async () => {
+    const done: Item[] = [];
+    for (const it of chosen) if (apply(await run(backend.trash(it.vault, it.id)))) done.push(it);
+    setMulti([]); setSelected(null);
+    notify(`${done.length} ${t.trashedN}`, false, { label: t.undo, run: async () => { for (const it of done) apply(await run(backend.restore(it.vault, it.id))); } });
+  };
+  const bulkMove = async (target: string) => {
+    const [vid, fid] = target.split('|');
+    let n = 0;
+    for (const it of chosen) {
+      const ok = it.vault === vid ? apply(await run(backend.move(it.vault, it.id, fid || null)))
+        : !!(await run(backend.moveToVault(it.vault, it.id, vid, fid || null)).then(r => r && (onUpdate(r[0]), onUpdate(r[1]), true)));
+      if (ok) n++;
+    }
+    setMulti([]);
+    notify(`${n} ${t.movedN}`);
+  };
+  const bulkPin = async (pin: boolean) => {
+    for (const it of chosen) if (!!it.pinned !== pin) await togglePin(it);
+  };
   const pinned = visible.filter(i => i.pinned);
   const rest = visible.filter(i => !i.pinned);
-  const snackbar = snack && <div className={'snackbar' + (snackError ? ' error' : '')} role="status"><Icon n={snackError ? 'error' : 'check_circle'} />{snack}</div>;
+  const snackbar = snack && (
+    <div className={'snackbar' + (snackError ? ' error' : '')} role="status">
+      <Icon n={snackError ? 'error' : 'check_circle'} />{snack}
+      {snackAction && <button className="snack-action" onClick={() => { snackAction.run(); setSnack(''); setSnackAction(null); }}>{snackAction.label}</button>}
+    </div>
+  );
   const activeVault = vaultList.find(v => v.id === vault && !v.locked);
   const depth = (f: Folder): number => f.parent ? 1 + depth(folders.find(x => x.id === f.parent) ?? { ...f, parent: null }) : 0;
 
@@ -755,11 +813,14 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
           </div>
         ) : <>
         <div className="seg">
-          <button className={'chip' + (tab === 'all' ? ' on' : '')} onClick={() => setTab('all')}>
-            {tab === 'all' && <Icon n="check" />}{t.all} · {visible.length}
+          <span className="chip on count-chip">{t.all} · {visible.length}</span>
+          <button className="chip" title={t.sortBy} onClick={e => openMenu(e, SORTS.map(([k, icon, label]) => ({
+            icon: settings.listSort === k ? 'check' : icon, label: t[label], action: () => onSettings({ ...settings, listSort: k }) })))}>
+            <Icon n="swap_vert" />{t[SORTS.find(s => s[0] === settings.listSort)?.[2] ?? 'sortTitle']}
           </button>
-          <button className={'chip' + (tab === 'recent' ? ' on' : '')} onClick={() => setTab('recent')}>
-            {tab === 'recent' && <Icon n="check" />}{t.recent}
+          <button className={'chip' + (settings.listGroup !== 'none' ? ' on' : '')} title={t.groupBy} onClick={e => openMenu(e, GROUPS.map(([k, icon, label]) => ({
+            icon: settings.listGroup === k ? 'check' : icon, label: t[label], action: () => onSettings({ ...settings, listGroup: k }) })))}>
+            <Icon n="segment" />{settings.listGroup === 'none' ? t.groupBy : t[GROUPS.find(g => g[0] === settings.listGroup)?.[2] ?? 'grNone']}
           </button>
         </div>
         {scopeTags.length > 0 && (
@@ -774,19 +835,48 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
         </>}
         <div className="items">
           {visible.length === 0 && <div className="empty"><Icon n={vault === HEALTH ? 'verified_user' : 'eco'} />{vault === HEALTH ? t.hOk : t.noItems}</div>}
-          {pinned.length > 0 && <span className="label group-label">{t.pinned}</span>}
-          {pinned.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} dragRef={dragItem} onDragEnd={() => setDragOver(null)}
-            onContextMenu={e => { if (!i.id.startsWith('new:')) { setSelected(i.id); openMenu(e, itemMenu(i)); } }} />)}
-          {rest.length > 0 && pinned.length > 0 && <span className="label group-label">{t.others}</span>}
+          {grouped && grouped.map(g => (
+            <div key={g.key} className="list-group" id={'grp-' + g.key}>
+              <span className="label group-label">{g.label}<small>{g.items.length}</small></span>
+              {g.items.map(i => row(i, g.key))}
+            </div>
+          ))}
+          {!grouped && pinned.length > 0 && <span className="label group-label">{t.pinned}</span>}
+          {!grouped && pinned.map(i => row(i))}
+          {!grouped && rest.length > 0 && pinned.length > 0 && <span className="label group-label">{t.others}</span>}
           {vault === HEALTH && rest.map(i => <HealthRow key={i.id} t={t} item={i} issues={issuesOf(i.id)} label={k => issueLabel(k, i.id)}
             active={i.id === selected} onClick={() => setSelected(i.id)} />)}
-          {vault !== HEALTH && rest.map(i => <Row key={i.id} t={t} item={i} active={i.id === selected} onClick={() => setSelected(i.id)} dragRef={dragItem} onDragEnd={() => setDragOver(null)}
-            onContextMenu={e => { if (!i.id.startsWith('new:')) { setSelected(i.id); openMenu(e, itemMenu(i)); } }} />)}
+          {vault !== HEALTH && !grouped && rest.map(i => row(i))}
         </div>
+        {grouped && settings.listGroup === 'letter' && grouped.length > 3 && (
+          <nav className="jump-bar" aria-label={t.grLetter}>
+            {grouped.map(g => <button key={g.key} onClick={() => document.getElementById('grp-' + g.key)?.scrollIntoView({ block: 'start', behavior: 'smooth' })}>{g.label}</button>)}
+          </nav>
+        )}
       </section>
 
       <main className="pane detail">
-        {current ? (
+        {chosen.length > 1 ? (
+          <div className="bulk">
+            <div className="bulk-head"><span className="bulk-count">{chosen.length}</span><b>{t.selected}</b></div>
+            <p className="dialog-body">{t.selectionHint}</p>
+            <label className="opt">{t.moveTo}
+              <select className="set-select" value="" onChange={e => e.target.value && bulkMove(e.target.value)}>
+                <option value="">—</option>
+                {vaultList.filter(v => !v.locked).map(v => [
+                  <option key={v.id} value={v.id + '|'}>{v.name}</option>,
+                  ...folders.filter(f => f.vault === v.id).map(f => <option key={f.id} value={v.id + '|' + f.id}>{'\u00a0\u00a0' + f.name}</option>),
+                ])}
+              </select>
+            </label>
+            <div className="row">
+              <button className="btn tonal" onClick={() => bulkPin(true)}><Icon n="push_pin" />{t.pinItem}</button>
+              <button className="btn tonal" onClick={() => bulkPin(false)}><Icon n="keep_off" />{t.unpinItem}</button>
+              <button className="btn tonal danger-tonal" onClick={bulkTrash}><Icon n="delete" />{ts.ui.moveToTrash}</button>
+              <button className="btn text" onClick={() => setMulti([])}>{t.clearSelection}</button>
+            </div>
+          </div>
+        ) : current ? (
           <Detail key={current.id} t={t} item={current} prefs={settings}
             vault={vaultList.find(v => v.id === current.vault)!}
             folders={folders.filter(f => f.vault === current.vault)}
@@ -1193,7 +1283,7 @@ function toPng(b64: string): Promise<string | null> {
 }
 
 function Row({ t, item, active, onClick, dragRef, onDragEnd, onContextMenu }: {
-  t: Strings; item: Item; active: boolean; onClick: () => void;
+  t: Strings; item: Item; active: boolean; onClick: (e: React.MouseEvent) => void;
   dragRef: React.MutableRefObject<Item | null>; onDragEnd: () => void; onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const saved = !item.id.startsWith('new:');
@@ -1208,6 +1298,14 @@ function Row({ t, item, active, onClick, dragRef, onDragEnd, onContextMenu }: {
     </button>
   );
 }
+
+const SORTS: [SortMode, string, 'sortTitle' | 'sortTitleDesc' | 'sortModified' | 'sortCreated'][] = [
+  ['title', 'sort_by_alpha', 'sortTitle'], ['titleDesc', 'sort_by_alpha', 'sortTitleDesc'], ['modified', 'history', 'sortModified'], ['created', 'new_releases', 'sortCreated'],
+];
+const GROUPS: [GroupMode, string, 'grNone' | 'grLetter' | 'grType' | 'grFolder' | 'grVault' | 'grDomain' | 'grTag' | 'grDate'][] = [
+  ['none', 'view_list', 'grNone'], ['letter', 'abc', 'grLetter'], ['type', 'category', 'grType'], ['folder', 'folder', 'grFolder'],
+  ['vault', 'stacks', 'grVault'], ['domain', 'language', 'grDomain'], ['tag', 'sell', 'grTag'], ['date', 'calendar_month', 'grDate'],
+];
 
 const KIND_ICON: Record<FieldKind, string> = {
   text: 'short_text', hidden: 'visibility_off', totp: 'lock_clock', date: 'calendar_month', url: 'language',

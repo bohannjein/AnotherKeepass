@@ -26,6 +26,7 @@ node src/totp.check.ts
 node src/generator.check.ts
 node src/model.check.ts
 node src/importers.check.ts
+node src/listGroups.check.ts
 cd src-tauri && cargo test --lib
 cargo test --lib browser_pipe_e2e -- --ignored   # browser protocol over a real pipe, tweetnacl client
 ```

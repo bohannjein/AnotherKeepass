@@ -115,6 +115,7 @@ pub struct ItemDto {
     custom_data: HashMap<String, String>,
     attachments: Vec<AttachmentDto>,
     modified: Option<String>,
+    created: Option<String>,
     expires: Option<String>,
     history: Vec<String>,
     /// custom icon id (KeePass custom icon, e.g. a website favicon)
@@ -380,6 +381,7 @@ fn dto(id: &str, v: &OpenVault) -> VaultDto {
                     .map(|(name, a)| AttachmentDto { name: name.to_string(), size: a.data.get().len() })
                     .collect(),
                 modified: e.times.last_modification.as_ref().map(fmt_time),
+                created: e.times.creation.as_ref().map(fmt_time),
                 expires: (e.times.expires == Some(true)).then(|| fmt_time(&e.times.expiry)),
                 history: e
                     .history

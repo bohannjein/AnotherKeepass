@@ -31,6 +31,9 @@ export interface Item {
   pinned?: boolean;
   trashed?: boolean;
   modified: string;
+  /** full timestamps for sorting/grouping */
+  modifiedAt?: string;
+  created?: string;
   folder?: string;
   expires?: string | null; // YYYY-MM-DD
   history?: string[];
@@ -114,6 +117,8 @@ export function rawToItem(raw: RawItem, v: VaultData): Item {
     tags: raw.tags.filter(t => t !== PINNED_TAG),
     trashed: raw.trashed,
     modified: raw.modified?.slice(0, 10) ?? '',
+    modifiedAt: raw.modified ?? undefined,
+    created: raw.created ?? undefined,
     folder: raw.folder === v.root ? undefined : raw.folder,
     expires: raw.expires?.slice(0, 10) ?? null,
     history: raw.history,

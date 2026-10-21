@@ -68,6 +68,8 @@ export const DEFAULTS = {
   hideInEdit: true,
   hidePwPreview: true,
   revealSeconds: 20,
+  listSort: 'title',
+  listGroup: 'none',
   hideTotpPreview: false,
   hideNotesPreview: false,
   ddgFavicons: false,
