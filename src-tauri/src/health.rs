@@ -195,3 +195,27 @@ mod tests {
         assert_eq!(breach_count(&sha1_hex("x"), range), 0);
     }
 }
+
+/// Strength of a password typed in the UI (master password): estimated bits.
+#[tauri::command]
+pub fn password_bits(password: String) -> u32 {
+    entropy_bits(&password) as u32
+}
+
+/// How often a password was seen in breaches (HIBP range API, k-anonymity: only 5 hash chars leave).
+#[tauri::command]
+pub async fn password_breached(password: String) -> Result<u64, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let hash = sha1_hex(&password);
+        let range = ureq::get(&format!("https://api.pwnedpasswords.com/range/{}", &hash[..5]))
+            .set("Add-Padding", "true")
+            .timeout(std::time::Duration::from_secs(10))
+            .call()
+            .map_err(|e| format!("hibp:{e}"))?
+            .into_string()
+            .map_err(|e| format!("hibp:{e}"))?;
+        Ok(breach_count(&hash, &range))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}

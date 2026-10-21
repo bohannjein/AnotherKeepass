@@ -6,6 +6,7 @@ import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialo
 import { backend, errorCode, type VaultData } from './backend';
 import type { Strings } from './i18n';
 import { Icon } from './Icon';
+import { PasswordStrength } from './PasswordStrength';
 
 export interface Known { path: string; name: string; color: string; icon: string; keyfile?: string }
 
@@ -159,6 +160,7 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
             </button>
           )}
           {pwField(password, setPassword, t.masterPassword)}
+          <PasswordStrength t={t} password={password} breachCheck />
           {pwField(confirm, setConfirm, t.confirmPassword)}
         </>
       )}

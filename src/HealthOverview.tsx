@@ -14,9 +14,10 @@ export const issueName = (t: Strings, k: Issue) =>
 const issueHint = (t: Strings, k: Issue) =>
   ({ breached: t.hBreachedHint, weak: t.hWeakHint, reused: t.hReusedHint, old: t.hOldHint, expired: t.hExpiredHint })[k];
 
-export function HealthOverview({ t, total, counts, breachesChecked, checking, canCheck, onCheck, active, onPick }: {
+export function HealthOverview({ t, total, counts, breachesChecked, checking, canCheck, onCheck, active, onPick, weakVaults, onUpgrade }: {
   t: Strings; total: number; counts: Record<Issue | 'ok', number>; breachesChecked: boolean; checking: boolean; canCheck: boolean;
   onCheck: () => void; active: Issue | null; onPick: (k: Issue | null) => void;
+  weakVaults: { id: string; name: string }[]; onUpgrade: (vault: string) => void;
 }) {
   const bad = total - counts.ok;
   const score = total ? Math.round((counts.ok / total) * 100) : 100;
@@ -37,6 +38,15 @@ export function HealthOverview({ t, total, counts, breachesChecked, checking, ca
           <p>{counts.ok} / {total} {t.hSummary}{bad > 0 && <> · <b>{bad}</b> {t.hToFix}</>}</p>
         </div>
       </div>
+      {weakVaults.length > 0 && (
+        <div className="weak-vaults">
+          <span className="health-icon issue-breached"><Icon n="lock_open_right" fill /></span>
+          <div><b>{t.weakVaults}</b><small>{t.weakVaultsHint}</small></div>
+          <div className="weak-list">
+            {weakVaults.map(v => <button key={v.id} className="btn tonal" onClick={() => onUpgrade(v.id)}><Icon n="upgrade" />{v.name} · {t.upgrade}</button>)}
+          </div>
+        </div>
+      )}
       <div className="health-tiles">
         {ISSUES.map(k => {
           const n = counts[k];

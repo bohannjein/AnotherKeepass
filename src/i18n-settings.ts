@@ -46,6 +46,7 @@ const en = {
     browserCustom: 'Custom browser', ssh: 'SSH agent', ksActivation: 'Activation', ksCert: 'Own certificate',
   },
   labels: {
+    revealSeconds: "Hide revealed values again after",
     helloRequirePassword: "Password and Windows Hello",
     screenProtect: "Hide from screenshots and screen sharing",
     updateNow: "Check for updates now",
@@ -102,6 +103,7 @@ const en = {
     ksSigner: 'Signer name', ksFingerprint: 'Certificate fingerprint', ksGenerate: 'Generate new certificate',
   },
   hints: {
+    revealSeconds: "Passwords and other hidden values you uncovered are masked again and dropped from the window's memory. 0 = keep visible.",
     helloRequirePassword: "Instead of replacing the master password, Windows Hello is asked in addition on every unlock (two factors).",
     screenProtect: "Screenshots, screen sharing (Teams, Zoom), recordings and remote tools like TeamViewer only see a black window. Turn off if you need to show the app to someone.",
     bLocalhostPasskeys: "Passkeys normally need https. This also allows them on http://localhost – only useful for web developers.",
@@ -240,6 +242,7 @@ const de: SettingsStrings = {
     browserCustom: 'Benutzerdefinierter Browser', ssh: 'SSH-Agent', ksActivation: 'Aktivierung', ksCert: 'Eigenes Zertifikat',
   },
   labels: {
+    revealSeconds: "Aufgedeckte Werte wieder verbergen nach",
     helloRequirePassword: "Passwort und Windows Hello",
     screenProtect: "Vor Screenshots und Bildschirmübertragung verbergen",
     updateNow: "Jetzt nach Updates suchen",
@@ -296,6 +299,7 @@ const de: SettingsStrings = {
     ksSigner: 'Name des Unterzeichners', ksFingerprint: 'Fingerabdruck des Zertifikats', ksGenerate: 'Neues Zertifikat generieren',
   },
   hints: {
+    revealSeconds: "Aufgedeckte Passwörter und andere verborgene Werte werden wieder verdeckt und aus dem Fensterspeicher entfernt. 0 = sichtbar lassen.",
     helloRequirePassword: "Statt das Master-Passwort zu ersetzen, wird Windows Hello bei jedem Entsperren zusätzlich abgefragt (zwei Faktoren).",
     screenProtect: "Screenshots, Bildschirmübertragung (Teams, Zoom), Aufnahmen und Fernwartung wie TeamViewer sehen nur ein schwarzes Fenster. Ausschalten, wenn du die App jemandem zeigen willst.",
     bLocalhostPasskeys: "Passkeys brauchen normalerweise https. Damit gehen sie auch auf http://localhost – nur für Webentwicklung sinnvoll.",
@@ -432,6 +436,7 @@ const fr: SettingsStrings = {
     browserCustom: 'Navigateur personnalisé', ssh: 'Agent SSH', ksActivation: 'Activation', ksCert: 'Certificat personnel',
   },
   labels: {
+    revealSeconds: "Masquer à nouveau les valeurs affichées après",
     helloRequirePassword: "Mot de passe et Windows Hello",
     screenProtect: "Masquer des captures et du partage d’écran",
     updateNow: "Rechercher des mises à jour",
@@ -488,6 +493,7 @@ const fr: SettingsStrings = {
     ksSigner: 'Nom du signataire', ksFingerprint: 'Empreinte du certificat', ksGenerate: 'Générer un nouveau certificat',
   },
   hints: {
+    revealSeconds: "Les mots de passe et valeurs masquées affichés sont masqués à nouveau et retirés de la mémoire de la fenêtre. 0 = laisser visible.",
     helloRequirePassword: "Au lieu de remplacer le mot de passe maître, Windows Hello est demandé en plus à chaque déverrouillage (deux facteurs).",
     screenProtect: "Captures d’écran, partage d’écran (Teams, Zoom), enregistrements et outils comme TeamViewer ne voient qu’une fenêtre noire. Désactivez pour montrer l’application à quelqu’un.",
     bLocalhostPasskeys: "Les clés d’accès exigent https. Ceci les autorise aussi sur http://localhost – utile seulement pour le développement web.",
@@ -624,6 +630,7 @@ const es: SettingsStrings = {
     browserCustom: 'Navegador personalizado', ssh: 'Agente SSH', ksActivation: 'Activación', ksCert: 'Certificado propio',
   },
   labels: {
+    revealSeconds: "Volver a ocultar valores mostrados tras",
     helloRequirePassword: "Contraseña y Windows Hello",
     screenProtect: "Ocultar en capturas y al compartir pantalla",
     updateNow: "Buscar actualizaciones ahora",
@@ -680,6 +687,7 @@ const es: SettingsStrings = {
     ksSigner: 'Nombre del firmante', ksFingerprint: 'Huella del certificado', ksGenerate: 'Generar nuevo certificado',
   },
   hints: {
+    revealSeconds: "Las contraseñas y valores ocultos mostrados se vuelven a ocultar y se borran de la memoria de la ventana. 0 = dejar visible.",
     helloRequirePassword: "En lugar de sustituir la contraseña maestra, Windows Hello se pide además en cada desbloqueo (dos factores).",
     screenProtect: "Capturas, pantalla compartida (Teams, Zoom), grabaciones y herramientas remotas como TeamViewer solo ven una ventana negra. Desactívalo si necesitas mostrar la app a alguien.",
     bLocalhostPasskeys: "Las llaves de acceso necesitan https. Esto las permite también en http://localhost – solo útil para desarrollo web.",

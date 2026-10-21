@@ -30,6 +30,8 @@ export interface VaultData {
   items: RawItem[];
   /** custom icon id → image bytes (base64) */
   icons?: Record<string, string>;
+  /** old/weak key derivation (AES-KDF, tiny Argon2) */
+  weakKdf?: boolean;
 }
 export interface ItemInput {
   id: string | null;
@@ -48,6 +50,10 @@ export interface KeeAgent { allow: boolean; addAtOpen: boolean; removeAtClose: b
 /** KeeShare setting of a folder */
 export interface Share { kind: 'sync' | 'export' | 'import'; path: string; password: string }
 export interface Update { version: string; url: string; notes: string }
+export interface VaultSettings {
+  name: string; description: string; recycleBin: boolean; historyMax: number;
+  kdf: 'aes' | 'argon2d' | 'argon2id' | 'other'; memoryMib: number; iterations: number; parallelism: number; weak: boolean;
+}
 export interface Totp { code: string; remaining: number; period: number }
 export interface AutoTypeCandidate { vault: string; id: string; title: string; username: string; sequence: string }
 export interface AutoTypePick { windowTitle: string; candidates: AutoTypeCandidate[] }
@@ -72,10 +78,16 @@ export interface Backend {
   lockAll(): Promise<void>;
   changeKey(id: string, password: string, keyfile?: string): Promise<void>;
   rename(id: string, name: string): Promise<VaultData>;
+  vaultSettings(id: string): Promise<VaultSettings>;
+  vaultSettingsSet(id: string, settings: VaultSettings): Promise<VaultData>;
+  /** Argon2 iterations for ~millis on this PC */
+  kdfBenchmark(memoryMib: number, parallelism: number, millis: number): Promise<number>;
   save(vault: string, item: ItemInput): Promise<[string, VaultData]>;
   /** many new entries, folders by name path below parent (null = root); one file write */
   importItems(vault: string, parent: string | null, items: ImportInput[]): Promise<[number, VaultData]>;
   secrets(vault: string, id: string): Promise<Record<string, string>>;
+  passwordBits(password: string): Promise<number>;
+  passwordBreached(password: string): Promise<number>;
   sshSettings(vault: string, id: string): Promise<KeeAgent | null>;
   sshStatus(configured: string): Promise<{ path: string; reachable: boolean }>;
   sshSettingsSet(vault: string, id: string, settings: KeeAgent | null): Promise<VaultData>;
@@ -138,9 +150,14 @@ const desktop: Backend = {
   lockAll: () => invoke('vault_lock_all'),
   changeKey: (id, password, keyfile) => invoke('vault_change_key', { id, password, keyfile }),
   rename: (id, name) => invoke('vault_rename', { id, name }),
+  vaultSettings: vault => invoke('vault_settings_get', { vault }),
+  vaultSettingsSet: (vault, settings) => invoke('vault_settings_set', { vault, settings }),
+  kdfBenchmark: (memoryMib, parallelism, millis) => invoke('kdf_benchmark', { memoryMib, parallelism, millis }),
   save: (vault, item) => invoke('entry_save', { vault, item }),
   importItems: (vault, parent, items) => invoke('entry_import', { vault, parent, items }),
   secrets: (vault, id) => invoke('entry_secrets', { vault, id }),
+  passwordBits: password => invoke('password_bits', { password }),
+  passwordBreached: password => invoke('password_breached', { password }),
   sshSettings: (vault, id) => invoke('ssh_settings', { vault, id }),
   sshStatus: configured => invoke('ssh_status', { configured }),
   sshSettingsSet: (vault, id, settings) => invoke('ssh_settings_set', { vault, id, settings }),
@@ -230,6 +247,12 @@ const demo: Backend = {
   async lockAll() { demoVaults.clear(); },
   async changeKey() {},
   async rename(id, name) { const v = get(id); v.data.name = name; return out(v); },
+  async vaultSettings(id) {
+    const v = get(id);
+    return { name: v.data.name, description: '', recycleBin: true, historyMax: 10, kdf: 'argon2id', memoryMib: 64, iterations: 10, parallelism: 2, weak: false };
+  },
+  async vaultSettingsSet(id, s) { const v = get(id); v.data.name = s.name; return out(v); },
+  kdfBenchmark: async () => 12,
   async save(vault, input) {
     const v = get(vault);
     const id = input.id ?? crypto.randomUUID();
@@ -299,6 +322,12 @@ const demo: Backend = {
   sshSettingsSet: async vault => out(get(vault)),
   sshAdd: async () => { throw new Error('ssh_agent'); },
   sshRemove: async () => { throw new Error('ssh_agent'); },
+  // demo: same idea as the Rust estimator (class pool × length)
+  passwordBits: async pw => {
+    const pool = (/[a-z]/.test(pw) ? 26 : 0) + (/[A-Z]/.test(pw) ? 26 : 0) + (/d/.test(pw) ? 10 : 0) + (/[^a-zA-Zd]/.test(pw) ? 33 : 0);
+    return Math.round(pw.length * Math.log2(pool || 1));
+  },
+  passwordBreached: async () => 0,
   async secrets(vault, id) { return { ...(get(vault).secrets.get(id) ?? {}) }; },
   async totp(vault, id, field) {
     const s = get(vault).secrets.get(id)?.[field] ?? '';

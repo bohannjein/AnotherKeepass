@@ -972,3 +972,17 @@ kbd {
 .btn.text.danger { color: #ffb4ab; }
 :root[data-theme='light'] .btn.text.danger { color: #ba1a1a; }
 .update-btn { color: var(--primary); animation: pulse 1.6s var(--ease) infinite alternate; border-radius: var(--r-full); }
+/* ---------- typed password strength ---------- */
+.pw-strength { display: grid; gap: 6px; justify-items: start; padding: 0 4px; }
+.pw-strength .strength { justify-content: flex-start; }
+.pw-hint { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--on-surface-var); line-height: 1.4; }
+.pw-hint .ms { font-size: 18px; }
+.pw-hint.bad { color: #ffb4ab; } .pw-hint.ok { color: var(--secondary); }
+:root[data-theme='light'] .pw-hint.bad { color: #ba1a1a; }
+.pw-strength .btn.text { height: 32px; padding: 0 8px; }
+/* ---------- vault settings ---------- */
+.vault-settings { width: min(500px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; }
+.form-note.warn { background: var(--i-breached); color: var(--on-i-breached); }
+.weak-vaults { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; align-items: center; padding: 18px; border-radius: var(--r-l); background: var(--surface-c); border: 2px solid var(--i-breached); }
+.weak-vaults small { display: block; color: var(--on-surface-var); font-size: 13px; }
+.weak-list { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }

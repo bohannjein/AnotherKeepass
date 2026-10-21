@@ -17,6 +17,8 @@ const ImportDialog = lazy(() => import('./ImportDialog'));
 import VaultDialog, { fileName, type Known } from './VaultDialog';
 import { Icon } from './Icon';
 import { SshPanel } from './SshPanel';
+import { PasswordStrength } from './PasswordStrength';
+import { VaultSettingsDialog } from './VaultSettingsDialog';
 import { ShareDialog } from './ShareDialog';
 import { HealthOverview, HealthRow, ISSUE_ICON, ISSUES, issueName as issueNameOf, type Issue } from './HealthOverview';
 import { TotpSetup } from './TotpSetup';
@@ -188,6 +190,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const [showGen, setShowGen] = useState(false);
   const [importFor, setImportFor] = useState<string | null>(null);
   const [shareFor, setShareFor] = useState<Folder | null>(null);
+  const [settingsFor, setSettingsFor] = useState<{ vault: string; upgrade?: boolean } | null>(null);
   // update check: at most once a week, only when enabled
   const [update, setUpdate] = useState<Update | null>(null);
   useEffect(() => {
@@ -536,6 +539,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
       { icon: 'create_new_folder', label: t.newFolder, action: () => setFolderDialog({ mode: 'create', vault: v.id, parent: '' }) },
       { icon: 'upload_file', label: t.importItems, action: () => setImportFor(v.id) },
       ...(backend.desktop ? [{ icon: 'image_search', label: t.loadIcons, action: () => loadIcons(items.filter(i => i.vault === v.id && !i.trashed && !i.icon)) }] : []),
+      { icon: 'tune', label: t.vaultSettings, action: () => setSettingsFor({ vault: v.id }) },
       { icon: 'key', label: t.changeMasterKey, action: () => setKeyDialog(v.id) },
       'sep',
       { icon: 'lock', label: t.closeVault, action: () => closeVault(v.id) },
@@ -721,6 +725,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
         {activeVault && (
           <div className="list-head">
             <span title={activeVault.id}>{activeVault.name}</span>
+            <button className="icon-btn" title={t.vaultSettings} aria-label={t.vaultSettings} onClick={() => setSettingsFor({ vault: activeVault.id })}><Icon n="tune" /></button>
             <button className="icon-btn" title={t.changeMasterKey} aria-label={t.changeMasterKey} onClick={() => setKeyDialog(activeVault.id)}><Icon n="key" /></button>
             <button className="icon-btn" title={t.closeVault} aria-label={t.closeVault} onClick={() => closeVault(activeVault.id)}><Icon n="lock" /></button>
           </div>
@@ -805,7 +810,9 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
         ) : (
           vault === HEALTH ? (
             <HealthOverview t={t} total={Object.keys(health).length} counts={healthCounts} breachesChecked={!!breaches} checking={checking}
-              canCheck={backend.desktop} onCheck={checkBreaches} active={issue} onPick={setIssue} />
+              canCheck={backend.desktop} onCheck={checkBreaches} active={issue} onPick={setIssue}
+              weakVaults={vaultList.filter(v => !v.locked && open[v.id]?.weakKdf).map(v => ({ id: v.id, name: v.name }))}
+              onUpgrade={id => setSettingsFor({ vault: id, upgrade: true })} />
           ) : <div className="placeholder"><div><div className="blob"><Icon n="eco" fill /></div>{t.selectItem}</div></div>
         )}
       </main>
@@ -819,6 +826,9 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
           vaultName={id => vaultList.find(v => v.id === id)?.name ?? ''}
           onClose={() => setPick(null)}
           onPick={(vault, id, sequence) => { setPick(null); run(backend.autotypePerform(vault, id, sequence)); }} />
+      )}
+      {settingsFor && (
+        <VaultSettingsDialog t={t} vault={settingsFor.vault} upgrade={settingsFor.upgrade} onClose={() => setSettingsFor(null)} onSaved={d => onUpdate(d)} />
       )}
       {shareFor && (
         <ShareDialog t={t} vault={shareFor.vault} folder={shareFor.id} name={shareFor.name} onClose={() => setShareFor(null)}
@@ -1124,6 +1134,7 @@ function KeyDialog({ t, onClose, onSubmit }: { t: Strings; onClose: () => void; 
         <label className="textfield"><Icon n="key" />
           <input type="password" autoFocus placeholder={t.masterPassword} aria-label={t.masterPassword} value={pw} onChange={e => setPw(e.target.value)} />
         </label>
+        <PasswordStrength t={t} password={pw} breachCheck />
         <label className="textfield"><Icon n="key" />
           <input type="password" placeholder={t.confirmPassword} aria-label={t.confirmPassword} value={confirm} onChange={e => setConfirm(e.target.value)} />
         </label>
@@ -1244,6 +1255,12 @@ function FieldRow({ t, f, prefs, onCopy, reveal, totp, onEdit }: {
   useEffect(() => {
     if (shown && secret === null && reveal) reveal().then(setSecret).catch(() => setSecret(''));
   }, [shown, secret, reveal]);
+  // revealed secrets mask themselves again after a while and leave the UI's memory
+  useEffect(() => {
+    if (!shown || !maskable || !prefs.revealSeconds) return;
+    const timer = setTimeout(() => { setShown(false); if (f.protected && !f.loaded) setSecret(null); }, prefs.revealSeconds * 1000);
+    return () => clearTimeout(timer);
+  }, [shown, maskable, prefs.revealSeconds, f.protected, f.loaded]);
   const otp = useTotp(totp, f.kind === 'totp' && !(maskable && !shown));
   const openMenu = useContextMenu();
   const menu = (e: React.MouseEvent) => openMenu(e, [
@@ -1382,7 +1399,13 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
 
   // reveal one protected field (cached per detail view)
   const secrets = useRef<Promise<Record<string, string>> | null>(null);
-  const getSecrets = () => (secrets.current ??= loadSecrets());
+  const getSecrets = () => {
+    if (!secrets.current) {
+      secrets.current = loadSecrets();
+      setTimeout(() => { secrets.current = null; }, 30_000); // don't keep decrypted values around
+    }
+    return secrets.current;
+  };
   const revealer = (raw: string) => () => getSecrets().then(s => s[raw] ?? '');
 
   const startEdit = async () => {
