@@ -736,6 +736,12 @@ fn apply_item(e: &mut keepass::db::EntryMut<'_>, item: &ItemInput, is_new: bool)
     if !e.fields.contains_key(fields::TITLE) {
         e.set_unprotected(fields::TITLE, "");
     }
+    // passkey data (KeePassXC KPEX_PASSKEY_*) isn't edited in the UI: carry it over
+    for (k, v) in old {
+        if (k.starts_with("KPEX_PASSKEY") || k.starts_with("KPXC_PASSKEY")) && !e.fields.contains_key(&k) {
+            e.fields.insert(k, v);
+        }
+    }
     e.tags = item.tags.clone();
     e.custom_data.retain(|k, _| !k.starts_with("AnotherKeepass."));
     for (k, v) in item.custom_data.iter().filter(|(k, _)| *k == CD_TYPE || *k == CD_KINDS) {

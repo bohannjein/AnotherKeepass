@@ -54,7 +54,10 @@ export interface AutoTypePick { windowTitle: string; candidates: AutoTypeCandida
 export type BrowserAsk =
   | { id: number; kind: 'associate' }
   | { id: number; kind: 'access'; host: string; entries: { vault: string; uuid: string; title: string; username: string }[] }
-  | { id: number; kind: 'update'; title: string; username: string };
+  | { id: number; kind: 'update'; title: string; username: string }
+  | { id: number; kind: 'passkeyRegister'; rpId: string; username: string; existing: PasskeyEntry[] }
+  | { id: number; kind: 'passkeyGet'; rpId: string; entries: PasskeyEntry[] };
+export interface PasskeyEntry { vault: string; uuid: string; title: string; username: string }
 
 export interface Backend {
   desktop: boolean;

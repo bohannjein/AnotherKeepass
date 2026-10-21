@@ -18,6 +18,7 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use crate::passkeys;
 use crate::vault::{OpenVault, VaultDto, Vaults};
 
 /// Reported to the extension; it enables features by version (2.7.x = current protocol).
@@ -41,7 +42,6 @@ const E_NO_GROUPS: u32 = 16;
 const E_CANNOT_CREATE_GROUP: u32 = 17;
 const E_NO_VALID_UUID: u32 = 18;
 const E_ALL_DENIED: u32 = 19;
-const E_PASSKEYS_UNKNOWN: u32 = 31;
 
 fn error_text(code: u32) -> &'static str {
     match code {
@@ -58,7 +58,6 @@ fn error_text(code: u32) -> &'static str {
         E_CANNOT_CREATE_GROUP => "Cannot create new group",
         E_NO_VALID_UUID => "No valid UUID provided",
         E_ALL_DENIED => "Access to all entries is denied",
-        E_PASSKEYS_UNKNOWN => "Passkeys are not supported",
         _ => "Unknown error",
     }
 }
@@ -77,6 +76,8 @@ pub struct BrowserPrefs {
     pub kph: bool,
     /// HTTP Basic Auth requests (httpAuth: true) don't ask for access
     pub skip_basic_auth: bool,
+    /// passkeys also for http://localhost (development)
+    pub localhost_passkeys: bool,
 }
 
 /// Questions for the user. Answers come back as JSON (None = denied / timed out).
@@ -84,6 +85,10 @@ pub enum Ask {
     Associate,
     Access { host: String, entries: Vec<Value> },
     Update { title: String, username: String },
+    /// new passkey; `existing` = entries of the same account that could take it instead
+    PasskeyRegister { rp_id: String, username: String, existing: Vec<Value> },
+    /// sign in with one of these passkeys
+    PasskeyGet { rp_id: String, entries: Vec<Value> },
 }
 
 /// What the protocol needs from the app (implemented by the Tauri app and by tests).
@@ -212,7 +217,8 @@ pub fn handle(host: &dyn Host, s: &mut Session, req: &Value) -> Value {
             Ok(Map::new())
         }
         "delete-entry" => delete_entry(host, s, p),
-        "passkeys-get" | "passkeys-register" => Err(E_PASSKEYS_UNKNOWN),
+        "passkeys-register" => passkeys_register(host, s, p),
+        "passkeys-get" => passkeys_get(host, s, p),
         _ => Err(E_INCORRECT_ACTION),
     };
 
@@ -697,6 +703,198 @@ fn delete_entry(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
     Ok(params(&[("success", json!("true"))]))
 }
 
+// ---------------------------------------------------------------- passkeys
+
+/// Vaults the extension may use (associated; only the active one unless "search all").
+fn usable_vaults(host: &dyn Host, p: &Value) -> Vec<String> {
+    let mut ids = associated_vaults(host, &keys_of(p));
+    if !host.prefs().search_all {
+        let active = active_id(host);
+        ids.retain(|v| Some(v) == active.as_ref());
+    }
+    ids
+}
+
+fn field(e: &Entry, name: &str) -> String {
+    e.get(name).unwrap_or_default().to_string()
+}
+
+/// Passkey entries for an RP: (vault, entry, credential id).
+fn passkey_entries(host: &dyn Host, vaults: &[String], rp: &str) -> Vec<(String, EntryId, String)> {
+    let Ok(map) = host.vaults().0.lock() else { return vec![] };
+    let mut out = Vec::new();
+    for vid in vaults {
+        let Some(v) = map.get(vid) else { continue };
+        let db = v.db();
+        let bin = db.recycle_bin().map(|g| g.id());
+        for e in db.iter_all_entries() {
+            if field(&e, passkeys::PRIVATE_KEY).is_empty() || field(&e, passkeys::RELYING_PARTY) != rp {
+                continue;
+            }
+            let mut g = Some(e.parent().id());
+            let mut trashed = false;
+            while let Some(gid) = g {
+                if Some(gid) == bin { trashed = true; break; }
+                g = db.group(gid).and_then(|x| x.parent().map(|p| p.id()));
+            }
+            if trashed { continue; }
+            let cred = e.get(passkeys::GENERATED_USER_ID).map(String::from).unwrap_or_else(|| field(&e, passkeys::CREDENTIAL_ID));
+            out.push((vid.clone(), e.id(), cred));
+        }
+    }
+    out
+}
+
+fn entry_brief(map: &HashMap<String, OpenVault>, vid: &str, id: EntryId) -> Option<Value> {
+    let e = map.get(vid)?.db().entry(id)?;
+    let user = e.get(passkeys::USERNAME).filter(|u| !u.is_empty()).or_else(|| e.get_username()).unwrap_or_default();
+    Some(json!({ "vault": vid, "uuid": uuid_hex(id.uuid()), "title": e.get_title().unwrap_or_default(), "username": user }))
+}
+
+fn write_passkey(e: &mut keepass::db::EntryMut<'_>, reg: &passkeys::Registration, cred_id: &str, pem: &str) {
+    e.set_unprotected(passkeys::USERNAME, reg.username.clone());
+    e.set_protected(passkeys::CREDENTIAL_ID, cred_id.to_string());
+    e.set_protected(passkeys::PRIVATE_KEY, pem.to_string());
+    e.set_unprotected(passkeys::RELYING_PARTY, reg.rp_id.clone());
+    e.set_protected(passkeys::USER_HANDLE, reg.user_handle.clone());
+    e.set_unprotected(passkeys::FLAG_BE, "1");
+    e.set_unprotected(passkeys::FLAG_BS, "1");
+    if !e.tags.iter().any(|t| t == "Passkey") {
+        e.tags.push("Passkey".into());
+    }
+}
+
+fn passkey_reply(v: Value) -> ActionResult {
+    Ok(params(&[("response", v)]))
+}
+
+fn passkeys_register(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
+    if !s.associated {
+        return Err(E_ASSOCIATION_FAILED);
+    }
+    let pk = &p["publicKey"];
+    if !pk.is_object() || pk.as_object().is_some_and(|o| o.is_empty()) {
+        return Err(passkeys::E_EMPTY_PUBLIC_KEY);
+    }
+    let origin = p["origin"].as_str().unwrap_or_default();
+    if !passkeys::origin_allowed(origin, host.prefs().localhost_passkeys) {
+        return Err(passkeys::E_INVALID_URL);
+    }
+    let reg = match passkeys::check_create(pk, origin) {
+        Ok(r) => r,
+        Err(code) => return passkey_reply(passkeys::error(code)),
+    };
+    let vaults = usable_vaults(host, p);
+    let vid = active_id(host).filter(|a| vaults.contains(a)).or_else(|| vaults.first().cloned()).ok_or(E_ASSOCIATION_FAILED)?;
+    let known = passkey_entries(host, &vaults, &reg.rp_id);
+    if known.iter().any(|(_, _, c)| reg.exclude.contains(c)) {
+        return passkey_reply(passkeys::error(passkeys::E_EXCLUDED));
+    }
+    // same account already has a passkey here → offer to replace it
+    let existing: Vec<Value> = {
+        let map = host.vaults().0.lock().map_err(|_| E_CANCELLED_OR_DENIED)?;
+        known.iter()
+            .filter(|(v, id, _)| map.get(v).and_then(|x| x.db().entry(*id)).is_some_and(|e| field(&e, passkeys::USER_HANDLE) == reg.user_handle))
+            .filter_map(|(v, id, _)| entry_brief(&map, v, *id))
+            .collect()
+    };
+    let Some(answer) = host.ask(Ask::PasskeyRegister { rp_id: reg.rp_id.clone(), username: reg.username.clone(), existing })
+        .filter(|a| a["ok"].as_bool() == Some(true)) else {
+        return passkey_reply(passkeys::error(passkeys::E_CANCELED));
+    };
+    let attachment = pk["authenticatorSelection"]["authenticatorAttachment"].as_str();
+    let (credential, cred_id, pem) = match passkeys::create(&reg, attachment) {
+        Ok(x) => x,
+        Err(code) => return passkey_reply(passkeys::error(code)),
+    };
+
+    let mut map = host.vaults().0.lock().map_err(|_| E_CANCELLED_OR_DENIED)?;
+    let target = answer["uuid"].as_str().and_then(parse_uuid_hex).map(EntryId::from);
+    let target_vault = target.and_then(|t| map.iter().find(|(_, v)| v.db().entry(t).is_some()).map(|(k, _)| k.clone())).unwrap_or(vid);
+    let v = map.get_mut(&target_vault).ok_or(E_DB_NOT_OPENED)?;
+    match target {
+        Some(id) if v.db().entry(id).is_some() => {
+            let mut e = v.db_mut().entry_mut(id).ok_or(E_NO_VALID_UUID)?;
+            let mut t = e.track_changes();
+            let mut e = t.as_mut();
+            write_passkey(&mut e, &reg, &cred_id, &pem);
+        }
+        _ => {
+            let db = v.db_mut();
+            let group_name = p["groupName"].as_str().filter(|g| !g.is_empty()).unwrap_or(passkeys::DEFAULT_GROUP).to_string();
+            let bin = db.recycle_bin().map(|g| g.id());
+            let root = db.root().id();
+            let found = db.iter_all_groups().find(|g| g.name == group_name && Some(g.id()) != bin).map(|g| g.id());
+            let group = match found {
+                Some(g) => g,
+                None => {
+                    let mut r = db.group_mut(root).ok_or(E_CANNOT_CREATE_GROUP)?;
+                    let mut g = r.add_group();
+                    g.name = group_name;
+                    g.id()
+                }
+            };
+            let mut g = db.group_mut(group).ok_or(E_CANNOT_CREATE_GROUP)?;
+            let mut e = g.add_entry();
+            e.set_unprotected(fields::TITLE, format!("{} (Passkey)", reg.rp_name));
+            e.set_unprotected(fields::USERNAME, reg.username.clone());
+            e.set_unprotected(fields::URL, origin.to_string());
+            let now = Times::now();
+            e.times.creation = Some(now);
+            e.times.last_modification = Some(now);
+            e.custom_data.insert("AnotherKeepass.Type".into(), cd_item("login".into()));
+            write_passkey(&mut e, &reg, &cred_id, &pem);
+        }
+    }
+    save_and_notify(host, &target_vault, v)?;
+    passkey_reply(credential)
+}
+
+fn passkeys_get(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
+    if !s.associated {
+        return Err(E_ASSOCIATION_FAILED);
+    }
+    let pk = &p["publicKey"];
+    if !pk.is_object() || pk.as_object().is_some_and(|o| o.is_empty()) {
+        return Err(passkeys::E_EMPTY_PUBLIC_KEY);
+    }
+    let origin = p["origin"].as_str().unwrap_or_default();
+    if !passkeys::origin_allowed(origin, host.prefs().localhost_passkeys) {
+        return Err(passkeys::E_INVALID_URL);
+    }
+    let (rp, allowed) = match passkeys::check_get(pk, origin) {
+        Ok(x) => x,
+        Err(code) => return passkey_reply(passkeys::error(code)),
+    };
+    if pk["allowCredentials"].as_array().is_some_and(|a| !a.is_empty()) && allowed.is_empty() {
+        return passkey_reply(passkeys::error(E_NO_LOGINS));
+    }
+    let vaults = usable_vaults(host, p);
+    let all = passkey_entries(host, &vaults, &rp); // locks the vaults itself: call before taking the lock below
+    let candidates: Vec<(String, EntryId, String)> = {
+        let map = host.vaults().0.lock().map_err(|_| E_CANCELLED_OR_DENIED)?;
+        all.into_iter()
+            .filter(|(v, id, cred)| allowed.contains(cred) || (allowed.is_empty() && map.get(v).and_then(|x| x.db().entry(*id)).is_some_and(|e| !field(&e, passkeys::USER_HANDLE).is_empty())))
+            .collect()
+    };
+    if candidates.is_empty() {
+        return passkey_reply(passkeys::error(E_NO_LOGINS));
+    }
+    let briefs: Vec<Value> = {
+        let map = host.vaults().0.lock().map_err(|_| E_CANCELLED_OR_DENIED)?;
+        candidates.iter().filter_map(|(v, id, _)| entry_brief(&map, v, *id)).collect()
+    };
+    let Some(choice) = host.ask(Ask::PasskeyGet { rp_id: rp.clone(), entries: briefs }).and_then(|a| a["uuid"].as_str().and_then(parse_uuid_hex)) else {
+        return passkey_reply(passkeys::error(passkeys::E_CANCELED));
+    };
+    let (vid, id, cred) = candidates.into_iter().find(|(_, id, _)| id.uuid() == choice).ok_or(E_NO_VALID_UUID)?;
+    let map = host.vaults().0.lock().map_err(|_| E_CANCELLED_OR_DENIED)?;
+    let e = map.get(&vid).and_then(|v| v.db().entry(id)).ok_or(E_NO_VALID_UUID)?;
+    let flag = |k: &str| e.get(k).map(|v| v == "1" || v.eq_ignore_ascii_case("true")).unwrap_or(true);
+    let reply = passkeys::assert(pk, origin, &rp, &cred, &field(&e, passkeys::USER_HANDLE), &field(&e, passkeys::PRIVATE_KEY), flag(passkeys::FLAG_BE), flag(passkeys::FLAG_BS));
+    passkey_reply(reply.unwrap_or_else(passkeys::error))
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -718,6 +916,8 @@ pub(crate) mod tests {
                 Ask::Access { entries, .. } => self.answer_access.then(|| json!({
                     "allow": entries.iter().map(|e| e["uuid"].clone()).collect::<Vec<_>>(), "remember": true })),
                 Ask::Update { .. } => Some(json!({ "ok": true })),
+                Ask::PasskeyRegister { .. } => Some(json!({ "ok": true })),
+                Ask::PasskeyGet { entries, .. } => entries.first().map(|e| json!({ "uuid": e["uuid"] })),
             }
         }
         fn vault_changed(&self, _dto: VaultDto) {}
@@ -855,7 +1055,22 @@ pub(crate) mod tests {
         let tree = c.call(&host, &mut s2, "get-database-groups", json!({ "action": "get-database-groups" }));
         assert!(tree["groups"]["groups"][0]["children"].as_array().unwrap().iter().any(|g| g["name"] == "Web"));
 
-        assert_eq!(c.call(&host, &mut s2, "passkeys-get", json!({ "action": "passkeys-get" }))["errorCode"], "31");
+        assert_eq!(c.call(&host, &mut s2, "passkeys-get", json!({ "action": "passkeys-get" }))["errorCode"], "24");
+
+        // passkeys: register, then sign in with it
+        let create = json!({ "challenge": "AAAAAAAAAAAAAAAAAAAAAAAAAAAA", "rp": { "id": "shop.test", "name": "Shop" },
+            "user": { "id": "dXNlcjE", "name": "alice" }, "pubKeyCredParams": [{ "type": "public-key", "alg": -7 }] });
+        let reg = c.call(&host, &mut s2, "passkeys-register", json!({ "action": "passkeys-register", "publicKey": create, "origin": "https://shop.test", "keys": keys }));
+        let cred_id = reg["response"]["id"].as_str().expect("credential").to_string();
+        let get = json!({ "challenge": "BBBBBBBBBBBBBBBBBBBBBBBBBBBB", "rpId": "shop.test", "allowCredentials": [{ "type": "public-key", "id": cred_id }] });
+        let login = c.call(&host, &mut s2, "passkeys-get", json!({ "action": "passkeys-get", "publicKey": get, "origin": "https://shop.test", "keys": keys }));
+        assert_eq!(login["response"]["id"], cred_id.as_str());
+        assert!(login["response"]["response"]["signature"].as_str().is_some_and(|s| !s.is_empty()));
+        let mut excluded = create.clone();
+        excluded["excludeCredentials"] = json!([{ "type": "public-key", "id": cred_id }]);
+        let again = c.call(&host, &mut s2, "passkeys-register", json!({ "action": "passkeys-register", "publicKey": excluded, "origin": "https://shop.test", "keys": keys }));
+        assert_eq!(again["response"]["errorCode"], 21);
+        assert_eq!(c.call(&host, &mut s2, "passkeys-get", json!({ "action": "passkeys-get", "publicKey": get, "origin": "http://shop.test", "keys": keys }))["errorCode"], "25");
 
         // lock: further requests report "database not opened"
         c.call(&host, &mut s2, "lock-database", json!({ "action": "lock-database" }));

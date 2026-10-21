@@ -8,6 +8,7 @@ mod clipboard;
 mod desktop;
 mod favicon;
 mod health;
+mod passkeys;
 mod update;
 mod keeshare;
 mod ssh;

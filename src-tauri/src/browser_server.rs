@@ -85,6 +85,7 @@ impl Host for AppHost {
             update_no_confirm: p.b_update_no_confirm,
             kph: p.b_kph,
             skip_basic_auth: p.b_skip_basic_auth,
+            localhost_passkeys: p.b_localhost_passkeys,
         }
     }
     fn active_vault(&self) -> Option<String> {
@@ -98,6 +99,8 @@ impl Host for AppHost {
             Ask::Associate => json!({ "id": id, "kind": "associate" }),
             Ask::Access { host, entries } => json!({ "id": id, "kind": "access", "host": host, "entries": entries }),
             Ask::Update { title, username } => json!({ "id": id, "kind": "update", "title": title, "username": username }),
+            Ask::PasskeyRegister { rp_id, username, existing } => json!({ "id": id, "kind": "passkeyRegister", "rpId": rp_id, "username": username, "existing": existing }),
+            Ask::PasskeyGet { rp_id, entries } => json!({ "id": id, "kind": "passkeyGet", "rpId": rp_id, "entries": entries }),
         };
         let _ = self.app.emit("akp-browser-ask", payload);
         desktop::show_main(&self.app);

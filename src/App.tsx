@@ -60,7 +60,7 @@ const DESKTOP_KEYS = [
   'atShortcut', 'atStartDelay', 'atCharDelay', 'atAlwaysAsk', 'atMatchTitle', 'atMatchUrl', 'atHideExpired',
   'browserEnabled', 'bChrome', 'bFirefox', 'bChromium', 'bEdge', 'bBrave', 'bVivaldi', 'bTor', 'bUnlock', 'bMatchScheme',
   'bBestMatch', 'bAllowExpired', 'bSearchAll', 'bNoAccessConfirm', 'bUpdateNoConfirm', 'bKph', 'bUpdateManifests',
-  'bCustomProxy', 'bProxyPath', 'bSkipBasicAuth', 'backupBeforeSave', 'backupPath', 'autoReload', 'atRelock', 'atRemember', 'trayStyle', 'quickUnlock', 'sshEnabled', 'sshAuthSock', 'ksImport', 'ksExport',
+  'bCustomProxy', 'bProxyPath', 'bSkipBasicAuth', 'bLocalhostPasskeys', 'backupBeforeSave', 'backupPath', 'autoReload', 'atRelock', 'atRemember', 'trayStyle', 'quickUnlock', 'sshEnabled', 'sshAuthSock', 'ksImport', 'ksExport',
 ] as const;
 const KNOWN_KEY = 'anotherkeepass.vaults';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -949,6 +949,7 @@ function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
   const [name, setName] = useState('browser-' + new Date().toISOString().slice(0, 10));
   const [allow, setAllow] = useState<string[]>(ask.kind === 'access' ? ask.entries.map(e => e.uuid) : []);
   const [remember, setRemember] = useState(true);
+  const [target, setTarget] = useState<string | null>(null); // passkey: entry to update / to sign in with
   const deny = () => onAnswer(null);
   return createPortal(
     <div className="scrim">
@@ -984,6 +985,45 @@ function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
             <div className="row">
               <button className="btn text" onClick={() => onAnswer({ allow: [], remember })}>{t.brDeny}</button>
               <button className="btn filled" autoFocus onClick={() => onAnswer({ allow, remember })}><Icon n="check" />{t.brAllow}</button>
+            </div>
+          </>
+        )}
+        {ask.kind === 'passkeyRegister' && (
+          <>
+            <h3><Icon n="passkey" />{t.pkRegTitle}</h3>
+            <p className="dialog-body">{t.pkRegBody} <b>{ask.rpId}</b>{ask.username && <> ({ask.username})</>}</p>
+            {ask.existing.length > 0 && (
+              <div className="browser-ask-list">
+                {[{ uuid: '', title: t.pkRegNew, username: '', vault: '' }, ...ask.existing].map(e => (
+                  <label key={e.uuid || 'new'} className="opt">
+                    <span className="browser-ask-entry"><b>{e.uuid ? `${t.pkRegReplace} ${e.title || t.untitled}` : e.title}</b>
+                      <small>{[e.username, e.vault && vaultName(e.vault)].filter(Boolean).join(' · ')}</small></span>
+                    <input type="radio" name="pk-target" checked={(target ?? '') === e.uuid} onChange={() => setTarget(e.uuid)} />
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="row">
+              <button className="btn text" onClick={deny}>{t.cancel}</button>
+              <button className="btn filled" autoFocus onClick={() => onAnswer({ ok: true, uuid: target || null })}><Icon n="check" />{t.pkSave}</button>
+            </div>
+          </>
+        )}
+        {ask.kind === 'passkeyGet' && (
+          <>
+            <h3><Icon n="passkey" />{t.pkGetTitle}</h3>
+            <p className="dialog-body">{t.pkGetBody} <b>{ask.rpId}</b></p>
+            <div className="browser-ask-list">
+              {ask.entries.map(e => (
+                <label key={e.uuid} className="opt">
+                  <span className="browser-ask-entry"><b>{e.title || t.untitled}</b><small>{[e.username, vaultName(e.vault)].filter(Boolean).join(' · ')}</small></span>
+                  <input type="radio" name="pk-pick" checked={(target ?? ask.entries[0]?.uuid) === e.uuid} onChange={() => setTarget(e.uuid)} />
+                </label>
+              ))}
+            </div>
+            <div className="row">
+              <button className="btn text" onClick={deny}>{t.cancel}</button>
+              <button className="btn filled" autoFocus onClick={() => onAnswer({ uuid: target ?? ask.entries[0]?.uuid })}><Icon n="login" />{t.pkUse}</button>
             </div>
           </>
         )}

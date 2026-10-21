@@ -100,6 +100,8 @@ const en = {
     ksSigner: 'Signer name', ksFingerprint: 'Certificate fingerprint', ksGenerate: 'Generate new certificate',
   },
   hints: {
+    bLocalhostPasskeys: "Passkeys normally need https. This also allows them on http://localhost – only useful for web developers.",
+    bSkipBasicAuth: "Login dialogs of the browser itself (HTTP Basic Auth) get your login without asking first.",
     updateCheck: "Once a week, looks for a newer release on GitHub and shows a button to download it.",
     updateBeta: "Also tell about test versions (may be less stable).",
     ksImport: "Folders shared as Import or Synchronize are updated from their shared file (right-click a folder → Share).",
@@ -288,6 +290,8 @@ const de: SettingsStrings = {
     ksSigner: 'Name des Unterzeichners', ksFingerprint: 'Fingerabdruck des Zertifikats', ksGenerate: 'Neues Zertifikat generieren',
   },
   hints: {
+    bLocalhostPasskeys: "Passkeys brauchen normalerweise https. Damit gehen sie auch auf http://localhost – nur für Webentwicklung sinnvoll.",
+    bSkipBasicAuth: "Anmeldefenster des Browsers selbst (HTTP Basic Auth) bekommen die Zugangsdaten ohne Nachfrage.",
     updateCheck: "Sucht einmal pro Woche auf GitHub nach einer neueren Version und zeigt dann einen Button zum Herunterladen.",
     updateBeta: "Auch Testversionen melden (eventuell weniger stabil).",
     ksImport: "Als „Importieren“ oder „Synchronisieren“ geteilte Ordner werden aus ihrer Datei aktualisiert (Rechtsklick auf Ordner → Teilen).",
@@ -474,6 +478,8 @@ const fr: SettingsStrings = {
     ksSigner: 'Nom du signataire', ksFingerprint: 'Empreinte du certificat', ksGenerate: 'Générer un nouveau certificat',
   },
   hints: {
+    bLocalhostPasskeys: "Les clés d’accès exigent https. Ceci les autorise aussi sur http://localhost – utile seulement pour le développement web.",
+    bSkipBasicAuth: "Les fenêtres de connexion du navigateur (HTTP Basic Auth) reçoivent l’identifiant sans demander.",
     updateCheck: "Une fois par semaine, cherche une version plus récente sur GitHub et affiche un bouton pour la télécharger.",
     updateBeta: "Signaler aussi les versions de test (parfois moins stables).",
     ksImport: "Les dossiers partagés en Import ou Synchronisation sont mis à jour depuis leur fichier (clic droit sur un dossier → Partager).",
@@ -660,6 +666,8 @@ const es: SettingsStrings = {
     ksSigner: 'Nombre del firmante', ksFingerprint: 'Huella del certificado', ksGenerate: 'Generar nuevo certificado',
   },
   hints: {
+    bLocalhostPasskeys: "Las llaves de acceso necesitan https. Esto las permite también en http://localhost – solo útil para desarrollo web.",
+    bSkipBasicAuth: "Las ventanas de inicio de sesión del navegador (HTTP Basic Auth) reciben el acceso sin preguntar.",
     updateCheck: "Una vez por semana busca una versión más reciente en GitHub y muestra un botón para descargarla.",
     updateBeta: "Avisar también de versiones de prueba (pueden ser menos estables).",
     ksImport: "Las carpetas compartidas como Importar o Sincronizar se actualizan desde su archivo (clic derecho en una carpeta → Compartir).",

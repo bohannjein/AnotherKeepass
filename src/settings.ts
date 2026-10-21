@@ -256,7 +256,7 @@ export const SECTIONS: Section[] = [
           { key: 'bUpdateNoConfirm', type: 'toggle', dependsOn: 'browserEnabled' },
           { key: 'bSkipBasicAuth', type: 'toggle', dependsOn: 'browserEnabled' },
           { key: 'bKph', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bLocalhostPasskeys', type: 'toggle', dependsOn: 'browserEnabled', planned: true },
+          { key: 'bLocalhostPasskeys', type: 'toggle', dependsOn: 'browserEnabled' },
           { key: 'bUpdateManifests', type: 'toggle', dependsOn: 'browserEnabled' },
           { key: 'bCustomProxy', type: 'toggle', dependsOn: 'browserEnabled' },
           { key: 'bProxyPath', type: 'path', dependsOn: 'bCustomProxy' },

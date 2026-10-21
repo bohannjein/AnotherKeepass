@@ -90,6 +90,7 @@ export function rawToItem(raw: RawItem, v: VaultData): Item {
   for (const f of raw.fields) {
     if (f.name === 'Title') { title = f.value ?? ''; continue; }
     if (f.name === 'Notes') { note = f.value ?? ''; continue; }
+    if (f.name.startsWith('KPEX_PASSKEY') || f.name.startsWith('KPXC_PASSKEY')) continue; // passkey data, see Rust apply_item
     if (f.protected || f.value) nonEmpty.add(f.name);
     const key = KEY_BY_NAME[f.name];
     const kind = kinds[f.name] ?? (key && DEFAULT_KIND[key]) ?? (f.protected ? 'hidden' : 'text');

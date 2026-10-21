@@ -44,6 +44,10 @@ sha1 = "0.10"
 ureq = { version = "2", features = ["json"] }
 ssh-key = { version = "0.6", features = ["encryption", "ed25519", "rsa", "ecdsa", "p256", "p384"] }
 ssh-encoding = { version = "0.2", features = ["alloc"] }
+p256 = { version = "0.13", features = ["ecdsa", "pkcs8", "pem"] }
+ed25519-dalek = { version = "2", features = ["pkcs8", "pem", "rand_core"] }
+rsa = { version = "0.9", features = ["sha2"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
 
 [target."cfg(windows)".dependencies]
 windows = { version = "0.61", features = ["Security_Credentials_UI", "Win32_System_WinRT", "Win32_Foundation", "Foundation"] }
