@@ -102,11 +102,17 @@ pub struct Remote {
     private: Option<rsa::RsaPrivateKey>,
     orgs: HashMap<String, SymKey>,
     snapshot: Snapshot,
+    /// entries created by the last push: (local entry uuid, server cipher id)
+    created: Vec<(String, String)>,
 }
 
 impl Remote {
     pub fn online(&self) -> bool {
         self.session.is_some()
+    }
+    /// new entries get their id from the server: who became what in the last upload
+    pub fn take_created(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.created)
     }
 }
 
@@ -272,7 +278,7 @@ pub fn open(path: &str, password: &str, second: Option<(u8, String)>) -> Result<
     save_account(path, &acct);
     let user_id = field(field(&sync, "profile"), "id").as_str().unwrap_or_default().to_string();
     log::info!("vaultwarden: {} items{}", snapshot.ciphers.len(), if session.is_some() { "" } else { " (offline copy)" });
-    Ok((db, Remote { path: path.to_string(), session, user_id, user, private, orgs, snapshot }))
+    Ok((db, Remote { path: path.to_string(), session, user_id, user, private, orgs, snapshot, created: vec![] }))
 }
 
 /// Fetch the current server state.
@@ -372,10 +378,13 @@ pub fn push(r: &mut Remote, db: &Database) -> Result<Database, String> {
         let key = mapping::cipher_key(&json!({ "organizationId": meta.org, "key": meta.key }), &r.user, &r.orgs)?;
         match r.snapshot.ciphers.get(&id) {
             None => {
-                seen.push(id);
+                seen.push(id.clone());
                 if !trashed {
                     meta.revision = None;
-                    session.create_cipher(&mapping::cipher_body(&plain, &meta, folder.as_deref(), &key, &r.user_id))?;
+                    let res = session.create_cipher(&mapping::cipher_body(&plain, &meta, folder.as_deref(), &key, &r.user_id))?;
+                    if let Some(sid) = field(&res, "id").as_str() {
+                        r.created.push((id, sid.to_string()));
+                    }
                 }
             }
             Some((old, _, was_trashed, old_folder)) => {
@@ -575,6 +584,36 @@ mod tests {
         // after the push the vault shows the server state (3 items, new password)
         assert_eq!(db.iter_all_entries().count(), 3);
         assert_eq!(db.entry(eid).unwrap().get("Password"), Some("new secret"));
+        forget(&path);
+    }
+
+    #[test]
+    fn kdbx_sync_survives_server_ids() {
+        let password = "pw pw";
+        let email = format!("s{}@example.com", Uuid::new_v4().simple());
+        let kdf = Kdf { kind: 0, iterations: 5000, memory: 0, parallelism: 0 };
+        let master = crypto::master_key(password, &email, &kdf).unwrap();
+        let mut ub = [0u8; 64];
+        OsRng.fill_bytes(&mut ub);
+        let user = SymKey::from_bytes(&ub).unwrap();
+        let m = mock(user.clone(), encrypt(&ub, &crypto::stretch(&master)), vec![]);
+        let path = format!("bw:{}#{}", m.url, email);
+        let (mut b, mut remote) = open(&path, password, Some((0, "123456".into()))).unwrap();
+
+        // the .kdbx has one entry; sync copies it to the account (local id) …
+        let mut a = Database::new();
+        a.root_mut().add_entry().set_unprotected("Title", "Only in file");
+        let (_, cb) = crate::sync::sync(&mut a, &mut b);
+        assert!(cb);
+        // … the upload gives it a server id …
+        b = push(&mut remote, &b).unwrap();
+        let renamed = remote.take_created();
+        assert_eq!(renamed.len(), 1);
+        crate::sync::remap(&mut a, &renamed);
+        // … and the next sync sees nothing to do (no delete, no duplicate)
+        assert_eq!(crate::sync::sync(&mut a, &mut b), (false, false));
+        assert_eq!(b.iter_all_entries().filter(|e| e.get_title() == Some("Only in file")).count(), 1);
+        assert_eq!(a.iter_all_entries().filter(|e| e.get_title() == Some("Only in file")).count(), 1);
         forget(&path);
     }
 }

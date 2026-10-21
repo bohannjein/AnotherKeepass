@@ -213,6 +213,8 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const [lookFor, setLookFor] = useState<VaultInfo | null>(null);
   const [exportFor, setExportFor] = useState<VaultInfo | null>(null);
   const [mergeFor, setMergeFor] = useState<VaultInfo | null>(null);
+  const [syncFor, setSyncFor] = useState<VaultInfo | null>(null);
+  useEffect(() => backend.on<string>('akp-sync-problem', e => notify(`${t.syncProblem}: ${e}`, true)), [t.syncProblem]); // eslint-disable-line react-hooks/exhaustive-deps
   const [preview, setPreview] = useState<{ name: string; load: () => Promise<Uint8Array> } | null>(null);
   const [palette, setPalette] = useState(false);
   // update check: at most once a week, only when enabled
@@ -571,7 +573,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       { icon: 'upload_file', label: t.importItems, action: () => setImportFor(v.id) },
       ...(backend.desktop ? [
         { icon: 'ios_share', label: t.exportMenu, action: () => setExportFor(v) },
-        ...(isRemote(v.id) ? [] : [{ icon: 'merge', label: t.mergeMenu, action: () => setMergeFor(v) }]),
+        ...(isRemote(v.id) ? [] : [{ icon: 'merge', label: t.mergeMenu, action: () => setMergeFor(v) }, { icon: 'sync_alt', label: t.syncMenu, action: () => setSyncFor(v) }]),
       ] : [{ icon: 'print', label: t.exportSheet, action: () => setExportFor(v) }]),
       ...(backend.desktop ? [{ icon: 'image_search', label: t.loadIcons, action: () => loadIcons(items.filter(i => i.vault === v.id && !i.trashed && !i.icon)) }] : []),
       ...(isRemote(v.id) ? [
@@ -846,6 +848,9 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
           <div className="list-head">
             <span title={activeVault.id}>{activeVault.name}</span>
             {open[activeVault.id]?.remote === false && <span className="pill offline-pill" title={t.vwOfflineHint}><Icon n="cloud_off" />{t.offline}</span>}
+            {open[activeVault.id]?.syncWith && (
+              <span className="pill offline-pill" title={`${t.syncChip} ${fileName(open[activeVault.id].syncWith!)}`}><Icon n="sync_alt" />{fileName(open[activeVault.id].syncWith!).split(' · ')[0]}</span>
+            )}
             {isRemote(activeVault.id)
               ? <button className="icon-btn" title={t.vwSync} aria-label={t.vwSync} onClick={async () => { if (apply(await run(backend.vaultSync(activeVault.id)))) notify(t.vwSynced); }}><Icon n="sync" /></button>
               : <>
@@ -994,6 +999,30 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
           </div>
         </div>, document.body)}
       {exportFor && <ExportDialog t={t} vault={exportFor} onClose={() => setExportFor(null)} onDone={notify} />}
+      {syncFor && createPortal(
+        <div className="scrim" onClick={() => setSyncFor(null)}>
+          <div className="dialog share-dialog" role="dialog" aria-label={t.syncTitle} onClick={e => e.stopPropagation()}>
+            <h3><Icon n="sync_alt" />{t.syncTitle}</h3>
+            <p className="dialog-body">{t.syncBody}</p>
+            {vaultList.some(x => isRemote(x.id) && !x.locked) ? (
+              <div className="share-modes">
+                {vaultList.filter(x => isRemote(x.id) && !x.locked).map(x => (
+                  <button key={x.id} className={'choice' + (open[syncFor.id]?.syncWith === x.id ? ' on' : '')}
+                    onClick={async () => { const d = await run(backend.syncLink(syncFor.id, x.id)); if (d) { onUpdate(d); notify(t.syncLinked); setSyncFor(null); } }}>
+                    <Icon n="cloud" /><span><b>{x.name}</b><small>{open[syncFor.id]?.syncWith === x.id ? t.syncChip + ' ' + x.name : t.syncStart}</small></span>
+                  </button>
+                ))}
+              </div>
+            ) : <p className="form-note"><Icon n="info" />{t.syncNone}</p>}
+            <div className="row">
+              {open[syncFor.id]?.syncWith && (
+                <button className="btn text danger" onClick={async () => { const d = await run(backend.syncLink(syncFor.id, null)); if (d) { onUpdate(d); notify(t.syncUnlinked); setSyncFor(null); } }}>{t.syncStop}</button>
+              )}
+              <span style={{ flex: 1 }} />
+              <button className="btn text" onClick={() => setSyncFor(null)}>{t.close}</button>
+            </div>
+          </div>
+        </div>, document.body)}
       {mergeFor && <MergeDialog t={t} vault={mergeFor} onClose={() => setMergeFor(null)} onMerged={(d, msg) => { onUpdate(d); notify(msg); }} />}
       {preview && <AttachmentPreview t={t} name={preview.name} load={preview.load} onClose={() => setPreview(null)} />}
       {lookFor && (

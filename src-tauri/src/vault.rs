@@ -90,6 +90,8 @@ pub struct VaultDto {
     weak_kdf: bool,
     /// Vaultwarden account: Some(online)
     remote: Option<bool>,
+    /// .kdbx linked to this account path (two-way sync)
+    sync_with: Option<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -427,6 +429,7 @@ fn dto(id: &str, v: &OpenVault) -> VaultDto {
         icons: db.iter_all_custom_icons().map(|i| (i.id().to_string(), B64.encode(&i.data))).collect(),
         weak_kdf: v.remote.is_none() && weak_kdf(&db.config.kdf_config),
         remote: v.remote.as_ref().map(|r| r.online()),
+        sync_with: crate::sync::link_of(db),
     }
 }
 
@@ -596,10 +599,24 @@ pub fn mutate_entry(state: &Vaults, vault: &str, id: &str, f: impl FnOnce(&mut k
 }
 
 fn mutate(state: &Vaults, id: &str, f: impl FnOnce(&mut Database) -> R<()>) -> R<VaultDto> {
-    with_vault(state, id, |v| {
-        f(&mut v.db)?;
-        write_db(v)?;
-        Ok(dto(id, v))
+    let mut map = state.0.lock().map_err(|_| "lock".to_string())?;
+    let v = map.get_mut(id).ok_or("vault_closed")?;
+    f(&mut v.db)?;
+    write_db(v)?;
+    // a linked .kdbx / Vaultwarden partner gets the change too
+    crate::sync::after_change(&mut map, id);
+    Ok(dto(id, map.get(id).ok_or("vault_closed")?))
+}
+
+/// Link a .kdbx vault with an open Vaultwarden account (None = unlink) and sync right away.
+#[tauri::command]
+pub fn sync_link(state: tauri::State<'_, Vaults>, vault: String, remote: Option<String>) -> R<VaultDto> {
+    if remote.as_deref().is_some_and(|r| !crate::bitwarden::is_remote(r)) || crate::bitwarden::is_remote(&vault) {
+        return Err("sync_link".into());
+    }
+    mutate(&state, &vault, |db| {
+        crate::sync::set_link(db, remote.as_deref());
+        Ok(())
     })
 }
 
@@ -708,8 +725,11 @@ async fn open_remote(state: tauri::State<'_, Vaults>, path: String, password: St
         .await
         .map_err(|e| format!("open:{e}"))??;
     let v = OpenVault { path: PathBuf::from(&path), db, key: DatabaseKey::new().with_password("remote"), remote: Some(Box::new(remote)) };
-    let d = dto(&path, &v);
-    state.0.lock().map_err(|_| "lock")?.insert(path, v);
+    let mut map = state.0.lock().map_err(|_| "lock")?;
+    map.insert(path.clone(), v);
+    crate::sync::after_change(&mut map, &path);
+    let d = dto(&path, map.get(&path).ok_or("vault_closed")?);
+    drop(map);
     crate::browser_server::notify("database-unlocked");
     Ok(d)
 }
@@ -721,8 +741,11 @@ pub async fn vault_sync(state: tauri::State<'_, Vaults>, vault: String) -> R<Vau
         let title = v.db.meta.database_name.clone().unwrap_or_default();
         let r = v.remote.as_mut().ok_or("not_remote")?;
         v.db = crate::bitwarden::pull(r, &title)?;
-        Ok(dto(&vault, v))
-    })
+        Ok(())
+    })?;
+    let mut map = state.0.lock().map_err(|_| "lock")?;
+    crate::sync::after_change(&mut map, &vault);
+    Ok(dto(&vault, map.get(&vault).ok_or("vault_closed")?))
 }
 
 /// Vaultwarden email 2FA: send the login code.
@@ -777,8 +800,11 @@ async fn open_with(app: tauri::AppHandle, state: tauri::State<'_, Vaults>, path:
         write_db(&mut v)?; // KeeShare import changed the folder
     }
     stamp(&v.path);
-    let d = dto(&path, &v);
-    state.0.lock().map_err(|_| "lock")?.insert(path.clone(), v);
+    let mut map = state.0.lock().map_err(|_| "lock")?;
+    map.insert(path.clone(), v);
+    crate::sync::after_change(&mut map, &path);
+    let d = dto(&path, map.get(&path).ok_or("vault_closed")?);
+    drop(map);
     crate::browser_server::notify("database-unlocked");
     // after the UI got the listing: SSH keys to the agent, an Auto-Type may be waiting for this unlock
     let app2 = app.clone();

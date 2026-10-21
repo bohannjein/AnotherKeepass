@@ -35,6 +35,8 @@ export interface VaultData {
   weakKdf?: boolean;
   /** Vaultwarden account: true online, false offline copy; absent for .kdbx files */
   remote?: boolean | null;
+  /** .kdbx: path of the Vaultwarden account it syncs with */
+  syncWith?: string | null;
 }
 export interface ItemInput {
   id: string | null;
@@ -74,6 +76,8 @@ export interface Backend {
   /** twoFactor: [provider, code] for Vaultwarden accounts ("bw:<server>#<email>") */
   open(path: string, password: string, keyfile?: string, twoFactor?: [number, string]): Promise<VaultData>;
   vaultSync(id: string): Promise<VaultData>;
+  /** link a .kdbx with an open account (null = unlink); syncs right away */
+  syncLink(vault: string, remote: string | null): Promise<VaultData>;
   bwSendEmail(path: string, password: string): Promise<void>;
   bwSignOut(path: string): Promise<void>;
   /** quick unlock: key kept since the last lock + Windows Hello available */
@@ -158,6 +162,7 @@ const desktop: Backend = {
   create: (path, name, password, keyfile) => invoke('vault_create', { path, name, password, keyfile }),
   open: (path, password, keyfile, twoFactor) => invoke('vault_open', { path, password, keyfile, twoFactorProvider: twoFactor?.[0], twoFactorCode: twoFactor?.[1] }),
   vaultSync: vault => invoke('vault_sync', { vault }),
+  syncLink: (vault, remote) => invoke('sync_link', { vault, remote }),
   bwSendEmail: (path, password) => invoke('bw_send_email', { path, password }),
   bwSignOut: path => invoke('bw_sign_out', { path }),
   quickAvailable: path => invoke('quick_unlock_available', { path }),
@@ -265,6 +270,7 @@ const demo: Backend = {
   },
   async close(id) { demoVaults.delete(id); },
   vaultSync: async id => out(get(id)),
+  syncLink: async id => out(get(id)),
   bwSendEmail: async () => {},
   bwSignOut: async () => {},
   quickAvailable: async () => false,

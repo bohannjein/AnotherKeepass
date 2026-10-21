@@ -9,6 +9,7 @@ mod desktop;
 mod favicon;
 mod bitwarden;
 mod health;
+mod sync;
 mod quick;
 mod transfer;
 mod passkeys;
@@ -52,6 +53,7 @@ pub fn run() {
       vault::entry_save,
       vault::entry_import,
       vault::vault_sync,
+      vault::sync_link,
       vault::bw_send_email,
       vault::bw_sign_out,
       quick::vaults_listing,
@@ -119,6 +121,7 @@ pub fn run() {
       )?;
       log::info!("start v{} single_instance={} tray={} start_minimized={} config={:?}", env!("CARGO_PKG_VERSION"), prefs.single_instance, prefs.tray_icon, prefs.start_minimized, desktop::config_path());
       let handle = app.handle();
+      let _ = sync::APP.set(handle.clone());
       let host = std::sync::Arc::new(browser_server::AppHost::new(handle.clone()));
       app.manage(host.clone());
       if prefs.browser_enabled {
