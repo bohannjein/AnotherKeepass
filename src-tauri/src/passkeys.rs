@@ -91,8 +91,9 @@ fn rp_id(requested: Option<&str>, domain: &str) -> Result<String, u32> {
 }
 
 fn client_data(kind: &str, challenge: &str, origin: &str) -> String {
-    // field order as the WebAuthn serialization spec wants it
-    format!(r#"{{"type":"{kind}","challenge":"{challenge}","origin":"{origin}","crossOrigin":false}}"#)
+    // field order as the WebAuthn serialization spec wants it; values JSON-escaped (page input)
+    let q = |s: &str| serde_json::Value::String(s.to_string()).to_string();
+    format!(r#"{{"type":{},"challenge":{},"origin":{},"crossOrigin":false}}"#, q(kind), q(challenge), q(origin))
 }
 
 // ---------------------------------------------------------------- CBOR (only what WebAuthn needs)

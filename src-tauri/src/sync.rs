@@ -81,6 +81,11 @@ fn folder_path(db: &Database, e: &EntryRef<'_>) -> Vec<String> {
     names
 }
 
+/// "A/B" (account) and A → B (file) are the same folder.
+fn norm_path(db: &Database, e: &EntryRef<'_>) -> Vec<String> {
+    folder_path(db, e).join("/").split('/').map(str::trim).filter(|s| !s.is_empty()).map(String::from).collect()
+}
+
 fn ensure_path(db: &mut Database, names: &[String]) -> GroupId {
     let mut cur = db.root().id();
     for n in names {
@@ -98,15 +103,14 @@ fn ensure_path(db: &mut Database, names: &[String]) -> GroupId {
 
 /// Content that matters for sync: folder, strings (non-empty), tags. Passkey strings,
 /// attachments and Bitwarden bookkeeping are not compared.
+/// Fingerprint of what both sides can hold: the account's view of the entry (as it would be
+/// uploaded) plus the folder. Tags, attachments, passkeys stay out, so data the account can't
+/// store never counts as a difference and never gets overwritten in the file.
 fn fingerprint(db: &Database, e: &EntryRef<'_>) -> String {
-    let mut fields: Vec<(&String, String)> = e.fields.iter()
-        .filter(|(k, v)| !v.get().is_empty() && !k.starts_with("KPEX_PASSKEY") && !k.starts_with("KPXC_PASSKEY"))
-        .map(|(k, v)| (k, v.get().clone()))
-        .collect();
-    fields.sort();
-    let mut tags = e.tags.clone();
-    tags.sort();
-    let doc = serde_json::json!({ "path": folder_path(db, e), "fields": fields, "tags": tags });
+    let (mut plain, _) = crate::bitwarden::mapping::read_entry(e);
+    plain.kind = 0; // the type is derived differently on both sides
+    plain.fields.sort();
+    let doc = serde_json::json!({ "path": norm_path(db, e), "plain": plain });
     Sha256::digest(doc.to_string().as_bytes()).iter().take(12).map(|b| format!("{b:02x}")).collect()
 }
 
@@ -123,8 +127,9 @@ fn modified(e: &EntryRef<'_>) -> chrono::NaiveDateTime {
 /// bookkeeping (Bitwarden meta, attachments) and pushes the old version into its history.
 fn copy_over(src_db: &Database, src: EntryId, dst_db: &mut Database, dst: Option<EntryId>) -> Option<EntryId> {
     let s = src_db.entry(src)?;
-    let path = folder_path(src_db, &s);
-    let (fields, tags, times) = (s.fields.clone(), s.tags.clone(), s.times.clone());
+    let path = norm_path(src_db, &s);
+    let (fields, src_tags, times) = (s.fields.clone(), s.tags.clone(), s.times.clone());
+    let pinned = src_tags.iter().any(|t| t == "pinned");
     let ours: Vec<(String, CustomDataItem)> = s.custom_data.iter().filter(|(k, _)| k.starts_with("AnotherKeepass.")).map(|(k, v)| (k.clone(), v.clone())).collect();
     let folder = ensure_path(dst_db, &path);
     let id = match dst.filter(|d| dst_db.entry(*d).is_some()) {
@@ -141,7 +146,11 @@ fn copy_over(src_db: &Database, src: EntryId, dst_db: &mut Database, dst: Option
             for (k, v) in keep {
                 m.fields.entry(k).or_insert(v);
             }
-            m.tags = tags;
+            // tags: the target's own tags stay, only "pinned" follows the source
+            m.tags.retain(|t| t != "pinned");
+            if pinned {
+                m.tags.push("pinned".into());
+            }
             m.custom_data.retain(|k, _| !k.starts_with("AnotherKeepass."));
             m.custom_data.extend(ours);
             d
@@ -150,7 +159,7 @@ fn copy_over(src_db: &Database, src: EntryId, dst_db: &mut Database, dst: Option
             let mut g = dst_db.group_mut(folder)?;
             let mut e = g.add_entry();
             e.fields = fields;
-            e.tags = tags;
+            e.tags = src_tags;
             e.custom_data.extend(ours);
             e.id()
         }
@@ -309,7 +318,11 @@ pub fn after_change(map: &mut HashMap<String, OpenVault>, id: &str) {
         None => vec![],
     };
     for (aid, bid) in pairs {
+        if map.get(&bid).and_then(|b| b.remote.as_ref()).is_some_and(|r| !r.online()) {
+            continue; // offline copy: nothing would reach the server, wait for the next online unlock
+        }
         let (Some(mut a), Some(mut b)) = (map.remove(&aid), map.remove(&bid)) else { continue };
+        let before = cd(a.db(), CD_STATE);
         let (mut ca, cb) = sync(a.db_mut(), b.db_mut());
         let mut problem = None;
         if cb {
@@ -318,7 +331,12 @@ pub fn after_change(map: &mut HashMap<String, OpenVault>, id: &str) {
                     let renamed = b.remote.as_mut().map(|r| r.take_created()).unwrap_or_default();
                     ca |= remap(a.db_mut(), &renamed);
                 }
-                Err(e) => problem = Some(e),
+                Err(e) => {
+                    // the account didn't take it: forget the new pairs, so nothing is mistaken
+                    // for "deleted on the server" next time
+                    set_cd(a.db_mut(), CD_STATE, before);
+                    problem = Some(e);
+                }
             }
         }
         if ca {
@@ -392,5 +410,25 @@ mod tests {
         trash(&mut a, id);
         sync(&mut a, &mut b);
         assert_eq!(titles(&b), ["Mail", "Shared"]);
+    }
+
+    #[test]
+    fn file_only_data_survives() {
+        let (mut a, mut b) = (Database::new(), Database::new());
+        let id = add(&mut a, &["Team", "Ops"], "Server", "root", "pw");
+        a.entry_mut(id).unwrap().tags = vec!["work".into(), "pinned".into()];
+        sync(&mut a, &mut b);
+        // what the server gives back: only "pinned" survives, nested folder as "Team/Ops"
+        let bid = b.iter_all_entries().next().unwrap().id();
+        b.entry_mut(bid).unwrap().tags = vec!["pinned".into()];
+        let flat = ensure_path(&mut b, &["Team/Ops".to_string()]);
+        b.entry_mut(bid).unwrap().move_to(flat).unwrap();
+        assert_eq!(sync(&mut a, &mut b), (false, false), "no difference that matters");
+        assert_eq!(a.entry(id).unwrap().tags, vec!["work".to_string(), "pinned".to_string()]);
+        // a real change on the account side still arrives, tags in the file stay
+        b.entry_mut(bid).unwrap().set_protected("Password", "new");
+        sync(&mut a, &mut b);
+        assert_eq!(a.entry(id).unwrap().get("Password"), Some("new"));
+        assert!(a.entry(id).unwrap().tags.contains(&"work".to_string()));
     }
 }

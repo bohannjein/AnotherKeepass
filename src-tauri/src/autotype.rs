@@ -262,8 +262,12 @@ fn on_hotkey<R: Runtime>(app: &AppHandle<R>) {
 pub fn request<R: Runtime>(app: &AppHandle<R>, search: &str) {
     RELOCK.store(false, Ordering::Relaxed);
     let (hwnd, _) = foreground();
+    ASK_ALWAYS.store(true, Ordering::Relaxed);
     trigger(app, hwnd, search);
 }
+
+/// Set for requests from the browser: show the picker even for a single match.
+static ASK_ALWAYS: AtomicBool = AtomicBool::new(false);
 
 fn trigger<R: Runtime>(app: &AppHandle<R>, hwnd: Option<isize>, title: &str) {
     if let Ok(mut t) = app.state::<Target>().0.lock() {
@@ -283,7 +287,9 @@ fn trigger<R: Runtime>(app: &AppHandle<R>, hwnd: Option<isize>, title: &str) {
     // "remember last entry": typed for this window a moment ago → take it again without asking
     let recent = LAST.lock().ok().and_then(|l| l.clone()).filter(|(_, _, at)| at.elapsed().as_secs() < p.at_remember);
     let remembered = recent.and_then(|(v, id, _)| found.iter().find(|c| c.vault == v && c.id == id).cloned());
-    if let Some(c) = remembered.or_else(|| (found.len() == 1 && !p.at_always_ask).then(|| found[0].clone())) {
+    let from_browser = ASK_ALWAYS.swap(false, Ordering::Relaxed);
+    let automatic = if from_browser { None } else { remembered.or_else(|| (found.len() == 1 && !p.at_always_ask).then(|| found[0].clone())) };
+    if let Some(c) = automatic {
         let app = app.clone();
         thread::spawn(move || {
             if let Err(e) = perform(&app, &c.vault, &c.id, Some(c.sequence), true) {

@@ -85,6 +85,8 @@ pub enum Ask {
     Associate,
     Access { host: String, entries: Vec<Value> },
     Update { title: String, username: String },
+    /// the extension wants to delete an entry
+    Delete { title: String, username: String },
     /// new passkey; `existing` = entries of the same account that could take it instead
     PasskeyRegister { rp_id: String, username: String, existing: Vec<Value> },
     /// sign in with one of these passkeys
@@ -111,11 +113,13 @@ pub struct Session {
     client: Option<PublicKey>,
     client_b64: String,
     associated: bool,
+    /// vaults this client proved an association for (associate / test-associate)
+    vaults: std::collections::HashSet<String>,
 }
 
 impl Default for Session {
     fn default() -> Self {
-        Self { secret: SecretKey::generate(&mut OsRng), client: None, client_b64: String::new(), associated: false }
+        Self { secret: SecretKey::generate(&mut OsRng), client: None, client_b64: String::new(), associated: false, vaults: Default::default() }
     }
 }
 
@@ -190,12 +194,13 @@ pub fn handle(host: &dyn Host, s: &mut Session, req: &Value) -> Value {
             Some(plain) => serde_json::from_slice(&plain).unwrap_or(Value::Null),
             None => return error_reply(&action, E_CANNOT_DECRYPT),
         },
-        None => Value::Null, // some actions (get-totp, request-autotype) may come without payload
+        // only the key exchange travels unencrypted; anything else is refused
+        None => return error_reply(&action, E_CANNOT_DECRYPT),
     };
-    let p = if payload.is_null() { req } else { &payload };
+    let p = &payload;
 
     let open = host.vaults().0.lock().map(|m| !m.is_empty()).unwrap_or(false);
-    if !open && action != "request-autotype" {
+    if !open {
         if p["triggerUnlock"].as_str() == Some("true") && host.prefs().unlock {
             host.show_window();
         }
@@ -209,17 +214,20 @@ pub fn handle(host: &dyn Host, s: &mut Session, req: &Value) -> Value {
         "get-logins" => get_logins(host, s, p),
         "generate-password" => Ok(generate_password()),
         "set-login" => set_login(host, s, p),
-        "lock-database" => {
+        "lock-database" if s.associated => {
             host.lock_all();
             Ok(Map::new())
         }
+        "lock-database" => Err(E_ASSOCIATION_FAILED),
         "get-totp" => get_totp(host, s, p),
         "get-database-groups" => database_groups(host, s),
         "create-new-group" => create_group(host, s, p),
-        "request-autotype" => {
+        // always with the entry picker: a page must not make us type into a window it chose
+        "request-autotype" if s.associated => {
             host.autotype_search(p["search"].as_str().unwrap_or_default());
             Ok(Map::new())
         }
+        "request-autotype" => Err(E_ASSOCIATION_FAILED),
         "delete-entry" => delete_entry(host, s, p),
         "passkeys-register" => passkeys_register(host, s, p),
         "passkeys-get" => passkeys_get(host, s, p),
@@ -288,6 +296,13 @@ fn associated_vaults(host: &dyn Host, keys: &[(String, String)]) -> Vec<String> 
         .collect()
 }
 
+/// Vaults a client may touch by entry UUID: the ones it proved an association for.
+fn allowed_vaults(host: &dyn Host, s: &Session, p: &Value) -> std::collections::HashSet<String> {
+    let mut v = s.vaults.clone();
+    v.extend(associated_vaults(host, &keys_of(p)));
+    v
+}
+
 fn keys_of(p: &Value) -> Vec<(String, String)> {
     p["keys"].as_array().map(|a| {
         a.iter().filter_map(|k| Some((k["id"].as_str()?.to_string(), k["key"].as_str()?.to_string()))).collect()
@@ -310,6 +325,7 @@ fn associate(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
     v.db_mut().meta.custom_data.insert(format!("{ASSOC_PREFIX}{name}"), cd_item(id_key));
     save_and_notify(host, &vid, v)?;
     s.associated = true;
+    s.vaults.insert(vid.clone());
     Ok(params(&[("hash", json!(db_hash(v.db()))), ("id", json!(name))]))
 }
 
@@ -322,6 +338,7 @@ fn test_associate(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
         return Err(E_ASSOCIATION_FAILED);
     }
     s.associated = true;
+    s.vaults.insert(vid.clone());
     Ok(params(&[("hash", json!(db_hash(v.db()))), ("id", json!(id))]))
 }
 
@@ -590,15 +607,17 @@ fn set_login(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
     if let Some(u) = existing {
         let uuid = parse_uuid_hex(u).ok_or(E_NO_VALID_UUID)?;
         if !host.prefs().update_no_confirm {
+            let allowed = allowed_vaults(host, s, p);
             let (title, username) = {
                 let map = host.vaults().0.lock().map_err(|_| E_CANCELLED_OR_DENIED)?;
-                let e = map.values().find_map(|v| v.db().entry(EntryId::from(uuid))).ok_or(E_NO_VALID_UUID)?;
+                let e = map.iter().filter(|(k, _)| allowed.contains(*k)).find_map(|(_, v)| v.db().entry(EntryId::from(uuid))).ok_or(E_NO_VALID_UUID)?;
                 (e.get_title().unwrap_or_default().to_string(), e.get_username().unwrap_or_default().to_string())
             };
             host.ask(Ask::Update { title, username }).filter(|a| a["ok"].as_bool() == Some(true)).ok_or(E_CANCELLED_OR_DENIED)?;
         }
+        let allowed = allowed_vaults(host, s, p);
         let mut map = host.vaults().0.lock().map_err(|_| E_CANCELLED_OR_DENIED)?;
-        let target = map.iter().find(|(_, v)| v.db().entry(EntryId::from(uuid)).is_some()).map(|(k, _)| k.clone()).ok_or(E_NO_VALID_UUID)?;
+        let target = map.iter().filter(|(k, _)| allowed.contains(*k)).find(|(_, v)| v.db().entry(EntryId::from(uuid)).is_some()).map(|(k, _)| k.clone()).ok_or(E_NO_VALID_UUID)?;
         let v = map.get_mut(&target).ok_or(E_NO_VALID_UUID)?;
         {
             let mut e = v.db_mut().entry_mut(EntryId::from(uuid)).ok_or(E_NO_VALID_UUID)?;
@@ -639,8 +658,9 @@ fn get_totp(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
         return Err(E_ASSOCIATION_FAILED);
     }
     let uuid = p["uuid"].as_str().and_then(parse_uuid_hex).ok_or(E_NO_VALID_UUID)?;
+    let allowed = allowed_vaults(host, s, p);
     let map = host.vaults().0.lock().map_err(|_| E_NO_VALID_UUID)?;
-    let e = map.values().find_map(|v| v.db().entry(EntryId::from(uuid))).ok_or(E_NO_VALID_UUID)?;
+    let e = map.iter().filter(|(k, _)| allowed.contains(*k)).find_map(|(_, v)| v.db().entry(EntryId::from(uuid))).ok_or(E_NO_VALID_UUID)?;
     Ok(params(&[("totp", json!(crate::vault::totp_code(&e, fields::OTP).unwrap_or_default()))]))
 }
 
@@ -699,8 +719,16 @@ fn delete_entry(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
         return Err(E_ASSOCIATION_FAILED);
     }
     let uuid = p["uuid"].as_str().and_then(parse_uuid_hex).ok_or(E_NO_VALID_UUID)?;
+    let allowed = allowed_vaults(host, s, p);
+    let (title, username) = {
+        let map = host.vaults().0.lock().map_err(|_| E_NO_VALID_UUID)?;
+        let e = map.iter().filter(|(k, _)| allowed.contains(*k)).find_map(|(_, v)| v.db().entry(EntryId::from(uuid))).ok_or(E_NO_VALID_UUID)?;
+        (e.get_title().unwrap_or_default().to_string(), e.get_username().unwrap_or_default().to_string())
+    };
+    // deleting from a web page always needs a yes
+    host.ask(Ask::Delete { title, username }).filter(|a| a["ok"].as_bool() == Some(true)).ok_or(E_CANCELLED_OR_DENIED)?;
     let mut map = host.vaults().0.lock().map_err(|_| E_NO_VALID_UUID)?;
-    let vid = map.iter().find(|(_, v)| v.db().entry(EntryId::from(uuid)).is_some()).map(|(k, _)| k.clone()).ok_or(E_NO_VALID_UUID)?;
+    let vid = map.iter().filter(|(k, _)| allowed.contains(*k)).find(|(_, v)| v.db().entry(EntryId::from(uuid)).is_some()).map(|(k, _)| k.clone()).ok_or(E_NO_VALID_UUID)?;
     let v = map.get_mut(&vid).ok_or(E_NO_VALID_UUID)?;
     v.trash_entry(EntryId::from(uuid)).map_err(|_| E_NO_VALID_UUID)?;
     save_and_notify(host, &vid, v)?;
@@ -919,7 +947,7 @@ pub(crate) mod tests {
                 Ask::Associate => Some(json!({ "name": "test-browser" })),
                 Ask::Access { entries, .. } => self.answer_access.then(|| json!({
                     "allow": entries.iter().map(|e| e["uuid"].clone()).collect::<Vec<_>>(), "remember": true })),
-                Ask::Update { .. } => Some(json!({ "ok": true })),
+                Ask::Update { .. } | Ask::Delete { .. } => Some(json!({ "ok": true })),
                 Ask::PasskeyRegister { .. } => Some(json!({ "ok": true })),
                 Ask::PasskeyGet { entries, .. } => entries.first().map(|e| json!({ "uuid": e["uuid"] })),
             }
@@ -1011,6 +1039,12 @@ pub(crate) mod tests {
 
         let hash = c.call(&host, &mut s, "get-databasehash", json!({ "action": "get-databasehash" }));
         assert_eq!(hash["hash"].as_str().unwrap().len(), 64);
+
+        // anything but the key exchange must be encrypted, and auto-type needs an association
+        let plain = handle(&host, &mut s, &json!({ "action": "request-autotype", "search": "github.com", "nonce": B64.encode(SalsaBox::generate_nonce(&mut OsRng)) }));
+        assert_eq!(plain["errorCode"], "4");
+        assert_eq!(c.call(&host, &mut s, "request-autotype", json!({ "action": "request-autotype", "search": "github.com" }))["errorCode"], "8");
+        assert_eq!(c.call(&host, &mut s, "lock-database", json!({ "action": "lock-database" }))["errorCode"], "8");
 
         // logins need an association first
         let denied = c.call(&host, &mut s, "get-logins", json!({ "action": "get-logins", "url": "https://github.com" }));

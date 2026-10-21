@@ -99,6 +99,7 @@ impl Host for AppHost {
             Ask::Associate => json!({ "id": id, "kind": "associate" }),
             Ask::Access { host, entries } => json!({ "id": id, "kind": "access", "host": host, "entries": entries }),
             Ask::Update { title, username } => json!({ "id": id, "kind": "update", "title": title, "username": username }),
+            Ask::Delete { title, username } => json!({ "id": id, "kind": "delete", "title": title, "username": username }),
             Ask::PasskeyRegister { rp_id, username, existing } => json!({ "id": id, "kind": "passkeyRegister", "rpId": rp_id, "username": username, "existing": existing }),
             Ask::PasskeyGet { rp_id, entries } => json!({ "id": id, "kind": "passkeyGet", "rpId": rp_id, "entries": entries }),
         };
@@ -169,10 +170,31 @@ type Listener = tokio::net::windows::named_pipe::NamedPipeServer;
 #[cfg(unix)]
 type Listener = tokio::net::UnixListener;
 
+/// Pipe instance that only the current user (and SYSTEM) can open; remote clients refused.
+#[cfg(windows)]
+fn create_pipe(first: bool) -> std::io::Result<Listener> {
+    create_pipe_named(&pipe_name(), first)
+}
+
+#[cfg(windows)]
+fn create_pipe_named(name: &str, first: bool) -> std::io::Result<Listener> {
+    use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
+    let sd = crate::hardening::security_descriptor("D:P(A;;GA;;;OW)(A;;GA;;;SY)").map_err(std::io::Error::other)?;
+    let mut sa = SECURITY_ATTRIBUTES { nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32, lpSecurityDescriptor: sd, bInheritHandle: 0 };
+    let r = unsafe {
+        tokio::net::windows::named_pipe::ServerOptions::new()
+            .first_pipe_instance(first)
+            .reject_remote_clients(true)
+            .create_with_security_attributes_raw(name, &mut sa as *mut _ as *mut std::ffi::c_void)
+    };
+    unsafe { windows_sys::Win32::Foundation::LocalFree(sd as _) };
+    r
+}
+
 #[cfg(windows)]
 fn listen_first() -> std::io::Result<Listener> {
     // first_pipe_instance fails if someone (KeePassXC) already serves this name
-    with_runtime(|| tokio::net::windows::named_pipe::ServerOptions::new().first_pipe_instance(true).create(pipe_name()))
+    with_runtime(|| create_pipe(true))
 }
 
 #[cfg(unix)]
@@ -197,13 +219,12 @@ fn listen_first() -> std::io::Result<Listener> {
 
 #[cfg(windows)]
 async fn accept_loop(mut server: Listener, host: Arc<dyn Host>, tx: broadcast::Sender<String>) {
-    use tokio::net::windows::named_pipe::ServerOptions;
     loop {
         if server.connect().await.is_err() {
             continue;
         }
         let conn = server;
-        server = match ServerOptions::new().create(pipe_name()) {
+        server = match create_pipe(false) {
             Ok(s) => s,
             Err(e) => {
                 log::error!("browser pipe: {e}");
@@ -343,6 +364,30 @@ pub fn sync_manifests(_p: &desktop::DesktopPrefs) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::browser::tests::{test_vault, TestHost};
+
+    /// our pipe: only this user; a client sees the server as "me" and the owner as trusted
+    #[test]
+    fn pipe_is_ours() {
+        use std::os::windows::io::AsRawHandle;
+        let name = format!(r"\\.\pipe\akp-own-{}", uuid::Uuid::new_v4().simple());
+        with_runtime(|| {
+            let _server = create_pipe_named(&name, true).unwrap();
+            let client = tokio::net::windows::named_pipe::ClientOptions::new().open(&name).unwrap();
+            assert!(crate::hardening::pipe_server_is_me(client.as_raw_handle() as _));
+            drop(client);
+            let _second = create_pipe_named(&name, false).unwrap();
+            use std::os::windows::fs::OpenOptionsExt;
+            let f = std::fs::OpenOptions::new().access_mode(0x8000_0000 | 0x4000_0000 | 0x0002_0000).open(&name).unwrap();
+            assert!(crate::hardening::pipe_owner_trusted(f.as_raw_handle() as _), "owner check accepts our own pipe");
+            Ok::<_, std::io::Error>(())
+        }).unwrap();
+        // a second "first instance" (squatting the name) is refused
+        with_runtime(|| {
+            let _a = create_pipe_named(&name, true).unwrap();
+            assert!(create_pipe_named(&name, true).is_err());
+            Ok::<_, std::io::Error>(())
+        }).unwrap();
+    }
 
     /// Real named pipe + tweetnacl client (scripts/browser-e2e.cjs), like the extension behind a proxy.
     /// Needs node and the npm dev dependencies:  cargo test --lib browser_pipe_e2e -- --ignored

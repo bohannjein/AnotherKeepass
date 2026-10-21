@@ -141,6 +141,9 @@ fn subtree(db: &Database, g: GroupId) -> (Vec<GroupId>, Vec<EntryId>) {
 /// Existing entries are overwritten when the source is newer (`newer_only`) or always.
 fn copy_tree(src: &Database, from: GroupId, dst: &mut Database, to: GroupId, newer_only: bool) -> Result<bool, String> {
     let mut changed = false;
+    // ids may only match inside the target folder: a container must not reach other entries
+    let (scope_groups, scope_entries) = subtree(dst, to);
+    let (scope_groups, scope_entries): (HashSet<GroupId>, HashSet<EntryId>) = (scope_groups.into_iter().collect(), scope_entries.into_iter().collect());
     let mut map = HashMap::from([(from, to)]);
     let mut queue = vec![from];
     while let Some(cur) = queue.pop() {
@@ -149,6 +152,10 @@ fn copy_tree(src: &Database, from: GroupId, dst: &mut Database, to: GroupId, new
         let subs: Vec<(GroupId, String)> = grp.groups().map(|s| (s.id(), s.name.clone())).collect();
         let entries: Vec<EntryId> = grp.entries().map(|e| e.id()).collect();
         for (sid, name) in subs {
+            if dst.group(sid).is_some() && !scope_groups.contains(&sid) {
+                log::warn!("keeshare: ignored a folder whose id belongs to another part of the vault");
+                continue;
+            }
             if dst.group(sid).is_none() {
                 let mut parent = dst.group_mut(target).ok_or("not_found")?;
                 parent.add_group_with_id(sid).map_err(|_| "duplicate")?.name = name;
@@ -161,6 +168,10 @@ fn copy_tree(src: &Database, from: GroupId, dst: &mut Database, to: GroupId, new
             queue.push(sid);
         }
         for eid in entries {
+            if dst.entry(eid).is_some() && !scope_entries.contains(&eid) {
+                log::warn!("keeshare: ignored an entry whose id belongs to another part of the vault");
+                continue;
+            }
             let incoming = copy_entry(src, eid)?;
             match dst.entry(eid).map(|e| e.times.last_modification) {
                 None => {

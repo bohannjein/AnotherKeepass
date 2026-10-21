@@ -30,6 +30,13 @@ pub fn parse_path(path: &str) -> Option<(String, String)> {
     Some((api::base(server), email.trim().to_string()))
 }
 
+/// Plain http only to this machine (testing); everything else must be https.
+fn check_secure(server: &str) -> Result<(), String> {
+    let u = url::Url::parse(server).map_err(|_| "bw:invalid_url")?;
+    let local = matches!(u.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
+    if u.scheme() == "https" || (u.scheme() == "http" && local) { Ok(()) } else { Err("insecure_url".into()) }
+}
+
 /// meta custom data: the account path (stable identity for the browser extension)
 pub const CD_ACCOUNT: &str = "AnotherKeepass.Account";
 
@@ -37,7 +44,7 @@ pub fn is_remote(path: &str) -> bool {
     path.starts_with("bw:")
 }
 
-// ---------------------------------------------------------------- account file (no secrets in clear)
+// ---------------------------------------------------------------- account file (DPAPI-protected)
 
 #[derive(Serialize, Deserialize, Default)]
 struct Account {
@@ -60,7 +67,10 @@ fn account_file(path: &str) -> Option<PathBuf> {
 }
 
 fn load_account(path: &str) -> Account {
-    let mut a: Account = account_file(path).and_then(|f| fs::read(f).ok()).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    let mut a: Account = account_file(path).and_then(|f| fs::read(f).ok())
+        .and_then(|b| crate::hardening::unprotect(&b).or(Some(b)))
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default();
     if a.device_id.is_empty() {
         a.device_id = Uuid::new_v4().to_string();
     }
@@ -70,7 +80,10 @@ fn load_account(path: &str) -> Account {
 fn save_account(path: &str, a: &Account) {
     if let Some(f) = account_file(path) {
         let _ = f.parent().map(fs::create_dir_all);
-        if let Err(e) = fs::write(&f, serde_json::to_vec(a).unwrap_or_default()) {
+        // the remember token and browser ids are secrets: only this Windows user can read the file
+        let plain = serde_json::to_vec(a).unwrap_or_default();
+        let data = crate::hardening::protect(&plain).unwrap_or(plain);
+        if let Err(e) = fs::write(&f, data) {
             log::warn!("vaultwarden cache: {e}");
         }
     }
@@ -213,6 +226,7 @@ fn build(sync: &Value, title: &str, user: &SymKey, orgs: &HashMap<String, SymKey
 /// Errors: "wrong_key", "twofactor:<ids>", "offline_no_cache", or a server message.
 pub fn open(path: &str, password: &str, second: Option<(u8, String)>) -> Result<(Database, Remote), String> {
     let (server, email) = parse_path(path).ok_or("bw_path")?;
+    check_secure(&server)?;
     let mut acct = load_account(path);
     let title = format!("{email} · {}", server.trim_start_matches("https://").trim_start_matches("http://"));
 
@@ -229,6 +243,11 @@ pub fn open(path: &str, password: &str, second: Option<(u8, String)>) -> Result<
     let Some(kdf) = kdf.or_else(|| acct.kdf.map(|(kind, iterations, memory, parallelism)| Kdf { kind, iterations, memory, parallelism })) else {
         return Err(format!("offline_no_cache:{unreachable}"));
     };
+    if let Some((kind, iterations, memory, parallelism)) = acct.kdf {
+        if crypto::kdf_weaker(&kdf, &Kdf { kind, iterations, memory, parallelism }) {
+            return Err("bw:kdf_weakened".into());
+        }
+    }
     let master = crypto::master_key(password, &email, &kdf)?;
     let hash = crypto::server_hash(&master, password);
     acct.kdf = Some((kdf.kind, kdf.iterations, kdf.memory, kdf.parallelism));
@@ -402,9 +421,10 @@ pub fn push(r: &mut Remote, db: &Database) -> Result<Database, String> {
             }
         }
     }
-    let gone: Vec<String> = r.snapshot.ciphers.keys().filter(|id| !seen.contains(id)).cloned().collect();
-    for id in gone {
-        session.delete_cipher(&id)?;
+    // gone locally: to the server's trash; permanently only what already was in the trash
+    let gone: Vec<(String, bool)> = r.snapshot.ciphers.iter().filter(|(id, _)| !seen.contains(id)).map(|(id, c)| (id.clone(), c.2)).collect();
+    for (id, was_trashed) in gone {
+        if was_trashed { session.delete_cipher(&id)? } else { session.trash_cipher(&id)? }
     }
     let gone: Vec<String> = r.snapshot.folders.keys().filter(|id| !seen_folders.contains(id)).cloned().collect();
     for id in gone {

@@ -41,7 +41,13 @@ pub fn run() {
 
 #[cfg(windows)]
 async fn connect() -> std::io::Result<tokio::net::windows::named_pipe::NamedPipeClient> {
-    tokio::net::windows::named_pipe::ClientOptions::new().open(crate::browser_server::pipe_name())
+    use std::os::windows::io::AsRawHandle;
+    let pipe = tokio::net::windows::named_pipe::ClientOptions::new().open(crate::browser_server::pipe_name())?;
+    // passwords only go to a server running as this user (no squatted pipe)
+    if !crate::hardening::pipe_server_is_me(pipe.as_raw_handle() as _) {
+        return Err(std::io::Error::other("browser pipe served by another user"));
+    }
+    Ok(pipe)
 }
 
 #[cfg(unix)]

@@ -81,6 +81,9 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
 
   const explain = (e: unknown) => {
     const code = errorCode(e);
+    if (code === 'insecure_url') return t.errInsecure;
+    if (String(e).includes('kdf_insecure')) return t.errKdfInsecure;
+    if (String(e).includes('kdf_weakened')) return t.errKdfWeakened;
     if (code === 'offline_no_cache') { const why = String(e).split('offline_no_cache:')[1]?.trim(); return why ? `${t.vwOffline}: ${why}` : t.vwOffline; }
     if (code === 'bw' || code === 'offline') return String(e).replace(/^(Error: )?(bw|offline):/, '');
     return code === 'hello_cancel' ? t.helloFailed : code === 'wrong_key' ? t.wrongKey : code === 'empty_key' ? t.masterPassword : `${t.fileError} (${String(e)})`;
@@ -249,7 +252,7 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
 
       <div className="row">
         {onClose ? <button type="button" className="btn text" onClick={onClose}>{t.cancel}</button> : <span />}
-        <button type="submit" className="btn filled" disabled={busy || (mode === 'server' ? !/^https?:\/\/./.test(server.trim()) || !email.includes('@') || !password
+        <button type="submit" className="btn filled" disabled={busy || (mode === 'server' ? !/^(https:\/\/.|http:\/\/(localhost|127\.0\.0\.1)\b)/.test(server.trim()) || !email.includes('@') || !password
           : mode === 'create' ? (backend.desktop && !path) || !password : !path || (!password && !keyfile))}>
           <Icon n={busy ? 'hourglass_top' : mode === 'create' ? 'check' : 'lock_open'} />{mode === 'create' ? t.create : t.unlock}
         </button>

@@ -42,8 +42,29 @@ impl SymKey {
     }
 }
 
+/// Bitwarden's minimums (and sane maximums): a server must not be able to make the password
+/// hash cheap to brute-force, nor make us burn all memory.
+pub fn check_kdf(k: &Kdf) -> Result<(), String> {
+    #[cfg(not(test))]
+    let min_pbkdf2 = 100_000;
+    #[cfg(test)]
+    let min_pbkdf2 = 5_000;
+    let ok = match k.kind {
+        0 => (min_pbkdf2..=5_000_000).contains(&k.iterations),
+        1 => (2..=20).contains(&k.iterations) && (16..=1024).contains(&k.memory) && (1..=16).contains(&k.parallelism),
+        _ => false,
+    };
+    if ok { Ok(()) } else { Err("bw:kdf_insecure".into()) }
+}
+
+/// Strength order to notice a server lowering the settings of a known account.
+pub fn kdf_weaker(new: &Kdf, old: &Kdf) -> bool {
+    new.kind == old.kind && (new.iterations < old.iterations || (new.kind == 1 && (new.memory < old.memory)))
+}
+
 /// Master key from password and email (the salt is the trimmed, lower-cased email).
 pub fn master_key(password: &str, email: &str, kdf: &Kdf) -> Result<Zeroizing<[u8; 32]>, String> {
+    check_kdf(kdf)?;
     let salt = email.trim().to_lowercase();
     let mut out = Zeroizing::new([0u8; 32]);
     match kdf.kind {
@@ -100,7 +121,9 @@ fn parts(s: &str) -> Result<(u8, Vec<Vec<u8>>), String> {
 pub fn decrypt(s: &str, key: &SymKey) -> Result<Vec<u8>, String> {
     let (t, p) = parts(s)?;
     let (iv, data) = match (t, p.as_slice()) {
-        (0, [iv, data]) => (iv, data),
+        // unauthenticated CBC only for the legacy protected user key (key without MAC part);
+        // otherwise a server could flip bits in any value (downgrade attack)
+        (0, [iv, data]) if key.mac.is_none() => (iv, data),
         (2, [iv, data, mac]) => {
             let mk = key.mac.as_ref().ok_or("bw_no_mac_key")?;
             let mut m = <HmacSha256 as Mac>::new_from_slice(mk.as_ref()).map_err(|_| "bw_mac")?;
@@ -199,5 +222,10 @@ mod tests {
         bad[1] = B64.encode(b"0123456789abcdef");
         assert!(decrypt(&bad.join("|"), &key).is_err());
         assert_eq!(decrypt_user_key(&protected, &[8u8; 32]).err().as_deref(), Some("wrong_key"));
+        // a type-0 string must not be accepted with a MAC-capable key (downgrade)
+        let p: Vec<&str> = s.trim_start_matches("2.").split('|').collect();
+        assert!(decrypt(&format!("0.{}|{}", p[0], p[1]), &key).is_err());
+        assert!(check_kdf(&Kdf { kind: 0, iterations: 1, memory: 0, parallelism: 0 }).is_err());
+        assert!(check_kdf(&Kdf { kind: 1, iterations: 3, memory: 1_000_000, parallelism: 4 }).is_err());
     }
 }

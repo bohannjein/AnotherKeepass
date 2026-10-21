@@ -163,7 +163,16 @@ fn request(msg: &[u8]) -> Result<(), String> {
     let configured = AGENT.lock().ok().and_then(|a| a.clone()).ok_or("ssh_off")?;
     let path = agent_path(&configured);
     #[cfg(windows)]
-    let mut conn = std::fs::OpenOptions::new().read(true).write(true).open(&path).map_err(|e| format!("ssh_agent:{e}"))?;
+    let mut conn = {
+        use std::os::windows::fs::OpenOptionsExt;
+        use std::os::windows::io::AsRawHandle;
+        // GENERIC_READ | GENERIC_WRITE | READ_CONTROL (to check who owns the pipe)
+        let f = std::fs::OpenOptions::new().access_mode(0x8000_0000 | 0x4000_0000 | 0x0002_0000).open(&path).map_err(|e| format!("ssh_agent:{e}"))?;
+        if !crate::hardening::pipe_owner_trusted(f.as_raw_handle() as _) {
+            return Err("ssh_agent:untrusted agent pipe (owned by another user)".into());
+        }
+        f
+    };
     #[cfg(unix)]
     let mut conn = std::os::unix::net::UnixStream::connect(&path).map_err(|e| format!("ssh_agent:{e}"))?;
     let mut framed = (msg.len() as u32).to_be_bytes().to_vec();

@@ -1241,6 +1241,12 @@ pub fn entry_move_to_vault(
 }
 
 fn move_to_vault(map: &mut HashMap<String, OpenVault>, src: &str, eid: EntryId, dst: &str, folder: Option<&str>) -> R<()> {
+    if map.get(dst).is_some_and(|d| d.remote.is_some()) {
+        let e = map.get(src).ok_or("vault_closed")?.db.entry(eid).ok_or("not_found")?;
+        if e.attachments_named().next().is_some() || e.fields.keys().any(|k| k.starts_with("KPEX_")) {
+            return Err("remote_move_loses_data".into()); // attachments / passkeys would be lost
+        }
+    }
     let mut c = copy_entry(&map.get(src).ok_or("vault_closed")?.db, eid)?;
     c.times.location_changed = Some(Times::now());
     let d = map.get_mut(dst).ok_or("vault_closed")?;

@@ -346,7 +346,11 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   }, [items, settings.showExpiring, settings.expiryDays, t.expiringSoon]);
 
   const run = async <T,>(p: Promise<T>): Promise<T | undefined> => {
-    try { return await p; } catch (e) { notify(`${t.saveError}: ${String(e)}`, true); return undefined; }
+    try { return await p; } catch (e) {
+      const m = String(e);
+      notify(m.includes('remote_move_loses_data') ? t.errRemoteMove : `${t.saveError}: ${m}`, true);
+      return undefined;
+    }
   };
   const apply = (d: VaultData | undefined) => { if (d) onUpdate(d); return !!d; };
 
@@ -1241,6 +1245,16 @@ function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
             <div className="row">
               <button className="btn text" onClick={deny}>{t.cancel}</button>
               <button className="btn filled" autoFocus onClick={() => onAnswer({ uuid: target ?? ask.entries[0]?.uuid })}><Icon n="login" />{t.pkUse}</button>
+            </div>
+          </>
+        )}
+        {ask.kind === 'delete' && (
+          <>
+            <h3><Icon n="delete" />{t.brDeleteTitle}</h3>
+            <p className="dialog-body">{t.brDeleteBody}: <b>{ask.title || t.untitled}</b>{ask.username && <> ({ask.username})</>}</p>
+            <div className="row">
+              <button className="btn filled" autoFocus onClick={deny}>{t.cancel}</button>
+              <button className="btn text danger" onClick={() => onAnswer({ ok: true })}><Icon n="delete" />{t.remove}</button>
             </div>
           </>
         )}

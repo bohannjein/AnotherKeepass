@@ -8,6 +8,7 @@ mod clipboard;
 mod desktop;
 mod favicon;
 mod bitwarden;
+mod hardening;
 mod health;
 mod sync;
 mod quick;
@@ -22,6 +23,7 @@ mod vault;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  hardening::apply();
   let prefs = desktop::load_prefs();
   desktop::apply_backup(&prefs);
   desktop::apply_ssh(&prefs);

@@ -13,6 +13,8 @@ use serde::Serialize;
 use crate::vault::{VaultDto, Vaults};
 
 fn csv_cell(s: &str) -> String {
+    // a leading = + - @ would make Excel run it as a formula (CSV injection)
+    let s = if s.starts_with(['=', '+', '-', '@', '\t', '\r']) { format!("'{s}") } else { s.to_string() };
     format!("\"{}\"", s.replace('"', "\"\""))
 }
 
@@ -154,6 +156,7 @@ mod tests {
             e.set_unprotected("Title", "Mail \"main\"");
             e.set_protected("Password", "p,w");
         }
+        assert_eq!(csv_cell("=HYPERLINK(1)"), "\"'=HYPERLINK(1)\"");
         let csv = to_csv(&db);
         assert!(csv.lines().nth(1).unwrap().starts_with("\"Root/Work\",\"Mail \"\"main\"\"\",\"\",\"p,w\""), "{csv}");
 
