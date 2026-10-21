@@ -87,6 +87,10 @@ export interface Backend {
   /** many new entries, folders by name path below parent (null = root); one file write */
   importItems(vault: string, parent: string | null, items: ImportInput[]): Promise<[number, VaultData]>;
   secrets(vault: string, id: string): Promise<Record<string, string>>;
+  vaultExportCsv(vault: string, dest: string): Promise<number>;
+  vaultSaveCopy(vault: string, dest: string): Promise<void>;
+  vaultMerge(vault: string, path: string, password: string, keyfile?: string): Promise<[{ created: number; updated: number; moved: number; deleted: number }, VaultData]>;
+  attachmentGet(vault: string, id: string, name: string): Promise<string>;
   passwordBits(password: string): Promise<number>;
   entryPasswordBits(vault: string, id: string): Promise<number>;
   passwordBreached(password: string): Promise<number>;
@@ -158,6 +162,10 @@ const desktop: Backend = {
   save: (vault, item) => invoke('entry_save', { vault, item }),
   importItems: (vault, parent, items) => invoke('entry_import', { vault, parent, items }),
   secrets: (vault, id) => invoke('entry_secrets', { vault, id }),
+  vaultExportCsv: (vault, dest) => invoke('vault_export_csv', { vault, dest }),
+  vaultSaveCopy: (vault, dest) => invoke('vault_save_copy', { vault, dest }),
+  vaultMerge: (vault, path, password, keyfile) => invoke('vault_merge', { vault, path, password, keyfile }),
+  attachmentGet: (vault, id, name) => invoke('attachment_get', { vault, id, name }),
   passwordBits: password => invoke('password_bits', { password }),
   entryPasswordBits: (vault, id) => invoke('entry_password_bits', { vault, id }),
   passwordBreached: password => invoke('password_breached', { password }),
@@ -332,6 +340,15 @@ const demo: Backend = {
   },
   passwordBreached: async () => 0,
   async entryPasswordBits(vault, id) { return demo.passwordBits(get(vault).secrets.get(id)?.Password ?? ''); },
+  vaultExportCsv: async () => { throw new Error('desktop only'); },
+  vaultSaveCopy: async () => { throw new Error('desktop only'); },
+  vaultMerge: async () => { throw new Error('desktop only'); },
+  async attachmentGet(vault, id, name) {
+    const b = demoVaults.get(vault)?.files.get(id + '/' + name);
+    if (!b) throw new Error('not_found');
+    let s = ''; for (const x of b) s += String.fromCharCode(x);
+    return btoa(s);
+  },
   async secrets(vault, id) { return { ...(get(vault).secrets.get(id) ?? {}) }; },
   async totp(vault, id, field) {
     const s = get(vault).secrets.get(id)?.[field] ?? '';

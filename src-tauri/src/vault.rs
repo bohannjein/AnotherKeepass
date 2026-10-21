@@ -30,6 +30,9 @@ pub struct OpenVault {
 }
 
 impl OpenVault {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
     pub fn db(&self) -> &Database {
         &self.db
     }

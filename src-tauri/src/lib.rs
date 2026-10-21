@@ -8,6 +8,7 @@ mod clipboard;
 mod desktop;
 mod favicon;
 mod health;
+mod transfer;
 mod passkeys;
 mod update;
 mod keeshare;
@@ -48,6 +49,10 @@ pub fn run() {
       vault::vault_rename,
       vault::entry_save,
       vault::entry_import,
+      transfer::vault_export_csv,
+      transfer::vault_save_copy,
+      transfer::vault_merge,
+      transfer::attachment_get,
       vault::vault_settings_get,
       vault::vault_settings_set,
       vault::kdf_benchmark,

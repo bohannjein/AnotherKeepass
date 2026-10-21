@@ -24,7 +24,7 @@ log = "0.4"
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 tauri-plugin-opener = "2"
-keepass = { version = "0.17", features = ["save_kdbx4", "totp"] }
+keepass = { version = "0.17", features = ["save_kdbx4", "totp", "_merge"] }
 rust-argon2 = "3"
 chrono = "0.4"
 uuid = "1"

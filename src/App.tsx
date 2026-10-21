@@ -19,6 +19,7 @@ import { Icon } from './Icon';
 import { SshPanel } from './SshPanel';
 import { PasswordStrength } from './PasswordStrength';
 import { VaultSettingsDialog } from './VaultSettingsDialog';
+import { AttachmentPreview, ExportDialog, MergeDialog, previewable } from './TransferDialogs';
 import { groupItems, sortItems, type GroupMode, type SortMode } from './listGroups';
 import { ShareDialog } from './ShareDialog';
 import { HealthOverview, HealthRow, ISSUE_ICON, ISSUES, issueName as issueNameOf, type Issue } from './HealthOverview';
@@ -51,6 +52,13 @@ const TEMPLATES: Partial<Record<ItemType, Field[]>> = {
   ],
 };
 const NEW_TYPES: ItemType[] = ['login', 'card', 'note', 'identity', 'other'];
+/** extra entry layouts built from custom fields (labels in the user's language at creation time) */
+const TEMPLATE_PRESETS: { id: string; type: ItemType; icon: string; label: 'tplWifi' | 'tplLicense' | 'tplBank' | 'tplServer'; fields: (t: Strings) => Field[] }[] = [
+  { id: 'wifi', type: 'other', icon: 'wifi', label: 'tplWifi', fields: t => [{ label: t.fSsid, value: '' }, { key: 'password', value: '', kind: 'hidden' }, { label: t.fSecurity, value: 'WPA2/WPA3' }] },
+  { id: 'license', type: 'other', icon: 'license', label: 'tplLicense', fields: t => [{ label: t.fProduct, value: '' }, { label: t.fLicenseKey, value: '', kind: 'hidden', protected: true }, { key: 'email', value: '' }, { label: t.fVersion, value: '' }] },
+  { id: 'bank', type: 'other', icon: 'account_balance', label: 'tplBank', fields: t => [{ label: t.fHolder, value: '' }, { label: t.fIban, value: '' }, { label: t.fBic, value: '' }, { key: 'username', value: '' }, { key: 'password', value: '', kind: 'hidden' }, { key: 'pin', value: '', kind: 'hidden' }] },
+  { id: 'server', type: 'login', icon: 'dns', label: 'tplServer', fields: t => [{ label: t.fHost, value: '' }, { label: t.fPort, value: '22' }, { key: 'username', value: '' }, { key: 'password', value: '', kind: 'hidden' }, { key: 'website', value: '', kind: 'url' }] },
+];
 
 const ALL = 'all';
 const TRASH = 'trash';
@@ -197,6 +205,9 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const [shareFor, setShareFor] = useState<Folder | null>(null);
   const [settingsFor, setSettingsFor] = useState<{ vault: string; upgrade?: boolean } | null>(null);
   const [lookFor, setLookFor] = useState<VaultInfo | null>(null);
+  const [exportFor, setExportFor] = useState<VaultInfo | null>(null);
+  const [mergeFor, setMergeFor] = useState<VaultInfo | null>(null);
+  const [preview, setPreview] = useState<{ name: string; load: () => Promise<Uint8Array> } | null>(null);
   // update check: at most once a week, only when enabled
   const [update, setUpdate] = useState<Update | null>(null);
   useEffect(() => {
@@ -372,11 +383,11 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
 
   const openIds = Object.keys(open);
   const targetVault = open[vault] ? vault : openIds[0];
-  const createItem = (type: ItemType) => {
+  const createItem = (type: ItemType, preset?: Field[]) => {
     const item: Item = {
       id: 'new:' + crypto.randomUUID(), vault: targetVault, type, title: '', subtitle: '',
       folder: folder && folders.some(f => f.id === folder && f.vault === targetVault) ? folder : undefined,
-      fields: (TEMPLATES[type] ?? []).map(f => f.key === 'password' && settings.generateForNew
+      fields: (preset ?? TEMPLATES[type] ?? []).map(f => f.key === 'password' && settings.generateForNew
         ? { ...f, value: generate({ length: 20, upper: true, digits: true, symbols: true }) }
         : { ...f }),
       modified: today(), tags: [], attachments: [], history: [],
@@ -547,6 +558,10 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     : [
       { icon: 'create_new_folder', label: t.newFolder, action: () => setFolderDialog({ mode: 'create', vault: v.id, parent: '' }) },
       { icon: 'upload_file', label: t.importItems, action: () => setImportFor(v.id) },
+      ...(backend.desktop ? [
+        { icon: 'ios_share', label: t.exportMenu, action: () => setExportFor(v) },
+        { icon: 'merge', label: t.mergeMenu, action: () => setMergeFor(v) },
+      ] : [{ icon: 'print', label: t.exportSheet, action: () => setExportFor(v) }]),
       ...(backend.desktop ? [{ icon: 'image_search', label: t.loadIcons, action: () => loadIcons(items.filter(i => i.vault === v.id && !i.trashed && !i.icon)) }] : []),
       { icon: 'tune', label: t.vaultSettings, action: () => setSettingsFor({ vault: v.id }) },
       { icon: 'palette', label: t.vaultLook, action: () => setLookFor(v) },
@@ -705,6 +720,12 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
                 {NEW_TYPES.map(type => (
                   <button key={type} role="menuitem" onClick={() => createItem(type)}>
                     <span className={'avatar sm ' + type}><Icon n={TYPE_ICON[type]} /></span>{t[type]}
+                  </button>
+                ))}
+                <span className="menu-label">{t.templates}</span>
+                {TEMPLATE_PRESETS.map(p => (
+                  <button key={p.id} role="menuitem" onClick={() => createItem(p.type, p.fields(t))}>
+                    <span className="avatar sm other"><Icon n={p.icon} /></span>{t[p.label]}
                   </button>
                 ))}
                 <hr />
@@ -899,6 +920,8 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
             onTogglePin={() => togglePin(current)}
             onHistoryRestore={i => historyRestore(current, i)}
             onDownload={a => download(current, a)}
+            onPreview={a => setPreview({ name: a.name, load: async () => a.file ? new Uint8Array(await a.file.arrayBuffer())
+              : Uint8Array.from(atob(await backend.attachmentGet(current.vault, current.id, a.name)), c => c.charCodeAt(0)) })}
             onLoadIcon={backend.desktop && current.fields.some(f => f.raw === 'URL' && f.value) ? () => loadIcons([current]) : undefined}
             onRemoveIcon={current.icon ? () => removeIcon(current) : undefined}
             onSshChanged={settings.sshEnabled && backend.desktop ? d => onUpdate(d) : undefined} onMessage={notify} />
@@ -922,6 +945,9 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
           onClose={() => setPick(null)}
           onPick={(vault, id, sequence) => { setPick(null); run(backend.autotypePerform(vault, id, sequence)); }} />
       )}
+      {exportFor && <ExportDialog t={t} vault={exportFor} onClose={() => setExportFor(null)} onDone={notify} />}
+      {mergeFor && <MergeDialog t={t} vault={mergeFor} onClose={() => setMergeFor(null)} onMerged={(d, msg) => { onUpdate(d); notify(msg); }} />}
+      {preview && <AttachmentPreview t={t} name={preview.name} load={preview.load} onClose={() => setPreview(null)} />}
       {lookFor && (
         <VaultLookDialog t={t} vault={lookFor} onClose={() => setLookFor(null)}
           onSave={(color, icon) => { onKnown(lookFor.id, { color, icon }); setLookFor(null); }} />
@@ -1523,13 +1549,13 @@ function EditRow({ t, f, prefs, title, onChange, onRemove, onCopy }: {
 }
 
 function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyText, loadSecrets, getTotp, onDuplicate, onSave, onDiscard,
-  onTrash, onRestore, onDeleteForever, onTogglePin, onHistoryRestore, onDownload, onLoadIcon, onRemoveIcon, onSshChanged, onMessage }: {
+  onTrash, onRestore, onDeleteForever, onTogglePin, onHistoryRestore, onDownload, onPreview, onLoadIcon, onRemoveIcon, onSshChanged, onMessage }: {
   t: Strings; item: Item; vault: VaultInfo; folders: Folder[]; isNew: boolean; prefs: Prefs;
   onCopyField: (f: Field, what: string) => void; onCopyText: (text: string, what: string) => void;
   loadSecrets: () => Promise<Record<string, string>>; getTotp: (field: string) => Promise<Totp>; onDuplicate: () => void;
   onSave: (d: Draft) => Promise<boolean>; onDiscard: () => void;
   onTrash: () => void; onRestore: () => void; onDeleteForever: () => void; onTogglePin: () => void;
-  onHistoryRestore: (index: number) => void; onDownload: (a: Attachment) => void;
+  onHistoryRestore: (index: number) => void; onDownload: (a: Attachment) => void; onPreview: (a: Attachment) => void;
   onLoadIcon?: () => void; onRemoveIcon?: () => void;
   onSshChanged?: (d: VaultData) => void; onMessage: (msg: string, error?: boolean) => void;
 }) {
@@ -1755,6 +1781,7 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
             <div className="file-row" key={idx}>
               <Icon n="description" />
               <span><b>{a.name}</b><small>{fmtSize(a.size)}</small></span>
+              {previewable(a.name) && <button className="icon-btn" title={t.preview} aria-label={t.preview} onClick={() => onPreview(a)}><Icon n="visibility" /></button>}
               <button className="icon-btn" title={t.download} aria-label={t.download} onClick={() => onDownload(a)}><Icon n="download" /></button>
               {draft && (
                 <button className="icon-btn" title={t.remove} aria-label={t.remove}

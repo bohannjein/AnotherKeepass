@@ -1063,3 +1063,25 @@ kbd {
 .field.copied { animation: copied .65s var(--spring); }
 @keyframes copied { 40% { transform: scale(.98); background: var(--primary-container); color: var(--on-primary-container); } }
 @media (prefers-reduced-motion: reduce) { .items .item, .field.copied { animation: none; } }
+/* ---------- export, merge, preview, templates ---------- */
+.warn-opt { gap: 12px; font-size: 14px; background: var(--surface-c); padding: 8px 12px; border-radius: var(--r-m); }
+.warn-opt .ms { color: #ffb4ab; vertical-align: middle; font-size: 18px; }
+.menu-label { display: block; padding: 8px 16px 2px; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--on-surface-var); }
+.preview-dialog { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
+.preview-dialog img { max-width: 100%; max-height: 60vh; object-fit: contain; border-radius: var(--r-m); justify-self: center; background: repeating-conic-gradient(#8882 0 25%, transparent 0 50%) 0 0 / 16px 16px; }
+.preview-dialog pre { max-height: 60vh; overflow: auto; padding: 14px; border-radius: var(--r-m); background: var(--surface-c); font: 13px/1.5 ui-monospace, 'Cascadia Mono', monospace; white-space: pre-wrap; word-break: break-word; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.print-sheet { position: fixed; inset: 0; z-index: 50; background: #fff; color: #111; padding: 48px; overflow: auto; font-family: var(--font); }
+.print-sheet h1 { font-size: 28px; margin-bottom: 12px; }
+.print-sheet p { margin: 12px 0; line-height: 1.5; max-width: 640px; }
+.print-sheet table { border-collapse: collapse; width: 100%; max-width: 720px; margin: 24px 0; }
+.print-sheet th { text-align: left; width: 200px; padding: 12px 8px; vertical-align: top; font-weight: 600; }
+.print-sheet td { padding: 12px 8px; border-bottom: 1px solid #999; word-break: break-all; }
+.print-sheet td.write-here { height: 40px; }
+.print-sheet td.tall { height: 120px; }
+.print-sheet .small { font-size: 13px; color: #555; }
+@media print {
+  body > *:not(.print-sheet) { display: none !important; }
+  .print-sheet { position: static; padding: 0; }
+  .no-print { display: none !important; }
+}
