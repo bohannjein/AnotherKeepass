@@ -210,13 +210,18 @@ pub fn open(path: &str, password: &str, second: Option<(u8, String)>) -> Result<
     let mut acct = load_account(path);
     let title = format!("{email} · {}", server.trim_start_matches("https://").trim_start_matches("http://"));
 
+    let mut unreachable = String::new();
     let kdf = match api::prelogin(&server, &email) {
         Ok(k) => Some(k),
-        Err(LoginError::Offline(_)) => None,
+        Err(LoginError::Offline(e)) => {
+            log::warn!("vaultwarden: {server} not reachable: {e}");
+            unreachable = e;
+            None
+        }
         Err(e) => return Err(format!("bw:{e:?}")),
     };
     let Some(kdf) = kdf.or_else(|| acct.kdf.map(|(kind, iterations, memory, parallelism)| Kdf { kind, iterations, memory, parallelism })) else {
-        return Err("offline_no_cache".into());
+        return Err(format!("offline_no_cache:{unreachable}"));
     };
     let master = crypto::master_key(password, &email, &kdf)?;
     let hash = crypto::server_hash(&master, password);

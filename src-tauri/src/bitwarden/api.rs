@@ -28,7 +28,8 @@ pub enum LoginError {
 }
 
 fn agent() -> ureq::Agent {
-    ureq::AgentBuilder::new().timeout(Duration::from_secs(20)).user_agent("AnotherKeepass").build()
+    // Windows certificate store (company CAs) and proxy settings from the environment
+    ureq::AgentBuilder::new().timeout(Duration::from_secs(20)).user_agent("AnotherKeepass").try_proxy_from_env(true).build()
 }
 
 pub fn base(server: &str) -> String {

@@ -41,7 +41,7 @@ sha2 = "0.10"
 tokio = { version = "1", features = ["net", "io-util", "io-std", "sync", "time", "rt", "macros", "process", "rt-multi-thread"] }
 url = "2"
 sha1 = "0.10"
-ureq = { version = "2", features = ["json"] }
+ureq = { version = "2", features = ["json", "native-certs"] }
 ssh-key = { version = "0.6", features = ["encryption", "ed25519", "rsa", "ecdsa", "p256", "p384"] }
 ssh-encoding = { version = "0.2", features = ["alloc"] }
 p256 = { version = "0.13", features = ["ecdsa", "pkcs8", "pem"] }

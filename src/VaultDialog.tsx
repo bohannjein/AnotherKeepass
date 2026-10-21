@@ -81,7 +81,7 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
 
   const explain = (e: unknown) => {
     const code = errorCode(e);
-    if (code === 'offline_no_cache') return t.vwOffline;
+    if (code === 'offline_no_cache') { const why = String(e).split('offline_no_cache:')[1]?.trim(); return why ? `${t.vwOffline}: ${why}` : t.vwOffline; }
     if (code === 'bw' || code === 'offline') return String(e).replace(/^(Error: )?(bw|offline):/, '');
     return code === 'hello_cancel' ? t.helloFailed : code === 'wrong_key' ? t.wrongKey : code === 'empty_key' ? t.masterPassword : `${t.fileError} (${String(e)})`;
   };
