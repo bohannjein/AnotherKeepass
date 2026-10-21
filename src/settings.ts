@@ -300,17 +300,6 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
-    // reminder for the hybrid roadmap (M6): visible but inert until server vaults exist
-    id: 'servers', icon: 'cloud_sync', groups: [
-      {
-        id: 'serversWip', items: [
-          { key: 'bwConnect', type: 'action', wip: true },
-          { key: 'vwConnect', type: 'action', wip: true },
-        ],
-      },
-    ],
-  },
-  {
     id: 'keeshare', icon: 'share', groups: [
       {
         id: 'ksActivation', items: [

@@ -14,7 +14,7 @@ import { settingsStrings } from './i18n-settings';
 const SettingsPage = lazy(() => import('./SettingsPage'));
 const Generator = lazy(() => import('./GeneratorDialog'));
 const ImportDialog = lazy(() => import('./ImportDialog'));
-import VaultDialog, { fileName, type Known } from './VaultDialog';
+import VaultDialog, { fileName, isRemote, type Known } from './VaultDialog';
 import { Icon } from './Icon';
 import { SshPanel } from './SshPanel';
 import { PasswordStrength } from './PasswordStrength';
@@ -180,7 +180,10 @@ export default function App() {
         ? <VaultDialog t={t} known={known} missing={missing} onMissing={p => forget([p])}
             onOpened={(d, meta) => { opened(d, meta); if (settings.minimizeAfterUnlock) backend.windowAfterUnlock(); }} />
         : <Vaults t={t} settings={settings} onSettings={update} open={open} known={known}
-          onKnown={(path, patch) => setKnown(list => { const next = list.map(k => k.path === path ? { ...k, ...patch } : k); saveKnown(next); return next; })}
+          onKnown={(path, patch) => setKnown(list => {
+            const next = 'forget' in patch ? list.filter(k => k.path !== path) : list.map(k => k.path === path ? { ...k, ...patch } : k);
+            saveKnown(next); return next;
+          })}
           onOpened={opened} onUpdate={onUpdate} onClosed={onClosed} onLock={lock} desktopProblems={desktopProblems} />}
     </ContextMenuProvider>
   );
@@ -568,12 +571,16 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       { icon: 'upload_file', label: t.importItems, action: () => setImportFor(v.id) },
       ...(backend.desktop ? [
         { icon: 'ios_share', label: t.exportMenu, action: () => setExportFor(v) },
-        { icon: 'merge', label: t.mergeMenu, action: () => setMergeFor(v) },
+        ...(isRemote(v.id) ? [] : [{ icon: 'merge', label: t.mergeMenu, action: () => setMergeFor(v) }]),
       ] : [{ icon: 'print', label: t.exportSheet, action: () => setExportFor(v) }]),
       ...(backend.desktop ? [{ icon: 'image_search', label: t.loadIcons, action: () => loadIcons(items.filter(i => i.vault === v.id && !i.trashed && !i.icon)) }] : []),
-      { icon: 'tune', label: t.vaultSettings, action: () => setSettingsFor({ vault: v.id }) },
+      ...(isRemote(v.id) ? [
+        { icon: 'sync', label: t.vwSync, action: async () => { if (apply(await run(backend.vaultSync(v.id)))) notify(t.vwSynced); } },
+        { icon: 'logout', label: t.vwSignOut, danger: true, action: () => setConfirm({ title: t.vwSignOut, body: t.vwSignOutBody, label: t.vwSignOut, icon: 'logout',
+          action: async () => { await run(backend.bwSignOut(v.id)); onClosed(v.id); onKnown(v.id, { forget: true } as Partial<Known>); } }) },
+      ] : [{ icon: 'tune', label: t.vaultSettings, action: () => setSettingsFor({ vault: v.id }) }]),
       { icon: 'palette', label: t.vaultLook, action: () => setLookFor(v) },
-      { icon: 'key', label: t.changeMasterKey, action: () => setKeyDialog(v.id) },
+      ...(isRemote(v.id) ? [] : [{ icon: 'key', label: t.changeMasterKey, action: () => setKeyDialog(v.id) }]),
       'sep',
       { icon: 'lock', label: t.closeVault, action: () => closeVault(v.id) },
     ];
@@ -838,8 +845,13 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
         {activeVault && (
           <div className="list-head">
             <span title={activeVault.id}>{activeVault.name}</span>
-            <button className="icon-btn" title={t.vaultSettings} aria-label={t.vaultSettings} onClick={() => setSettingsFor({ vault: activeVault.id })}><Icon n="tune" /></button>
-            <button className="icon-btn" title={t.changeMasterKey} aria-label={t.changeMasterKey} onClick={() => setKeyDialog(activeVault.id)}><Icon n="key" /></button>
+            {open[activeVault.id]?.remote === false && <span className="pill offline-pill" title={t.vwOfflineHint}><Icon n="cloud_off" />{t.offline}</span>}
+            {isRemote(activeVault.id)
+              ? <button className="icon-btn" title={t.vwSync} aria-label={t.vwSync} onClick={async () => { if (apply(await run(backend.vaultSync(activeVault.id)))) notify(t.vwSynced); }}><Icon n="sync" /></button>
+              : <>
+                <button className="icon-btn" title={t.vaultSettings} aria-label={t.vaultSettings} onClick={() => setSettingsFor({ vault: activeVault.id })}><Icon n="tune" /></button>
+                <button className="icon-btn" title={t.changeMasterKey} aria-label={t.changeMasterKey} onClick={() => setKeyDialog(activeVault.id)}><Icon n="key" /></button>
+              </>}
             <button className="icon-btn" title={t.closeVault} aria-label={t.closeVault} onClick={() => closeVault(activeVault.id)}><Icon n="lock" /></button>
           </div>
         )}

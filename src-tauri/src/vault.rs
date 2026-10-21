@@ -27,6 +27,8 @@ pub struct OpenVault {
     path: PathBuf,
     db: Database,
     key: DatabaseKey,
+    /// Vaultwarden account (in-memory database, saved by uploading changes)
+    pub(crate) remote: Option<Box<crate::bitwarden::Remote>>,
 }
 
 impl OpenVault {
@@ -56,7 +58,7 @@ impl OpenVault {
     }
     #[cfg(test)]
     pub fn new_for_test(path: PathBuf, db: Database) -> Self {
-        Self { path, db, key: make_key(Some("pw"), None).unwrap() }
+        Self { path, db, key: make_key(Some("pw"), None).unwrap(), remote: None }
     }
 }
 
@@ -86,6 +88,8 @@ pub struct VaultDto {
     icons: HashMap<String, String>,
     /// key derivation is weaker than today's defaults (old AES-KDF files, tiny Argon2 memory)
     weak_kdf: bool,
+    /// Vaultwarden account: Some(online)
+    remote: Option<bool>,
 }
 
 #[derive(Serialize, Clone)]
@@ -225,6 +229,11 @@ fn backup_target(vault: &Path, pattern: &str) -> Option<PathBuf> {
 
 /// Write via temp file + rename so a crash never leaves a half-written database.
 fn write_db(v: &mut OpenVault) -> R<()> {
+    // Vaultwarden: upload the changes, then show what the server has now
+    if let Some(r) = v.remote.as_mut() {
+        v.db = crate::bitwarden::push(r, &v.db)?;
+        return Ok(());
+    }
     upgrade_to_kdbx4(v)?;
     let pattern = BACKUP_PATTERN.lock().ok().and_then(|p| p.clone());
     if let Some(target) = pattern.and_then(|p| backup_target(&v.path, &p)).filter(|_| v.path.is_file()) {
@@ -416,7 +425,8 @@ fn dto(id: &str, v: &OpenVault) -> VaultDto {
         folders,
         items,
         icons: db.iter_all_custom_icons().map(|i| (i.id().to_string(), B64.encode(&i.data))).collect(),
-        weak_kdf: weak_kdf(&db.config.kdf_config),
+        weak_kdf: v.remote.is_none() && weak_kdf(&db.config.kdf_config),
+        remote: v.remote.as_ref().map(|r| r.online()),
     }
 }
 
@@ -593,7 +603,7 @@ fn mutate(state: &Vaults, id: &str, f: impl FnOnce(&mut Database) -> R<()>) -> R
     })
 }
 
-fn ensure_recycle_bin(db: &mut Database) -> GroupId {
+pub(crate) fn ensure_recycle_bin(db: &mut Database) -> GroupId {
     if let Some(bin) = db.recycle_bin() {
         return bin.id();
     }
@@ -664,7 +674,7 @@ pub fn vault_create(
     db.meta.history_max_items = Some(10);
     db.root_mut().name = name;
     ensure_recycle_bin(&mut db);
-    let mut v = OpenVault { path: PathBuf::from(&path), db, key };
+    let mut v = OpenVault { path: PathBuf::from(&path), db, key, remote: None };
     write_db(&mut v)?;
     let d = dto(&path, &v);
     state.0.lock().map_err(|_| "lock")?.insert(path, v);
@@ -678,9 +688,57 @@ pub async fn vault_open(
     path: String,
     password: Option<String>,
     keyfile: Option<String>,
+    two_factor_provider: Option<u8>,
+    two_factor_code: Option<String>,
 ) -> R<VaultDto> {
+    if crate::bitwarden::is_remote(&path) {
+        return open_remote(state, path, password.unwrap_or_default(), two_factor_provider.zip(two_factor_code)).await;
+    }
     let key = make_key(password.as_deref(), keyfile.as_deref())?;
     open_with(app, state, path, key, true).await
+}
+
+/// Vaultwarden account: log in (network) and decrypt into an in-memory vault.
+async fn open_remote(state: tauri::State<'_, Vaults>, path: String, password: String, second: Option<(u8, String)>) -> R<VaultDto> {
+    if password.is_empty() {
+        return Err("empty_key".into());
+    }
+    let p = path.clone();
+    let (db, remote) = tauri::async_runtime::spawn_blocking(move || crate::bitwarden::open(&p, &password, second))
+        .await
+        .map_err(|e| format!("open:{e}"))??;
+    let v = OpenVault { path: PathBuf::from(&path), db, key: DatabaseKey::new().with_password("remote"), remote: Some(Box::new(remote)) };
+    let d = dto(&path, &v);
+    state.0.lock().map_err(|_| "lock")?.insert(path, v);
+    crate::browser_server::notify("database-unlocked");
+    Ok(d)
+}
+
+/// Vaultwarden: fetch the server state now.
+#[tauri::command]
+pub async fn vault_sync(state: tauri::State<'_, Vaults>, vault: String) -> R<VaultDto> {
+    with_vault(&state, &vault, |v| {
+        let title = v.db.meta.database_name.clone().unwrap_or_default();
+        let r = v.remote.as_mut().ok_or("not_remote")?;
+        v.db = crate::bitwarden::pull(r, &title)?;
+        Ok(dto(&vault, v))
+    })
+}
+
+/// Vaultwarden email 2FA: send the login code.
+#[tauri::command]
+pub async fn bw_send_email(path: String, password: String) -> R<()> {
+    tauri::async_runtime::spawn_blocking(move || crate::bitwarden::send_email_code(&path, &password))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Vaultwarden: close and forget this device's token and offline copy.
+#[tauri::command]
+pub fn bw_sign_out(state: tauri::State<'_, Vaults>, path: String) -> R<()> {
+    state.0.lock().map_err(|_| "lock")?.remove(&path);
+    crate::bitwarden::forget(&path);
+    Ok(())
 }
 
 /// `second_factor`: in "password and Windows Hello" mode ask Hello once the key is known to be right.
@@ -714,7 +772,7 @@ async fn open_with(app: tauri::AppHandle, state: tauri::State<'_, Vaults>, path:
             return Err("hello_cancel".into());
         }
     }
-    let mut v = OpenVault { path: PathBuf::from(&path), db, key };
+    let mut v = OpenVault { path: PathBuf::from(&path), db, key, remote: None };
     if shared {
         write_db(&mut v)?; // KeeShare import changed the folder
     }
@@ -739,7 +797,7 @@ async fn open_with(app: tauri::AppHandle, state: tauri::State<'_, Vaults>, path:
 /// Which remembered vault files still exist (moved/deleted ones are dropped from the list).
 #[tauri::command]
 pub fn paths_exist(paths: Vec<String>) -> Vec<bool> {
-    paths.iter().map(|p| Path::new(p).is_file()).collect()
+    paths.iter().map(|p| crate::bitwarden::is_remote(p) || Path::new(p).is_file()).collect()
 }
 
 #[tauri::command]
@@ -771,7 +829,7 @@ pub fn lock_vaults(map: &mut HashMap<String, OpenVault>) {
     if let Ok(mut q) = QUICK_KEYS.lock() {
         if QUICK_UNLOCK.load(std::sync::atomic::Ordering::Relaxed) {
             let keys = q.get_or_insert_with(HashMap::new);
-            for (id, v) in map.iter() {
+            for (id, v) in map.iter().filter(|(_, v)| v.remote.is_none()) {
                 keys.insert(id.clone(), v.key.clone());
             }
         } else {
@@ -1354,7 +1412,7 @@ mod tests {
         let mut db = Database::with_config(new_config());
         db.meta.database_name = Some("Test".into());
         ensure_recycle_bin(&mut db);
-        let mut v = OpenVault { path: path.clone(), db, key: key.clone() };
+        let mut v = OpenVault { path: path.clone(), db, key: key.clone(), remote: None };
         write_db(&mut v).unwrap();
         let root = v.db.root().id().to_string();
         state.0.lock().unwrap().insert(p.clone(), v);
@@ -1442,7 +1500,7 @@ mod tests {
         let mut db = Database::with_config(new_config());
         ensure_recycle_bin(&mut db);
         let root = db.root().id().to_string();
-        let mut v = OpenVault { path, db, key: make_key(Some("pw"), None).unwrap() };
+        let mut v = OpenVault { path, db, key: make_key(Some("pw"), None).unwrap(), remote: None };
         write_db(&mut v).unwrap();
         state.0.lock().unwrap().insert(p.clone(), v);
         (p, root)
@@ -1574,7 +1632,7 @@ mod tests {
         db.meta.database_name = Some("Ours".into());
         ensure_recycle_bin(&mut db);
         let work = db.root_mut().add_group().edit(|g| g.name = "Work".into()).id().to_string();
-        let mut v = OpenVault { path, db, key: make_key(Some("compat-pw"), None).unwrap() };
+        let mut v = OpenVault { path, db, key: make_key(Some("compat-pw"), None).unwrap(), remote: None };
         write_db(&mut v).unwrap();
         state.0.lock().unwrap().insert(p.clone(), v);
         save_for_test(&state, &p, ItemInput {
@@ -1607,7 +1665,7 @@ mod tests {
         assert_eq!(e.get_username(), Some("alice"));
         let (id, folder) = (e.id().to_string(), e.parent().id().to_string());
         let state = Vaults::default();
-        state.0.lock().unwrap().insert(p.clone(), OpenVault { path, db, key });
+        state.0.lock().unwrap().insert(p.clone(), OpenVault { path, db, key, remote: None });
         save_for_test(&state, &p, ItemInput {
             id: Some(id),
             folder,

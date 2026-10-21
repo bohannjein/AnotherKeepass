@@ -7,6 +7,7 @@ use tauri::Manager;
 mod clipboard;
 mod desktop;
 mod favicon;
+mod bitwarden;
 mod health;
 mod quick;
 mod transfer;
@@ -50,6 +51,9 @@ pub fn run() {
       vault::vault_rename,
       vault::entry_save,
       vault::entry_import,
+      vault::vault_sync,
+      vault::bw_send_email,
+      vault::bw_sign_out,
       quick::vaults_listing,
       quick::quick_hide,
       transfer::vault_export_csv,

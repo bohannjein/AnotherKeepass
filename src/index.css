@@ -1119,3 +1119,9 @@ kbd {
 html:has(.quick), body:has(.quick), #root:has(.quick) { background: transparent !important; }
 .quick { height: 100vh; padding: 8px; }
 .quick .palette { height: 100%; max-height: none; background: var(--surface-low); border-radius: var(--r-xl); border: 1px solid var(--outline-var); box-shadow: 0 8px 24px rgb(0 0 0 / .35); animation: pop .35s var(--spring); }
+/* ---------- Vaultwarden ---------- */
+.two-factor { display: grid; gap: 10px; padding: 14px; border-radius: var(--r-l); background: var(--surface-c); }
+.two-factor .label { display: flex; align-items: center; gap: 8px; color: var(--primary); }
+.two-factor .seg { margin: 0; }
+.offline-pill { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font-size: 12px; background: var(--surface-highest); color: var(--on-surface-var); }
+.offline-pill .ms { font-size: 16px; }

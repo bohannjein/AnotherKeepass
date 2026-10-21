@@ -1,5 +1,5 @@
 // Open / create / unlock a vault. Used as the lock screen and as the "add vault" dialog.
-// Server accounts (Bitwarden/Vaultwarden) are shown disabled as a reminder: not built yet.
+// Vaultwarden accounts ("bw:<server>#<email>") log in here too, including the second factor.
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
@@ -12,9 +12,13 @@ export interface Known { path: string; name: string; color: string; icon: string
 
 const COLORS = ['--v-clay', '--v-moss', '--v-ochre'];
 const ICONS = ['shield_lock', 'cottage', 'apartment', 'work_history', 'savings', 'school'];
-export const fileName = (path: string) => path.replace(/^demo:/, '').split(/[\\/]/).pop() ?? path;
+export const fileName = (path: string) => {
+  const bw = path.match(/^bw:(?:https?:\/\/)?([^#/]+)[^#]*#(.+)$/);
+  return bw ? `${bw[2]} · ${bw[1]}` : path.replace(/^demo:/, '').split(/[\\/]/).pop() ?? path;
+};
+export const isRemote = (path: string) => path.startsWith('bw:');
 
-type Mode = 'open' | 'create';
+type Mode = 'open' | 'create' | 'server';
 
 export default function VaultDialog({ t, known, missing = [], onMissing, initialPath, initialMode = 'open', modal, onOpened, onClose }: {
   t: Strings; known: Known[]; missing?: string[]; onMissing?: (path: string) => void;
@@ -50,9 +54,17 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // Vaultwarden: server + email, then maybe a second factor
+  const [server, setServer] = useState('https://');
+  const [email, setEmail] = useState('');
+  const [twoFactor, setTwoFactor] = useState<number[] | null>(null);
+  const [tfProvider, setTfProvider] = useState(0);
+  const [tfCode, setTfCode] = useState('');
+  const [tfNote, setTfNote] = useState('');
 
   const meta = (p: string, n: string): Known => known.find(k => k.path === p)
-    ?? { path: p, name: n, color: COLORS[known.length % COLORS.length], icon: ICONS[known.length % ICONS.length] };
+    ?? (isRemote(p) ? { path: p, name: n, color: '--v-sea', icon: 'cloud' }
+      : { path: p, name: n, color: COLORS[known.length % COLORS.length], icon: ICONS[known.length % ICONS.length] });
 
   const pickFile = async () => {
     const p = await openDialog({ multiple: false, directory: false, filters: [{ name: t.kdbxFilter, extensions: ['kdbx'] }] });
@@ -69,6 +81,8 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
 
   const explain = (e: unknown) => {
     const code = errorCode(e);
+    if (code === 'offline_no_cache') return t.vwOffline;
+    if (code === 'bw' || code === 'offline') return String(e).replace(/^(Error: )?(bw|offline):/, '');
     return code === 'hello_cancel' ? t.helloFailed : code === 'wrong_key' ? t.wrongKey : code === 'empty_key' ? t.masterPassword : `${t.fileError} (${String(e)})`;
   };
 
@@ -76,20 +90,31 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
     e.preventDefault();
     setError('');
     if (mode === 'create' && password !== confirm) { setError(t.passwordsDontMatch); return; }
-    const target = mode === 'create' && !backend.desktop ? `demo:${(name.trim() || 'vault').toLowerCase()}.kdbx` : path;
+    const target = mode === 'server' ? `bw:${server.trim().replace(/\/+$/, '')}#${email.trim()}`
+      : mode === 'create' && !backend.desktop ? `demo:${(name.trim() || 'vault').toLowerCase()}.kdbx` : path;
     if (!target) return;
     setBusy(true);
     try {
-      const data = mode === 'open'
-        ? await backend.open(target, password, keyfile || undefined)
+      const second: [number, string] | undefined = twoFactor && tfCode.trim() ? [tfProvider, tfCode.trim()] : undefined;
+      const data = mode !== 'create'
+        ? await backend.open(target, password, isRemote(target) ? undefined : keyfile || undefined, second)
         : await backend.create(target, name.trim() || fileName(target).replace(/\.kdbx$/, ''), password, keyfile || undefined);
-      setPassword(''); setConfirm('');
+      setPassword(''); setConfirm(''); setTwoFactor(null); setTfCode(''); setTfNote('');
       onOpened(data, { ...meta(target, data.name), name: data.name, keyfile: keyfile || undefined });
     } catch (err) {
       // file gone since last time: drop it from the remembered list
       if (mode === 'open' && errorCode(err) === 'io' && /os error [23]/.test(String(err))) {
         onMissing?.(target);
         setPath('');
+      }
+      if (errorCode(err) === 'twofactor') {
+        const ids = String(err).split('twofactor:')[1]?.split(',').map(Number).filter(n => !isNaN(n)) ?? [];
+        const usable = ids.filter(i => i === 0 || i === 1);
+        setTwoFactor(ids);
+        setTfProvider(usable[0] ?? 0);
+        setError(usable.length ? '' : t.tfUnsupported);
+        if (mode !== 'server') setPath(target);
+        return;
       }
       setError(explain(err));
     } finally {
@@ -125,9 +150,50 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
         <button type="button" role="tab" aria-selected={mode === 'create'} className={'chip' + (mode === 'create' ? ' on' : '')} onClick={() => { setMode('create'); setError(''); setPath(''); }}>
           <Icon n="note_add" />{t.createVault}
         </button>
+        {backend.desktop && (
+          <button type="button" role="tab" aria-selected={mode === 'server'} className={'chip' + (mode === 'server' ? ' on' : '')} onClick={() => { setMode('server'); setError(''); setTwoFactor(null); }}>
+            <Icon n="dns" />Vaultwarden
+          </button>
+        )}
       </div>
 
-      {mode === 'open' ? (
+      {mode === 'server' && (
+        <>
+          <p className="form-note"><Icon n="cloud" />{t.vwHint}</p>
+          <label className="textfield"><Icon n="dns" />
+            <input value={server} onChange={e => setServer(e.target.value)} placeholder={t.vwServer} aria-label={t.vwServer} autoFocus spellCheck={false} inputMode="url" />
+          </label>
+          <label className="textfield"><Icon n="mail" />
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder={t.vwEmail} aria-label={t.vwEmail} autoComplete="username" />
+          </label>
+          {pwField(password, setPassword, t.masterPassword)}
+        </>
+      )}
+      {twoFactor && (
+        <div className="two-factor">
+          <span className="label"><Icon n="verified_user" />{t.tfTitle}</span>
+          {twoFactor.filter(i => i === 0 || i === 1).length > 1 && (
+            <div className="seg">
+              {twoFactor.filter(i => i === 0 || i === 1).map(i => (
+                <button type="button" key={i} className={'chip' + (tfProvider === i ? ' on' : '')} onClick={() => setTfProvider(i)}>
+                  <Icon n={i === 0 ? 'phonelink_lock' : 'mail'} />{i === 0 ? t.tfApp : t.tfEmail}
+                </button>
+              ))}
+            </div>
+          )}
+          <label className="textfield"><Icon n="pin" />
+            <input value={tfCode} onChange={e => setTfCode(e.target.value)} placeholder={t.tfCode} aria-label={t.tfCode} autoFocus inputMode="numeric" autoComplete="one-time-code" />
+          </label>
+          {tfProvider === 1 && (
+            <button type="button" className="btn text" onClick={async () => {
+              const target = mode === 'server' ? `bw:${server.trim().replace(/\/+$/, '')}#${email.trim()}` : path;
+              try { await backend.bwSendEmail(target, password); setTfNote(t.tfSent); } catch (e) { setError(String(e)); }
+            }}><Icon n="forward_to_inbox" />{t.tfSend}</button>
+          )}
+          {tfNote && <small className="pw-hint ok"><Icon n="check_circle" />{tfNote}</small>}
+        </div>
+      )}
+      {mode === 'server' ? null : mode === 'open' ? (
         <>
           {choices.length > 0 && (
             <div className="vault-choices">
@@ -165,7 +231,7 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
         </>
       )}
 
-      {backend.desktop && (mode === 'create' || path) && (
+      {backend.desktop && mode !== 'server' && (mode === 'create' || (path && !isRemote(path))) && (
         <div className="keyfile-row">
           <button type="button" className="btn text" onClick={pickKeyfile}><Icon n="key_vertical" />{keyfile ? fileName(keyfile) : t.keyfile}</button>
           {keyfile && <button type="button" className="icon-btn" onClick={() => setKeyfile('')} aria-label={t.remove}><Icon n="close" /></button>}
@@ -183,19 +249,12 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
 
       <div className="row">
         {onClose ? <button type="button" className="btn text" onClick={onClose}>{t.cancel}</button> : <span />}
-        <button type="submit" className="btn filled" disabled={busy || (mode === 'create' ? (backend.desktop && !path) || !password : !path || (!password && !keyfile))}>
-          <Icon n={busy ? 'hourglass_top' : mode === 'open' ? 'lock_open' : 'check'} />{mode === 'open' ? t.unlock : t.create}
+        <button type="submit" className="btn filled" disabled={busy || (mode === 'server' ? !/^https?:\/\/./.test(server.trim()) || !email.includes('@') || !password
+          : mode === 'create' ? (backend.desktop && !path) || !password : !path || (!password && !keyfile))}>
+          <Icon n={busy ? 'hourglass_top' : mode === 'create' ? 'check' : 'lock_open'} />{mode === 'create' ? t.create : t.unlock}
         </button>
       </div>
 
-      {/* reminder for the hybrid roadmap: server vaults are planned, not implemented */}
-      <div className="wip-block" aria-disabled="true">
-        <span className="label">{t.serverAccount}</span>
-        <div className="wip-row">
-          <button type="button" className="wip-btn" disabled><Icon n="cloud" />{t.bitwarden}<span className="pill">{t.wip}</span></button>
-          <button type="button" className="wip-btn" disabled><Icon n="dns" />{t.vaultwarden}<span className="pill">{t.wip}</span></button>
-        </div>
-      </div>
     </form>
   );
 

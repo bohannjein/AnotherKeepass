@@ -33,6 +33,8 @@ export interface VaultData {
   icons?: Record<string, string>;
   /** old/weak key derivation (AES-KDF, tiny Argon2) */
   weakKdf?: boolean;
+  /** Vaultwarden account: true online, false offline copy; absent for .kdbx files */
+  remote?: boolean | null;
 }
 export interface ItemInput {
   id: string | null;
@@ -69,7 +71,11 @@ export interface PasskeyEntry { vault: string; uuid: string; title: string; user
 export interface Backend {
   desktop: boolean;
   create(path: string, name: string, password: string, keyfile?: string): Promise<VaultData>;
-  open(path: string, password: string, keyfile?: string): Promise<VaultData>;
+  /** twoFactor: [provider, code] for Vaultwarden accounts ("bw:<server>#<email>") */
+  open(path: string, password: string, keyfile?: string, twoFactor?: [number, string]): Promise<VaultData>;
+  vaultSync(id: string): Promise<VaultData>;
+  bwSendEmail(path: string, password: string): Promise<void>;
+  bwSignOut(path: string): Promise<void>;
   /** quick unlock: key kept since the last lock + Windows Hello available */
   quickAvailable(path: string): Promise<boolean>;
   quickUnlock(path: string, message: string): Promise<VaultData>;
@@ -150,7 +156,10 @@ export interface Backend {
 const desktop: Backend = {
   desktop: true,
   create: (path, name, password, keyfile) => invoke('vault_create', { path, name, password, keyfile }),
-  open: (path, password, keyfile) => invoke('vault_open', { path, password, keyfile }),
+  open: (path, password, keyfile, twoFactor) => invoke('vault_open', { path, password, keyfile, twoFactorProvider: twoFactor?.[0], twoFactorCode: twoFactor?.[1] }),
+  vaultSync: vault => invoke('vault_sync', { vault }),
+  bwSendEmail: (path, password) => invoke('bw_send_email', { path, password }),
+  bwSignOut: path => invoke('bw_sign_out', { path }),
   quickAvailable: path => invoke('quick_unlock_available', { path }),
   quickUnlock: (path, message) => invoke('vault_quick_unlock', { path, message }),
   close: id => invoke('vault_close', { id }),
@@ -255,6 +264,9 @@ const demo: Backend = {
     return out(v);
   },
   async close(id) { demoVaults.delete(id); },
+  vaultSync: async id => out(get(id)),
+  bwSendEmail: async () => {},
+  bwSignOut: async () => {},
   quickAvailable: async () => false,
   quickUnlock: async () => { throw new Error('no_quick'); },
   async pathsExist(paths) { return paths.map(() => true); },
