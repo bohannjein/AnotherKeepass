@@ -40,6 +40,7 @@ pub struct DesktopPrefs {
     pub at_match_url: bool,
     pub at_hide_expired: bool,
     pub at_relock: bool,
+    pub quick_shortcut: String,
     pub ks_import: bool,
     pub ks_export: bool,
     pub ssh_enabled: bool,
@@ -97,6 +98,7 @@ impl Default for DesktopPrefs {
             at_match_url: true,
             at_hide_expired: false,
             at_relock: false,
+            quick_shortcut: "Ctrl+Alt+Space".into(),
             ks_import: true,
             ks_export: true,
             ssh_enabled: false,
@@ -322,6 +324,15 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>, p: &DesktopPrefs) -> tauri::R
 
 pub fn on_window_event<R: Runtime>(window: &tauri::Window<R>, event: &WindowEvent) {
     let app = window.app_handle();
+    if window.label() == crate::quick::LABEL {
+        // quick access: gone as soon as it loses focus, never really closed
+        match event {
+            WindowEvent::Focused(false) => { let _ = window.hide(); }
+            WindowEvent::CloseRequested { api, .. } => { api.prevent_close(); let _ = window.hide(); }
+            _ => {}
+        }
+        return;
+    }
     let p = prefs(app);
     match event {
         // with a tray icon × only hides the window (like Proton Pass); quitting goes through the tray menu
@@ -402,10 +413,8 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
         }
     }
     problems.extend(crate::browser_server::sync_manifests(&prefs));
-    if old.at_shortcut != prefs.at_shortcut {
-        if let Err(e) = crate::autotype::register_shortcut(&app, &prefs.at_shortcut) {
-            problems.push(format!("shortcut:{e}"));
-        }
+    if old.at_shortcut != prefs.at_shortcut || old.quick_shortcut != prefs.quick_shortcut {
+        problems.extend(crate::autotype::register_shortcuts(&app, &prefs.at_shortcut, &prefs.quick_shortcut));
     }
     if !problems.is_empty() {
         log::warn!("desktop_apply problems: {problems:?}");
@@ -448,7 +457,7 @@ pub fn on_session_event<R: Runtime>(app: &AppHandle<R>, code: u32) {
 /// Screenshots, screen sharing, Teams/TeamViewer/RDP recording see a black window
 /// (SetWindowDisplayAffinity WDA_EXCLUDEFROMCAPTURE via Tauri).
 pub fn apply_screen_protect<R: Runtime>(app: &AppHandle<R>, on: bool) {
-    if let Some(w) = main_window(app) {
+    for w in app.webview_windows().values() {
         if let Err(e) = w.set_content_protected(on) {
             log::warn!("screen protection: {e}");
         }

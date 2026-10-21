@@ -20,6 +20,7 @@ import { SshPanel } from './SshPanel';
 import { PasswordStrength } from './PasswordStrength';
 import { VaultSettingsDialog } from './VaultSettingsDialog';
 import { AttachmentPreview, ExportDialog, MergeDialog, previewable } from './TransferDialogs';
+import { CommandPalette, type PaletteItem } from './CommandPalette';
 import { groupItems, sortItems, type GroupMode, type SortMode } from './listGroups';
 import { ShareDialog } from './ShareDialog';
 import { HealthOverview, HealthRow, ISSUE_ICON, ISSUES, issueName as issueNameOf, type Issue } from './HealthOverview';
@@ -71,7 +72,7 @@ const DESKTOP_KEYS = [
   'atShortcut', 'atStartDelay', 'atCharDelay', 'atAlwaysAsk', 'atMatchTitle', 'atMatchUrl', 'atHideExpired',
   'browserEnabled', 'bChrome', 'bFirefox', 'bChromium', 'bEdge', 'bBrave', 'bVivaldi', 'bTor', 'bUnlock', 'bMatchScheme',
   'bBestMatch', 'bAllowExpired', 'bSearchAll', 'bNoAccessConfirm', 'bUpdateNoConfirm', 'bKph', 'bUpdateManifests',
-  'bCustomProxy', 'bProxyPath', 'bSkipBasicAuth', 'bLocalhostPasskeys', 'backupBeforeSave', 'backupPath', 'autoReload', 'atRelock', 'atRemember', 'trayStyle', 'sshEnabled', 'sshAuthSock', 'ksImport', 'ksExport',
+  'bCustomProxy', 'bProxyPath', 'bSkipBasicAuth', 'bLocalhostPasskeys', 'backupBeforeSave', 'backupPath', 'autoReload', 'atRelock', 'atRemember', 'trayStyle', 'quickShortcut', 'sshEnabled', 'sshAuthSock', 'ksImport', 'ksExport',
 ] as const;
 const KNOWN_KEY = 'anotherkeepass.vaults';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -208,6 +209,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const [exportFor, setExportFor] = useState<VaultInfo | null>(null);
   const [mergeFor, setMergeFor] = useState<VaultInfo | null>(null);
   const [preview, setPreview] = useState<{ name: string; load: () => Promise<Uint8Array> } | null>(null);
+  const [palette, setPalette] = useState(false);
   // update check: at most once a week, only when enabled
   const [update, setUpdate] = useState<Update | null>(null);
   useEffect(() => {
@@ -476,6 +478,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     if (e.key === 'F5' || (mod && ['r', 'p', 'j', 'h', 'g', 's', 'o'].includes(e.key.toLowerCase()))) { e.preventDefault(); return; }
     if (e.key === 'F1' || (mod && e.key === '/')) return run1(() => setShowKeys(s => !s));
     if (e.key === 'Escape') { window.dispatchEvent(new Event('akp:cancel')); setShowKeys(false); setMulti([]); return; }
+    if (mod && e.key.toLowerCase() === 'k') return run1(() => setPalette(p => !p));
     if (mod && e.key.toLowerCase() === 'f') return run1(() => searchRef.current?.focus());
     if (mod && e.key.toLowerCase() === 'l') return run1(onLock);
     if (mod && e.key.toLowerCase() === 'n' && targetVault) return run1(() => createItem('login'));
@@ -678,6 +681,27 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const bulkPin = async (pin: boolean) => {
     for (const it of chosen) if (!!it.pinned !== pin) await togglePin(it);
   };
+  // Ctrl+K: actions first, then every entry of the open vaults
+  const paletteItems: PaletteItem[] = useMemo(() => {
+    const close = (fn: () => void) => () => { setPalette(false); fn(); };
+    const actions: PaletteItem[] = [
+      ...NEW_TYPES.map(ty => ({ id: 'new-' + ty, icon: TYPE_ICON[ty], label: `${t.actNew}: ${t[ty]}`, run: close(() => createItem(ty)) })),
+      { id: 'gen', icon: 'password', label: t.actGenerator, run: close(() => setShowGen(true)) },
+      { id: 'health', icon: 'health_and_safety', label: t.actHealth, run: close(() => selectVault(HEALTH)) },
+      { id: 'trash', icon: 'delete', label: t.actTrash, run: close(() => selectVault(TRASH)) },
+      { id: 'import', icon: 'upload_file', label: t.importItems, run: close(() => setImportFor(targetVault)) },
+      { id: 'theme', icon: 'contrast', label: t.actTheme, run: close(() => onSettings({ ...settings, theme: settings.theme === 'dark' ? 'light' : 'dark' })) },
+      { id: 'settings', icon: 'settings', label: t.actSettings, run: close(() => setPage('settings')) },
+      { id: 'lock', icon: 'lock', label: t.actLock, run: close(onLock) },
+    ];
+    const entries: PaletteItem[] = allItems.filter(i => !i.trashed && !i.id.startsWith('new:')).map(i => ({
+      id: 'e-' + i.vault + i.id, icon: TYPE_ICON[i.type], image: i.icon, label: i.title || t.untitled, sub: i.subtitle,
+      hint: vaultList.length > 1 ? vaultList.find(v => v.id === i.vault)?.name : undefined,
+      run: close(() => { setVault(ALL); setFolder(null); setMulti([]); setSelected(i.id); }),
+      alt: close(() => { const f = i.fields.find(x => x.raw === 'Password'); if (f) copyField(i, f, t.password); }),
+    }));
+    return [...actions, ...entries];
+  }, [allItems, vaultList, t, settings, targetVault]); // eslint-disable-line react-hooks/exhaustive-deps
   const pinned = visible.filter(i => i.pinned);
   const rest = visible.filter(i => !i.pinned);
   const snackbar = snack && (
@@ -945,6 +969,13 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
           onClose={() => setPick(null)}
           onPick={(vault, id, sequence) => { setPick(null); run(backend.autotypePerform(vault, id, sequence)); }} />
       )}
+      {palette && createPortal(
+        <div className="scrim palette-scrim" onClick={() => setPalette(false)}>
+          <div className="palette-dialog" role="dialog" aria-label={t.palette} onClick={e => e.stopPropagation()}>
+            <CommandPalette items={paletteItems} placeholder={t.paletteSearch} onClose={() => setPalette(false)}
+              footer={<><kbd>Enter</kbd> {t.paOpen} <kbd>Ctrl Enter</kbd> {t.password} <kbd>Esc</kbd></>} />
+          </div>
+        </div>, document.body)}
       {exportFor && <ExportDialog t={t} vault={exportFor} onClose={() => setExportFor(null)} onDone={notify} />}
       {mergeFor && <MergeDialog t={t} vault={mergeFor} onClose={() => setMergeFor(null)} onMerged={(d, msg) => { onUpdate(d); notify(msg); }} />}
       {preview && <AttachmentPreview t={t} name={preview.name} load={preview.load} onClose={() => setPreview(null)} />}

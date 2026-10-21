@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import '@fontsource-variable/roboto-flex/wght.css'
 import './index.css'
 import App from './App.tsx'
+import QuickApp from './QuickApp.tsx'
 import { backend } from './backend'
 
 // unexpected UI errors go to the app log file (desktop), so problems can be traced later
@@ -11,7 +12,7 @@ window.addEventListener('unhandledrejection', e => backend.log('error', `unhandl
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    {new URLSearchParams(location.search).has('quick') ? <QuickApp /> : <App />}
   </StrictMode>,
 )
 requestAnimationFrame(() => backend.log('info', `ui ready after ${Math.round(performance.now())} ms`))

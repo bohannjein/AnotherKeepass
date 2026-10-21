@@ -46,6 +46,7 @@ const en = {
     browserCustom: 'Custom browser', ssh: 'SSH agent', ksActivation: 'Activation', ksCert: 'Own certificate',
   },
   labels: {
+    quickShortcut: "Quick access shortcut",
     accent: "Accent color",
     listDensity: "List density",
     letterAvatars: "Letter avatars for entries without icon",
@@ -106,6 +107,7 @@ const en = {
     ksSigner: 'Signer name', ksFingerprint: 'Certificate fingerprint', ksGenerate: 'Generate new certificate',
   },
   hints: {
+    quickShortcut: "Opens a small search window from anywhere: Enter copies the password, Shift+Enter the username, Ctrl+Enter types the login.",
     accent: "Main color of buttons, highlights and the active vault.",
     listDensity: "Compact shows more entries at once.",
     letterAvatars: "Logins get a colored initial instead of the generic person icon.",
@@ -255,6 +257,7 @@ const de: SettingsStrings = {
     browserCustom: 'Benutzerdefinierter Browser', ssh: 'SSH-Agent', ksActivation: 'Aktivierung', ksCert: 'Eigenes Zertifikat',
   },
   labels: {
+    quickShortcut: "Tastenkürzel für Schnellzugriff",
     accent: "Akzentfarbe",
     listDensity: "Listendichte",
     letterAvatars: "Buchstaben-Avatare für Einträge ohne Symbol",
@@ -315,6 +318,7 @@ const de: SettingsStrings = {
     ksSigner: 'Name des Unterzeichners', ksFingerprint: 'Fingerabdruck des Zertifikats', ksGenerate: 'Neues Zertifikat generieren',
   },
   hints: {
+    quickShortcut: "Öffnet von überall ein kleines Suchfenster: Enter kopiert das Passwort, Umschalt+Enter den Benutzernamen, Strg+Enter tippt die Anmeldung.",
     accent: "Hauptfarbe für Buttons, Hervorhebungen und den aktiven Tresor.",
     listDensity: "Kompakt zeigt mehr Einträge auf einmal.",
     letterAvatars: "Logins bekommen einen farbigen Anfangsbuchstaben statt des allgemeinen Personen-Symbols.",
@@ -462,6 +466,7 @@ const fr: SettingsStrings = {
     browserCustom: 'Navigateur personnalisé', ssh: 'Agent SSH', ksActivation: 'Activation', ksCert: 'Certificat personnel',
   },
   labels: {
+    quickShortcut: "Raccourci d’accès rapide",
     accent: "Couleur d’accent",
     listDensity: "Densité de la liste",
     letterAvatars: "Avatars à initiale pour les entrées sans icône",
@@ -522,6 +527,7 @@ const fr: SettingsStrings = {
     ksSigner: 'Nom du signataire', ksFingerprint: 'Empreinte du certificat', ksGenerate: 'Générer un nouveau certificat',
   },
   hints: {
+    quickShortcut: "Ouvre une petite recherche depuis n’importe où : Entrée copie le mot de passe, Maj+Entrée l’identifiant, Ctrl+Entrée saisit la connexion.",
     accent: "Couleur principale des boutons et mises en avant.",
     listDensity: "Compact affiche plus d’entrées à la fois.",
     letterAvatars: "Les identifiants reçoivent une initiale colorée au lieu de l’icône générique.",
@@ -669,6 +675,7 @@ const es: SettingsStrings = {
     browserCustom: 'Navegador personalizado', ssh: 'Agente SSH', ksActivation: 'Activación', ksCert: 'Certificado propio',
   },
   labels: {
+    quickShortcut: "Atajo de acceso rápido",
     accent: "Color de acento",
     listDensity: "Densidad de la lista",
     letterAvatars: "Avatares con inicial para entradas sin icono",
@@ -729,6 +736,7 @@ const es: SettingsStrings = {
     ksSigner: 'Nombre del firmante', ksFingerprint: 'Huella del certificado', ksGenerate: 'Generar nuevo certificado',
   },
   hints: {
+    quickShortcut: "Abre una pequeña búsqueda desde cualquier sitio: Intro copia la contraseña, Mayús+Intro el usuario, Ctrl+Intro escribe el acceso.",
     accent: "Color principal de botones y resaltados.",
     listDensity: "Compacto muestra más entradas a la vez.",
     letterAvatars: "Los inicios de sesión muestran una inicial de color en lugar del icono genérico.",

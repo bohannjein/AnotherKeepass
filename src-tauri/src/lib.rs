@@ -8,6 +8,7 @@ mod clipboard;
 mod desktop;
 mod favicon;
 mod health;
+mod quick;
 mod transfer;
 mod passkeys;
 mod update;
@@ -49,6 +50,8 @@ pub fn run() {
       vault::vault_rename,
       vault::entry_save,
       vault::entry_import,
+      quick::vaults_listing,
+      quick::quick_hide,
       transfer::vault_export_csv,
       transfer::vault_save_copy,
       transfer::vault_merge,
@@ -120,8 +123,11 @@ pub fn run() {
         }
       }
       desktop::create_tray(handle, &prefs)?;
-      if let Err(e) = autotype::register_shortcut(handle, &prefs.at_shortcut) {
-        log::warn!("auto-type shortcut: {e}");
+      if let Err(e) = quick::create(handle) {
+        log::warn!("quick access window: {e}");
+      }
+      for p in autotype::register_shortcuts(handle, &prefs.at_shortcut, &prefs.quick_shortcut) {
+        log::warn!("{p}");
       }
       desktop::watch_session(handle.clone());
       desktop::poll_lock(handle.clone());

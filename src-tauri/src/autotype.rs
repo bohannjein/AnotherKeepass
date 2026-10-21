@@ -219,20 +219,37 @@ fn focus(_h: isize) {}
 
 // ---------------------------------------------------------------- flow
 
-pub fn register_shortcut<R: Runtime>(app: &AppHandle<R>, shortcut: &str) -> Result<(), String> {
+/// Window that has the focus right now (for the quick access window's Auto-Type).
+pub fn foreground_hwnd() -> Option<isize> {
+    foreground().0
+}
+
+/// (Re)register both global shortcuts: Auto-Type and quick access. Errors name the one that failed.
+pub fn register_shortcuts<R: Runtime>(app: &AppHandle<R>, autotype: &str, quick: &str) -> Vec<String> {
     let gs = app.global_shortcut();
-    gs.unregister_all().map_err(|e| e.to_string())?;
-    if shortcut.trim().is_empty() {
-        return Ok(());
-    }
+    let _ = gs.unregister_all();
+    let mut problems = Vec::new();
     // the settings page records "Meta" for the Windows key
-    let normalized = shortcut.replace("Meta", "Super");
-    gs.on_shortcut(normalized.as_str(), |app, _, e| {
-        if e.state == ShortcutState::Pressed {
-            on_hotkey(app);
+    let norm = |s: &str| s.replace("Meta", "Super");
+    if !autotype.trim().is_empty() {
+        if let Err(e) = gs.on_shortcut(norm(autotype).as_str(), |app, _, e| {
+            if e.state == ShortcutState::Pressed {
+                on_hotkey(app);
+            }
+        }) {
+            problems.push(format!("shortcut:{e}"));
         }
-    })
-    .map_err(|e| e.to_string())
+    }
+    if !quick.trim().is_empty() {
+        if let Err(e) = gs.on_shortcut(norm(quick).as_str(), |app, _, e| {
+            if e.state == ShortcutState::Pressed {
+                crate::quick::toggle(app);
+            }
+        }) {
+            problems.push(format!("quickShortcut:{e}"));
+        }
+    }
+    problems
 }
 
 fn on_hotkey<R: Runtime>(app: &AppHandle<R>) {

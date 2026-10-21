@@ -87,6 +87,8 @@ export interface Backend {
   /** many new entries, folders by name path below parent (null = root); one file write */
   importItems(vault: string, parent: string | null, items: ImportInput[]): Promise<[number, VaultData]>;
   secrets(vault: string, id: string): Promise<Record<string, string>>;
+  /** all open vaults (quick access window) */
+  vaultsListing(): Promise<VaultData[]>;
   vaultExportCsv(vault: string, dest: string): Promise<number>;
   vaultSaveCopy(vault: string, dest: string): Promise<void>;
   vaultMerge(vault: string, path: string, password: string, keyfile?: string): Promise<[{ created: number; updated: number; moved: number; deleted: number }, VaultData]>;
@@ -162,6 +164,7 @@ const desktop: Backend = {
   save: (vault, item) => invoke('entry_save', { vault, item }),
   importItems: (vault, parent, items) => invoke('entry_import', { vault, parent, items }),
   secrets: (vault, id) => invoke('entry_secrets', { vault, id }),
+  vaultsListing: () => invoke('vaults_listing'),
   vaultExportCsv: (vault, dest) => invoke('vault_export_csv', { vault, dest }),
   vaultSaveCopy: (vault, dest) => invoke('vault_save_copy', { vault, dest }),
   vaultMerge: (vault, path, password, keyfile) => invoke('vault_merge', { vault, path, password, keyfile }),
@@ -349,6 +352,7 @@ const demo: Backend = {
     let s = ''; for (const x of b) s += String.fromCharCode(x);
     return btoa(s);
   },
+  async vaultsListing() { return [...demoVaults.values()].map(out); },
   async secrets(vault, id) { return { ...(get(vault).secrets.get(id) ?? {}) }; },
   async totp(vault, id, field) {
     const s = get(vault).secrets.get(id)?.[field] ?? '';
