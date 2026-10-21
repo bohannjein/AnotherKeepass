@@ -128,6 +128,7 @@ pub fn run() {
       }
       for p in autotype::register_shortcuts(handle, &prefs.at_shortcut, &prefs.quick_shortcut) {
         log::warn!("{p}");
+        desktop::SHORTCUT_FAILED.store(true, std::sync::atomic::Ordering::Relaxed);
       }
       desktop::watch_session(handle.clone());
       desktop::poll_lock(handle.clone());

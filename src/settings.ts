@@ -50,7 +50,7 @@ export const DEFAULTS = {
   atHideExpired: false,
   atRelock: false,
   atShortcut: '',
-  quickShortcut: 'Ctrl+Alt+Space',
+  quickShortcut: 'Ctrl+Alt+K',
   atRemember: 10,
   atStartDelay: 500,
   atCharDelay: 25,

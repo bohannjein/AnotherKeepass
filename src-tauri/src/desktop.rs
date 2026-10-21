@@ -98,7 +98,7 @@ impl Default for DesktopPrefs {
             at_match_url: true,
             at_hide_expired: false,
             at_relock: false,
-            quick_shortcut: "Ctrl+Alt+Space".into(),
+            quick_shortcut: "Ctrl+Alt+K".into(),
             ks_import: true,
             ks_export: true,
             ssh_enabled: false,
@@ -173,6 +173,9 @@ fn save_prefs(p: &DesktopPrefs) -> Result<(), String> {
     }
     fs::write(path, serde_json::to_vec_pretty(p).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
+
+/// A global shortcut could not be registered at start (taken by another program).
+pub static SHORTCUT_FAILED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 pub fn apply_keeshare(p: &DesktopPrefs) {
     use std::sync::atomic::Ordering;
@@ -413,7 +416,9 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
         }
     }
     problems.extend(crate::browser_server::sync_manifests(&prefs));
-    if old.at_shortcut != prefs.at_shortcut || old.quick_shortcut != prefs.quick_shortcut {
+    // also retry after a failed registration at start, so the UI gets to see the problem
+    let retry = SHORTCUT_FAILED.swap(false, std::sync::atomic::Ordering::Relaxed);
+    if retry || old.at_shortcut != prefs.at_shortcut || old.quick_shortcut != prefs.quick_shortcut {
         problems.extend(crate::autotype::register_shortcuts(&app, &prefs.at_shortcut, &prefs.quick_shortcut));
     }
     if !problems.is_empty() {

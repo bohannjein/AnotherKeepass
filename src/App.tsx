@@ -82,6 +82,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 function loadSettings(): Settings | null {
   try {
     const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null');
+    // Ctrl+Alt+Space (old default) is often taken by other tools
+    if (raw && raw.quickShortcut === 'Ctrl+Alt+Space') raw.quickShortcut = 'Ctrl+Alt+K';
     return raw ? mergePrefs(raw) : null;
   } catch { return null; }
 }
@@ -319,7 +321,10 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     return () => { a(); b(); };
   }, [t.autoTypeError]);
   useEffect(() => {
-    if (desktopProblems.length) notify(`${t.desktopProblem}: ${desktopProblems.join(', ')}`, true);
+    // a taken shortcut gets a clear sentence instead of the raw error
+    const text = desktopProblems.map(p => /^(quickShortcut|shortcut):.*already registered/.test(p)
+      ? t.shortcutTaken.replace('{k}', p.startsWith('quick') ? settings.quickShortcut : settings.atShortcut) : p);
+    if (text.length) notify(`${t.desktopProblem}: ${text.join(', ')}`, true);
   }, [desktopProblems, t.desktopProblem]);
 
   // the extension's "database" is the selected vault (or the first open one)
