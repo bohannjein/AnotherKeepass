@@ -142,6 +142,10 @@ fn error_reply(action: &str, code: u32) -> Value {
 
 /// Database identity for the extension: SHA-256 (hex) of the root group UUID as 32 hex chars.
 pub fn db_hash(db: &Database) -> String {
+    // server accounts are rebuilt on every sync: hash their stable account id instead of the root uuid
+    if let Some(account) = cd_string(db.meta.custom_data.get(crate::bitwarden::CD_ACCOUNT)) {
+        return hex(&Sha256::digest(account.as_bytes()));
+    }
     hex(&Sha256::digest(db.root().id().uuid().simple().to_string().as_bytes()))
 }
 

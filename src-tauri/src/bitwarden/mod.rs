@@ -30,6 +30,9 @@ pub fn parse_path(path: &str) -> Option<(String, String)> {
     Some((api::base(server), email.trim().to_string()))
 }
 
+/// meta custom data: the account path (stable identity for the browser extension)
+pub const CD_ACCOUNT: &str = "AnotherKeepass.Account";
+
 pub fn is_remote(path: &str) -> bool {
     path.starts_with("bw:")
 }
@@ -44,6 +47,9 @@ struct Account {
     kdf: Option<(u8, u32, u32, u32)>,
     /// last sync response – everything in it is encrypted with the account keys (offline use)
     sync: Option<Value>,
+    /// browser extension associations (KPXC_BROWSER_*: public ids, no secrets)
+    #[serde(default)]
+    browser: HashMap<String, String>,
 }
 
 fn account_file(path: &str) -> Option<PathBuf> {
@@ -129,6 +135,7 @@ fn parse_time(s: Option<&str>) -> Option<chrono::NaiveDateTime> {
 /// Sync response → in-memory database + snapshot of what the server has.
 fn build(sync: &Value, title: &str, user: &SymKey, orgs: &HashMap<String, SymKey>) -> Result<(Database, Snapshot), String> {
     let mut db = Database::new();
+    // (account id and browser associations are added by with_account)
     db.config = crate::vault::new_config();
     db.meta.database_name = Some(title.to_string());
     db.root_mut().name = title.to_string();
@@ -252,7 +259,8 @@ pub fn open(path: &str, password: &str, second: Option<(u8, String)>) -> Result<
         Err(LoginError::Other(e)) => return Err(format!("bw:{e}")),
     };
     let orgs = org_keys(field(&sync, "profile"), private.as_ref());
-    let (db, snapshot) = build(&sync, &title, &user, &orgs)?;
+    let (mut db, snapshot) = build(&sync, &title, &user, &orgs)?;
+    with_account(&mut db, path, &acct);
     if session.is_some() {
         acct.sync = Some(sync.clone());
     }
@@ -267,16 +275,39 @@ pub fn pull(r: &mut Remote, title: &str) -> Result<Database, String> {
     let session = r.session.as_mut().ok_or("offline")?;
     let sync = session.sync()?;
     r.orgs = org_keys(field(&sync, "profile"), r.private.as_ref());
-    let (db, snap) = build(&sync, title, &r.user, &r.orgs)?;
+    let (mut db, snap) = build(&sync, title, &r.user, &r.orgs)?;
     r.snapshot = snap;
     let mut acct = load_account(&r.path);
     acct.sync = Some(sync);
     save_account(&r.path, &acct);
+    with_account(&mut db, &r.path, &acct);
     Ok(db)
+}
+
+fn with_account(db: &mut Database, path: &str, acct: &Account) {
+    let item = |s: &str| keepass::db::CustomDataItem { value: Some(keepass::db::CustomDataValue::String(s.to_string())), last_modification_time: Some(Times::now()) };
+    db.meta.custom_data.insert(CD_ACCOUNT.into(), item(path));
+    for (k, v) in &acct.browser {
+        db.meta.custom_data.insert(k.clone(), item(v));
+    }
+}
+
+/// Browser associations live in the vault's meta data; for accounts they are kept locally.
+fn keep_associations(path: &str, db: &Database) {
+    let assoc: HashMap<String, String> = db.meta.custom_data.iter()
+        .filter(|(k, _)| k.starts_with("KPXC_BROWSER_"))
+        .filter_map(|(k, v)| match &v.value { Some(keepass::db::CustomDataValue::String(s)) => Some((k.clone(), s.clone())), _ => None })
+        .collect();
+    let mut acct = load_account(path);
+    if acct.browser != assoc {
+        acct.browser = assoc;
+        save_account(path, &acct);
+    }
 }
 
 /// Upload what changed since the last sync, then sync again. Returns the fresh database.
 pub fn push(r: &mut Remote, db: &Database) -> Result<Database, String> {
+    keep_associations(&r.path, db);
     if r.session.is_none() {
         return Err("offline".into());
     }
