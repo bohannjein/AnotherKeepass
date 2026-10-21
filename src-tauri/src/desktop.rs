@@ -30,6 +30,8 @@ pub struct DesktopPrefs {
     pub lock_on_minimize: bool,
     pub lock_on_session: bool,
     pub lock_on_user_switch: bool,
+    /// hide the window from screenshots, screen sharing and remote tools
+    pub screen_protect: bool,
     pub at_shortcut: String,
     pub at_start_delay: u64,
     pub at_char_delay: u64,
@@ -85,6 +87,7 @@ impl Default for DesktopPrefs {
             lock_on_minimize: false,
             lock_on_session: true,
             lock_on_user_switch: true,
+            screen_protect: true,
             at_shortcut: String::new(),
             at_start_delay: 500,
             at_char_delay: 25,
@@ -366,6 +369,7 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
     save_prefs(&prefs).inspect_err(|e| log::error!("desktop.json: {e}"))?;
     apply_backup(&prefs);
     apply_ssh(&prefs);
+    apply_screen_protect(&app, prefs.screen_protect);
     apply_keeshare(&prefs);
     crate::vault::quick_unlock_enable(prefs.quick_unlock);
     let mut problems = Vec::new();
@@ -432,8 +436,19 @@ pub fn on_session_event<R: Runtime>(app: &AppHandle<R>, code: u32) {
     let p = prefs(app);
     let lock = (code == WTS_SESSION_LOCK && p.lock_on_session)
         || ((code == WTS_CONSOLE_DISCONNECT || code == WTS_REMOTE_DISCONNECT) && p.lock_on_user_switch);
-    if lock {
+    if lock && app.state::<Vaults>().0.lock().is_ok_and(|m| !m.is_empty()) {
+        log::info!("windows session event {code:#x}: locking");
         lock_all(app);
+    }
+}
+
+/// Screenshots, screen sharing, Teams/TeamViewer/RDP recording see a black window
+/// (SetWindowDisplayAffinity WDA_EXCLUDEFROMCAPTURE via Tauri).
+pub fn apply_screen_protect<R: Runtime>(app: &AppHandle<R>, on: bool) {
+    if let Some(w) = main_window(app) {
+        if let Err(e) = w.set_content_protected(on) {
+            log::warn!("screen protection: {e}");
+        }
     }
 }
 
@@ -473,6 +488,7 @@ pub fn watch_session(app: AppHandle) {
             log::warn!("session lock notifications unavailable");
             return;
         }
+        log::info!("session lock notifications registered");
         let mut msg: MSG = std::mem::zeroed();
         while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
             TranslateMessage(&msg);
@@ -481,6 +497,54 @@ pub fn watch_session(app: AppHandle) {
     });
 }
 
+/// Fallback next to the WTS notification: poll the session's lock state every 2 s
+/// (WTSSessionInfoEx). Catches lock events the message-only window may miss; unlike
+/// checking the input desktop it doesn't fire on UAC prompts.
+/// Current session locked? None if Windows can't tell.
+#[cfg(windows)]
+pub fn session_locked() -> Option<bool> {
+    use windows_sys::Win32::System::RemoteDesktop::{
+        WTSFreeMemory, WTSQuerySessionInformationW, WTSSessionInfoEx, WTSINFOEXW, WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION,
+        WTS_SESSIONSTATE_LOCK, WTS_SESSIONSTATE_UNLOCK,
+    };
+    unsafe {
+        let mut buf: windows_sys::core::PWSTR = std::ptr::null_mut();
+        let mut len = 0u32;
+        if WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION, WTSSessionInfoEx, &mut buf, &mut len) == 0 || buf.is_null() {
+            return None;
+        }
+        let info = &*(buf as *const WTSINFOEXW);
+        let flags = if info.Level == 1 { info.Data.WTSInfoExLevel1.SessionFlags as u32 } else { u32::MAX };
+        WTSFreeMemory(buf as _);
+        match flags {
+            WTS_SESSIONSTATE_LOCK => Some(true),
+            WTS_SESSIONSTATE_UNLOCK => Some(false),
+            _ => None,
+        }
+    }
+}
+
+/// Fallback next to the WTS notification: poll the session's lock state every 2 s.
+/// Catches lock events the message-only window may miss; unlike checking the input
+/// desktop it doesn't fire on UAC prompts.
+#[cfg(windows)]
+pub fn poll_lock(app: AppHandle) {
+    std::thread::spawn(move || {
+        let mut was_locked = false;
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            let Some(locked) = session_locked() else { continue };
+            if locked && !was_locked {
+                on_session_event(&app, 0x7);
+            }
+            was_locked = locked;
+        }
+    });
+}
+
+#[cfg(not(windows))]
+pub fn poll_lock(_app: AppHandle) {}
+
 // ponytail: Linux/macOS screen-lock signals (logind D-Bus / NSWorkspace) not wired yet
 #[cfg(not(windows))]
 pub fn watch_session(_app: AppHandle) {}
@@ -488,6 +552,14 @@ pub fn watch_session(_app: AppHandle) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// run while the PC is unlocked: cargo test --lib session_state -- --ignored
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn session_state() {
+        assert_eq!(session_locked(), Some(false));
+    }
 
     #[test]
     fn prefs_roundtrip_and_defaults() {

@@ -46,6 +46,7 @@ const en = {
     browserCustom: 'Custom browser', ssh: 'SSH agent', ksActivation: 'Activation', ksCert: 'Own certificate',
   },
   labels: {
+    screenProtect: "Hide from screenshots and screen sharing",
     updateNow: "Check for updates now",
     showPlanned: 'Show planned options',
     bwConnect: 'Connect Bitwarden account', vwConnect: 'Connect Vaultwarden server (self-hosted)',
@@ -100,6 +101,7 @@ const en = {
     ksSigner: 'Signer name', ksFingerprint: 'Certificate fingerprint', ksGenerate: 'Generate new certificate',
   },
   hints: {
+    screenProtect: "Screenshots, screen sharing (Teams, Zoom), recordings and remote tools like TeamViewer only see a black window. Turn off if you need to show the app to someone.",
     bLocalhostPasskeys: "Passkeys normally need https. This also allows them on http://localhost – only useful for web developers.",
     bSkipBasicAuth: "Login dialogs of the browser itself (HTTP Basic Auth) get your login without asking first.",
     updateCheck: "Once a week, looks for a newer release on GitHub and shows a button to download it.",
@@ -236,6 +238,7 @@ const de: SettingsStrings = {
     browserCustom: 'Benutzerdefinierter Browser', ssh: 'SSH-Agent', ksActivation: 'Aktivierung', ksCert: 'Eigenes Zertifikat',
   },
   labels: {
+    screenProtect: "Vor Screenshots und Bildschirmübertragung verbergen",
     updateNow: "Jetzt nach Updates suchen",
     showPlanned: 'Geplante Optionen anzeigen',
     bwConnect: 'Bitwarden-Konto verbinden', vwConnect: 'Vaultwarden-Server verbinden (selbst gehostet)',
@@ -290,6 +293,7 @@ const de: SettingsStrings = {
     ksSigner: 'Name des Unterzeichners', ksFingerprint: 'Fingerabdruck des Zertifikats', ksGenerate: 'Neues Zertifikat generieren',
   },
   hints: {
+    screenProtect: "Screenshots, Bildschirmübertragung (Teams, Zoom), Aufnahmen und Fernwartung wie TeamViewer sehen nur ein schwarzes Fenster. Ausschalten, wenn du die App jemandem zeigen willst.",
     bLocalhostPasskeys: "Passkeys brauchen normalerweise https. Damit gehen sie auch auf http://localhost – nur für Webentwicklung sinnvoll.",
     bSkipBasicAuth: "Anmeldefenster des Browsers selbst (HTTP Basic Auth) bekommen die Zugangsdaten ohne Nachfrage.",
     updateCheck: "Sucht einmal pro Woche auf GitHub nach einer neueren Version und zeigt dann einen Button zum Herunterladen.",
@@ -424,6 +428,7 @@ const fr: SettingsStrings = {
     browserCustom: 'Navigateur personnalisé', ssh: 'Agent SSH', ksActivation: 'Activation', ksCert: 'Certificat personnel',
   },
   labels: {
+    screenProtect: "Masquer des captures et du partage d’écran",
     updateNow: "Rechercher des mises à jour",
     showPlanned: 'Afficher les options prévues',
     bwConnect: 'Connecter un compte Bitwarden', vwConnect: 'Connecter un serveur Vaultwarden (auto-hébergé)',
@@ -478,6 +483,7 @@ const fr: SettingsStrings = {
     ksSigner: 'Nom du signataire', ksFingerprint: 'Empreinte du certificat', ksGenerate: 'Générer un nouveau certificat',
   },
   hints: {
+    screenProtect: "Captures d’écran, partage d’écran (Teams, Zoom), enregistrements et outils comme TeamViewer ne voient qu’une fenêtre noire. Désactivez pour montrer l’application à quelqu’un.",
     bLocalhostPasskeys: "Les clés d’accès exigent https. Ceci les autorise aussi sur http://localhost – utile seulement pour le développement web.",
     bSkipBasicAuth: "Les fenêtres de connexion du navigateur (HTTP Basic Auth) reçoivent l’identifiant sans demander.",
     updateCheck: "Une fois par semaine, cherche une version plus récente sur GitHub et affiche un bouton pour la télécharger.",
@@ -612,6 +618,7 @@ const es: SettingsStrings = {
     browserCustom: 'Navegador personalizado', ssh: 'Agente SSH', ksActivation: 'Activación', ksCert: 'Certificado propio',
   },
   labels: {
+    screenProtect: "Ocultar en capturas y al compartir pantalla",
     updateNow: "Buscar actualizaciones ahora",
     showPlanned: 'Mostrar opciones previstas',
     bwConnect: 'Conectar cuenta de Bitwarden', vwConnect: 'Conectar servidor Vaultwarden (autoalojado)',
@@ -666,6 +673,7 @@ const es: SettingsStrings = {
     ksSigner: 'Nombre del firmante', ksFingerprint: 'Huella del certificado', ksGenerate: 'Generar nuevo certificado',
   },
   hints: {
+    screenProtect: "Capturas, pantalla compartida (Teams, Zoom), grabaciones y herramientas remotas como TeamViewer solo ven una ventana negra. Desactívalo si necesitas mostrar la app a alguien.",
     bLocalhostPasskeys: "Las llaves de acceso necesitan https. Esto las permite también en http://localhost – solo útil para desarrollo web.",
     bSkipBasicAuth: "Las ventanas de inicio de sesión del navegador (HTTP Basic Auth) reciben el acceso sin preguntar.",
     updateCheck: "Una vez por semana busca una versión más reciente en GitHub y muestra un botón para descargarla.",

@@ -112,6 +112,8 @@ pub fn run() {
         log::warn!("auto-type shortcut: {e}");
       }
       desktop::watch_session(handle.clone());
+      desktop::poll_lock(handle.clone());
+      desktop::apply_screen_protect(handle, prefs.screen_protect);
       vault::watch_files(handle.clone());
       desktop::initial_show(handle, &prefs);
       Ok(())
