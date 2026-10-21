@@ -34,6 +34,9 @@ export const DEFAULTS = {
   faviconTimeout: 10,
   // General · interface
   fontSize: 100,
+  accent: 'terracotta',
+  listDensity: 'comfortable',
+  letterAvatars: true,
   colorizePasswords: true,
   monospaceNotes: false,
   trayIcon: true,
@@ -170,6 +173,9 @@ export const SECTIONS: Section[] = [
         id: 'interface', items: [
           { key: 'lang', type: 'select', options: ['en', 'de', 'fr', 'es'] },
           { key: 'theme', type: 'select', options: ['dark', 'light'] },
+          { key: 'accent', type: 'select', options: ['terracotta', 'sage', 'ochre', 'plum', 'sea'] },
+          { key: 'listDensity', type: 'select', options: ['comfortable', 'compact'] },
+          { key: 'letterAvatars', type: 'toggle' },
           { key: 'fontSize', type: 'number', min: 80, max: 150, step: 10, unit: '%' },
           { key: 'colorizePasswords', type: 'toggle' },
           { key: 'monospaceNotes', type: 'toggle' },

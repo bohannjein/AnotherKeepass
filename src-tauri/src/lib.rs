@@ -65,6 +65,7 @@ pub fn run() {
       favicon::favicon_fetch,
       health::health_report,
       health::password_bits,
+      health::entry_password_bits,
       health::password_breached,
       health::health_breach_prefixes,
       health::health_breach_match,

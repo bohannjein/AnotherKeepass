@@ -88,6 +88,7 @@ export interface Backend {
   importItems(vault: string, parent: string | null, items: ImportInput[]): Promise<[number, VaultData]>;
   secrets(vault: string, id: string): Promise<Record<string, string>>;
   passwordBits(password: string): Promise<number>;
+  entryPasswordBits(vault: string, id: string): Promise<number>;
   passwordBreached(password: string): Promise<number>;
   sshSettings(vault: string, id: string): Promise<KeeAgent | null>;
   sshStatus(configured: string): Promise<{ path: string; reachable: boolean }>;
@@ -158,6 +159,7 @@ const desktop: Backend = {
   importItems: (vault, parent, items) => invoke('entry_import', { vault, parent, items }),
   secrets: (vault, id) => invoke('entry_secrets', { vault, id }),
   passwordBits: password => invoke('password_bits', { password }),
+  entryPasswordBits: (vault, id) => invoke('entry_password_bits', { vault, id }),
   passwordBreached: password => invoke('password_breached', { password }),
   sshSettings: (vault, id) => invoke('ssh_settings', { vault, id }),
   sshStatus: configured => invoke('ssh_status', { configured }),
@@ -329,6 +331,7 @@ const demo: Backend = {
     return Math.round(pw.length * Math.log2(pool || 1));
   },
   passwordBreached: async () => 0,
+  async entryPasswordBits(vault, id) { return demo.passwordBits(get(vault).secrets.get(id)?.Password ?? ''); },
   async secrets(vault, id) { return { ...(get(vault).secrets.get(id) ?? {}) }; },
   async totp(vault, id, field) {
     const s = get(vault).secrets.get(id)?.[field] ?? '';

@@ -5,7 +5,7 @@ import { backend, demoAttachment, type AutoTypePick, type BrowserAsk, type Healt
 import { draftToInput, iconUrl, rawToItem, type Attachment, type Draft, type Field, type FieldKind, type Folder, type Item, type ItemType, type VaultInfo } from './model';
 import { DEMO_VAULTS } from './mock';
 import { openExternal, openOptions } from './open';
-import { clearHistory, generate } from './generator';
+import { clearHistory, generate, strengthOf } from './generator';
 import { colorize } from './colorize';
 import { LANGS, strings, type Lang, type Strings } from './i18n';
 import { DEFAULTS, mergePrefs, type Prefs } from './settings';
@@ -120,9 +120,10 @@ export default function App() {
   const zoom = (settings?.fontSize ?? 100) / 100;
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.accent = settings?.accent ?? 'terracotta';
     document.documentElement.lang = lang;
     document.documentElement.style.setProperty('--zoom', String(zoom));
-  }, [theme, lang, zoom]);
+  }, [theme, lang, zoom, settings?.accent]);
 
   openOptions.minimize = !!settings?.minimizeOnUrl;
   const update = (s: Settings) => { setSettings(s); saveSettings(s); };
@@ -168,6 +169,7 @@ export default function App() {
         ? <VaultDialog t={t} known={known} missing={missing} onMissing={p => forget([p])}
             onOpened={(d, meta) => { opened(d, meta); if (settings.minimizeAfterUnlock) backend.windowAfterUnlock(); }} />
         : <Vaults t={t} settings={settings} onSettings={update} open={open} known={known}
+          onKnown={(path, patch) => setKnown(list => { const next = list.map(k => k.path === path ? { ...k, ...patch } : k); saveKnown(next); return next; })}
           onOpened={opened} onUpdate={onUpdate} onClosed={onClosed} onLock={lock} desktopProblems={desktopProblems} />}
     </ContextMenuProvider>
   );
@@ -175,8 +177,9 @@ export default function App() {
 
 type Confirm = { title: string; body: string; label: string; icon: string; action: () => void };
 
-function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onClosed, onLock, desktopProblems }: {
+function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpdate, onClosed, onLock, desktopProblems }: {
   t: Strings; settings: Settings; onSettings: (s: Settings) => void;
+  onKnown: (path: string, patch: Partial<Known>) => void;
   open: Record<string, VaultData>; known: Known[];
   onOpened: (d: VaultData, meta: Known) => void; onUpdate: (d: VaultData) => void; onClosed: (id: string) => void; onLock: () => void;
   desktopProblems: string[];
@@ -193,6 +196,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const [importFor, setImportFor] = useState<string | null>(null);
   const [shareFor, setShareFor] = useState<Folder | null>(null);
   const [settingsFor, setSettingsFor] = useState<{ vault: string; upgrade?: boolean } | null>(null);
+  const [lookFor, setLookFor] = useState<VaultInfo | null>(null);
   // update check: at most once a week, only when enabled
   const [update, setUpdate] = useState<Update | null>(null);
   useEffect(() => {
@@ -545,6 +549,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
       { icon: 'upload_file', label: t.importItems, action: () => setImportFor(v.id) },
       ...(backend.desktop ? [{ icon: 'image_search', label: t.loadIcons, action: () => loadIcons(items.filter(i => i.vault === v.id && !i.trashed && !i.icon)) }] : []),
       { icon: 'tune', label: t.vaultSettings, action: () => setSettingsFor({ vault: v.id }) },
+      { icon: 'palette', label: t.vaultLook, action: () => setLookFor(v) },
       { icon: 'key', label: t.changeMasterKey, action: () => setKeyDialog(v.id) },
       'sep',
       { icon: 'lock', label: t.closeVault, action: () => closeVault(v.id) },
@@ -633,7 +638,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   };
   useEffect(() => { setMulti([]); }, [vault, folder]);
   const row = (i: Item, group = '') => (
-    <Row key={group + i.id} t={t} item={i} active={multi.length > 1 ? multi.includes(i.id) : i.id === selected} onClick={e => choose(e, i.id)}
+    <Row key={group + i.id} t={t} item={i} letters={settings.letterAvatars} active={multi.length > 1 ? multi.includes(i.id) : i.id === selected} onClick={e => choose(e, i.id)}
       dragRef={dragItem} onDragEnd={() => setDragOver(null)}
       onContextMenu={e => { if (!i.id.startsWith('new:')) { setSelected(i.id); openMenu(e, itemMenu(i)); } }} />
   );
@@ -833,7 +838,7 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
           </div>
         )}
         </>}
-        <div className="items">
+        <div className={'items' + (settings.listDensity === 'compact' ? ' compact' : '')} key={vault + '|' + (folder ?? '')}>
           {visible.length === 0 && <div className="empty"><Icon n={vault === HEALTH ? 'verified_user' : 'eco'} />{vault === HEALTH ? t.hOk : t.noItems}</div>}
           {grouped && grouped.map(g => (
             <div key={g.key} className="list-group" id={'grp-' + g.key}>
@@ -916,6 +921,10 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
           vaultName={id => vaultList.find(v => v.id === id)?.name ?? ''}
           onClose={() => setPick(null)}
           onPick={(vault, id, sequence) => { setPick(null); run(backend.autotypePerform(vault, id, sequence)); }} />
+      )}
+      {lookFor && (
+        <VaultLookDialog t={t} vault={lookFor} onClose={() => setLookFor(null)}
+          onSave={(color, icon) => { onKnown(lookFor.id, { color, icon }); setLookFor(null); }} />
       )}
       {settingsFor && (
         <VaultSettingsDialog t={t} vault={settingsFor.vault} upgrade={settingsFor.upgrade} onClose={() => setSettingsFor(null)} onSaved={d => onUpdate(d)} />
@@ -1258,10 +1267,42 @@ function NavItem(p: {
 const isExpired = (i: Item) => !!i.expires && i.expires < today();
 
 /** Type avatar, or the entry's website/custom icon on a soft tile. */
-function ItemAvatar({ item }: { item: Item }) {
-  return item.icon
-    ? <span className="avatar favicon"><img src={item.icon} alt="" draggable={false} /></span>
-    : <span className={'avatar ' + item.type}><Icon n={TYPE_ICON[item.type]} /></span>;
+const LETTER_COLORS = ['clay', 'moss', 'ochre', 'plum', 'sea', 'sand'];
+/** Type avatar, website/custom icon, or (logins) a colored initial derived from the title. */
+function ItemAvatar({ item, letters = true }: { item: Item; letters?: boolean }) {
+  if (item.icon) return <span className="avatar favicon"><img src={item.icon} alt="" draggable={false} /></span>;
+  const initial = item.title.trim().charAt(0).toUpperCase();
+  if (letters && item.type === 'login' && /\p{L}|\d/u.test(initial)) {
+    let h = 0;
+    for (const c of item.title.toLowerCase()) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return <span className={'avatar letter ' + LETTER_COLORS[h % LETTER_COLORS.length]}>{initial}</span>;
+  }
+  return <span className={'avatar ' + item.type}><Icon n={TYPE_ICON[item.type]} /></span>;
+}
+
+const VAULT_COLORS = ['--v-clay', '--v-moss', '--v-ochre', '--v-plum', '--v-sea', '--v-sand'];
+const VAULT_ICONS = ['shield_lock', 'cottage', 'apartment', 'work', 'savings', 'school', 'family_restroom', 'sports_esports', 'code', 'favorite', 'flight', 'storefront'];
+function VaultLookDialog({ t, vault, onClose, onSave }: { t: Strings; vault: VaultInfo; onClose: () => void; onSave: (color: string, icon: string) => void }) {
+  const [color, setColor] = useState(vault.color);
+  const [icon, setIcon] = useState(vault.icon);
+  return createPortal(
+    <div className="scrim" onClick={onClose}>
+      <div className="dialog vault-look" role="dialog" aria-label={t.vaultLook} onClick={e => e.stopPropagation()}>
+        <h3><span className="vi big" style={{ background: `var(${color})` }}><Icon n={icon} /></span>{vault.name}</h3>
+        <span className="label">{t.vaultColor}</span>
+        <div className="swatches">
+          {VAULT_COLORS.map(c => <button key={c} className={'swatch' + (c === color ? ' on' : '')} style={{ background: `var(${c})` }} onClick={() => setColor(c)} aria-label={c} />)}
+        </div>
+        <span className="label">{t.vaultIcon}</span>
+        <div className="icon-grid">
+          {VAULT_ICONS.map(i => <button key={i} className={'icon-pick' + (i === icon ? ' on' : '')} onClick={() => setIcon(i)} aria-label={i}><Icon n={i} /></button>)}
+        </div>
+        <div className="row">
+          <button className="btn text" onClick={onClose}>{t.cancel}</button>
+          <button className="btn filled" onClick={() => onSave(color, icon)}><Icon n="check" />{t.save}</button>
+        </div>
+      </div>
+    </div>, document.body);
 }
 
 /** Any image the webview can decode → 64×64 PNG (base64), what KeePass clients expect. */
@@ -1282,8 +1323,8 @@ function toPng(b64: string): Promise<string | null> {
   });
 }
 
-function Row({ t, item, active, onClick, dragRef, onDragEnd, onContextMenu }: {
-  t: Strings; item: Item; active: boolean; onClick: (e: React.MouseEvent) => void;
+function Row({ t, item, active, onClick, dragRef, onDragEnd, onContextMenu, letters }: {
+  t: Strings; item: Item; active: boolean; onClick: (e: React.MouseEvent) => void; letters?: boolean;
   dragRef: React.MutableRefObject<Item | null>; onDragEnd: () => void; onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const saved = !item.id.startsWith('new:');
@@ -1291,7 +1332,7 @@ function Row({ t, item, active, onClick, dragRef, onDragEnd, onContextMenu }: {
     <button className={'item' + (active ? ' active' : '')} onClick={onClick} onContextMenu={onContextMenu} draggable={saved}
       onDragStart={e => { dragRef.current = item; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', item.title); }}
       onDragEnd={() => { dragRef.current = null; onDragEnd(); }}>
-      <ItemAvatar item={item} />
+      <ItemAvatar item={item} letters={letters} />
       <span><b>{item.title || t.untitled}</b><span>{item.subtitle || t[item.type]}</span></span>
       {isExpired(item) ? <span className="pin expired" title={t.expired}><Icon n="event_busy" /></span>
         : item.pinned && <span className="pin"><Icon n="push_pin" fill /></span>}
@@ -1339,8 +1380,8 @@ function useTotp(get: (() => Promise<Totp>) | undefined, enabled: boolean) {
   return s;
 }
 
-function FieldRow({ t, f, prefs, onCopy, reveal, totp, onEdit }: {
-  t: Strings; f: Field; prefs: Prefs; onCopy: () => void; onEdit: () => void;
+function FieldRow({ t, f, prefs, onCopy, reveal, totp, onEdit, strength }: {
+  t: Strings; f: Field; prefs: Prefs; onCopy: () => void; onEdit: () => void; strength?: () => Promise<number>;
   reveal?: () => Promise<string>; totp?: () => Promise<Totp>;
 }) {
   const isPw = f.key === 'password';
@@ -1360,6 +1401,11 @@ function FieldRow({ t, f, prefs, onCopy, reveal, totp, onEdit }: {
     return () => clearTimeout(timer);
   }, [shown, maskable, prefs.revealSeconds, f.protected, f.loaded]);
   const otp = useTotp(totp, f.kind === 'totp' && !(maskable && !shown));
+  const [bits, setBits] = useState<number | null>(null);
+  // short "copied" pulse on the row
+  const [flash, setFlash] = useState(false);
+  const copy = () => { onCopy(); setFlash(true); setTimeout(() => setFlash(false), 650); };
+  useEffect(() => { if (strength) strength().then(setBits).catch(() => {}); }, [strength]);
   const openMenu = useContextMenu();
   const menu = (e: React.MouseEvent) => openMenu(e, [
     { icon: 'content_copy', label: t.copy, action: onCopy },
@@ -1394,16 +1440,21 @@ function FieldRow({ t, f, prefs, onCopy, reveal, totp, onEdit }: {
   const multi = f.key && MULTILINE.has(f.key);
   return (
     // whole row copies (click or double-click per settings); inner controls stop propagation
-    <div className="field copyable" role="button" tabIndex={0} title={prefs.copyOnDoubleClick ? undefined : t.clickToCopy}
+    <div className={'field copyable' + (flash ? ' copied' : '')} role="button" tabIndex={0} title={prefs.copyOnDoubleClick ? undefined : t.clickToCopy}
       aria-label={`${t.copy}: ${name}`} onContextMenu={menu}
-      onClick={prefs.copyOnDoubleClick ? undefined : onCopy}
-      onDoubleClick={f.kind === 'url' ? urlAction : prefs.copyOnDoubleClick ? onCopy : undefined}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCopy(); } }}>
+      onClick={prefs.copyOnDoubleClick ? undefined : copy}
+      onDoubleClick={f.kind === 'url' ? urlAction : prefs.copyOnDoubleClick ? copy : undefined}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copy(); } }}>
       <Icon n={fieldIcon(f)} />
       <div>
         <span className="label">{name}</span>
         <div className={'val' + (mono ? ' mono' : '') + (multi ? ' multi' : '')}
           title={!multi && !isSecret(f) && typeof val === 'string' ? val : undefined}>{val}</div>
+        {bits !== null && bits > 0 && (
+          <span className={'field-strength ' + strengthOf(bits)} title={`≈ ${bits} bit`}>
+            <i style={{ transform: `scaleX(${Math.min(1, bits / 120)})` }} />
+          </span>
+        )}
       </div>
       <div className="tools">
         {maskable && (
@@ -1505,6 +1556,7 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
     return secrets.current;
   };
   const revealer = (raw: string) => () => getSecrets().then(s => s[raw] ?? '');
+  const passwordBits = useCallback(() => backend.entryPasswordBits(item.vault, item.id), [item.vault, item.id, item.modified]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startEdit = async () => {
     const next = fromItem();
@@ -1547,7 +1599,7 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
     <>
       <header>
         <div className="hero">
-          <ItemAvatar item={item} />
+          <ItemAvatar item={item} letters={prefs.letterAvatars} />
           <div>
             {draft ? (
               <input className="title-edit" value={draft.title} placeholder={t.title} aria-label={t.title} autoFocus={isNew}
@@ -1643,6 +1695,7 @@ function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyT
               <FieldRow key={f.raw ?? fieldName(t, f)} t={t} f={f} prefs={prefs} onEdit={startEdit}
                 onCopy={() => onCopyField(f, fieldName(t, f))}
                 reveal={f.protected && f.raw && !isNew ? revealer(f.raw) : undefined}
+                strength={f.key === 'password' && !isNew ? passwordBits : undefined}
                 totp={f.kind === 'totp' && !isNew && f.raw ? () => getTotp(f.raw!) : undefined} />
             ))}
         </div>

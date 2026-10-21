@@ -196,6 +196,15 @@ mod tests {
     }
 }
 
+/// Strength of an entry's stored password, for the bar in the entry view.
+#[tauri::command]
+pub fn entry_password_bits(state: tauri::State<'_, Vaults>, vault: String, id: String) -> Result<u32, String> {
+    let map = state.0.lock().map_err(|_| "lock")?;
+    let v = map.get(&vault).ok_or("vault_closed")?;
+    let e = v.db().entry(keepass::db::EntryId::from(uuid::Uuid::parse_str(&id).map_err(|_| "not_found")?)).ok_or("not_found")?;
+    Ok(entropy_bits(e.get("Password").unwrap_or_default()) as u32)
+}
+
 /// Strength of a password typed in the UI (master password): estimated bits.
 #[tauri::command]
 pub fn password_bits(password: String) -> u32 {

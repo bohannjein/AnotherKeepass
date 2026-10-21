@@ -1004,3 +1004,62 @@ kbd {
 .seg { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .seg .chip { white-space: nowrap; flex-shrink: 0; }
 .jump-bar { right: 14px; }
+/* ---------- accent palettes (default terracotta = the base tokens) ---------- */
+:root[data-accent='sage'] { --primary: #b1d18a; --on-primary: #1f3701; --primary-container: #354e16; --on-primary-container: #cdeda3; }
+:root[data-accent='ochre'] { --primary: #e9c16c; --on-primary: #3f2e00; --primary-container: #5b4300; --on-primary-container: #ffdf9e; }
+:root[data-accent='plum'] { --primary: #f0b3e8; --on-primary: #4f1b4d; --primary-container: #683365; --on-primary-container: #ffd7f5; }
+:root[data-accent='sea'] { --primary: #82d3e0; --on-primary: #00363e; --primary-container: #004f59; --on-primary-container: #a2eefd; }
+:root[data-theme='light'][data-accent='sage'] { --primary: #4c662b; --on-primary: #fff; --primary-container: #cdeda3; --on-primary-container: #354e16; }
+:root[data-theme='light'][data-accent='ochre'] { --primary: #775a0b; --on-primary: #fff; --primary-container: #ffdf9e; --on-primary-container: #5b4300; }
+:root[data-theme='light'][data-accent='plum'] { --primary: #7f4b7b; --on-primary: #fff; --primary-container: #ffd7f5; --on-primary-container: #643461; }
+:root[data-theme='light'][data-accent='sea'] { --primary: #006874; --on-primary: #fff; --primary-container: #9eeffd; --on-primary-container: #004f58; }
+:root { --v-plum: #5e2f5a; --v-sea: #00474f; --v-sand: #5a4a32; }
+:root[data-theme='light'] { --v-plum: #ffd7f5; --v-sea: #c6f0f7; --v-sand: #f0e0c8; }
+
+/* ---------- letter avatars ---------- */
+.avatar.letter { font-weight: 800; font-size: 19px; border-radius: var(--r-full); }
+.avatar.letter.clay { background: #723610; color: #ffdbc8; }
+.avatar.letter.moss { background: #354e16; color: #cdeda3; }
+.avatar.letter.ochre { background: #5b4300; color: #ffdf9e; }
+.avatar.letter.plum { background: #683365; color: #ffd7f5; }
+.avatar.letter.sea { background: #004f59; color: #a2eefd; }
+.avatar.letter.sand { background: #4f4539; color: #f2dfc9; }
+:root[data-theme='light'] .avatar.letter.clay { background: #ffdbc8; color: #723610; }
+:root[data-theme='light'] .avatar.letter.moss { background: #cdeda3; color: #354e16; }
+:root[data-theme='light'] .avatar.letter.ochre { background: #ffdf9e; color: #5b4300; }
+:root[data-theme='light'] .avatar.letter.plum { background: #ffd7f5; color: #683365; }
+:root[data-theme='light'] .avatar.letter.sea { background: #a2eefd; color: #004f59; }
+:root[data-theme='light'] .avatar.letter.sand { background: #f2dfc9; color: #4f4539; }
+.hero .avatar.letter { font-size: 32px; }
+
+/* ---------- compact list ---------- */
+.items.compact .item { padding: 5px 10px; gap: 10px; grid-template-columns: 32px 1fr auto; }
+.items.compact .avatar { width: 32px; height: 32px; font-size: 15px; }
+.items.compact .avatar .ms { font-size: 18px; }
+.items.compact .item b { font-size: 14px; }
+.items.compact .item b + span { font-size: 12px; }
+
+/* ---------- vault look ---------- */
+.vault-look h3 .vi.big { width: 44px; height: 44px; border-radius: var(--r-m); display: grid; place-items: center; color: var(--v-on); }
+.swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+.swatch { width: 40px; height: 40px; border-radius: var(--r-full); border: 3px solid transparent; transition: border-radius .35s var(--spring); }
+.swatch.on { border-color: var(--primary); border-radius: var(--r-s); }
+.icon-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.icon-pick { height: 44px; border-radius: var(--r-m); display: grid; place-items: center; background: var(--surface-c); }
+.icon-pick.on { background: var(--primary-container); color: var(--on-primary-container); }
+
+/* ---------- password strength in the entry view ---------- */
+.field-strength { display: block; width: 120px; height: 4px; margin-top: 6px; border-radius: var(--r-full); background: var(--surface-highest); overflow: hidden; }
+.field-strength i { display: block; height: 100%; width: 100%; transform-origin: left; border-radius: inherit; background: currentColor; transition: transform .5s var(--spring); }
+.field-strength.weak { color: #ffb4ab; } .field-strength.medium { color: #e8c35a; } .field-strength.strong { color: var(--secondary); }
+:root[data-theme='light'] .field-strength.weak { color: #ba1a1a; } :root[data-theme='light'] .field-strength.medium { color: #8a6a00; }
+
+/* ---------- motion: list enters, copy pulse ---------- */
+.items .item { animation: item-in .35s var(--ease) backwards; }
+.items .item:nth-child(2) { animation-delay: .02s; } .items .item:nth-child(3) { animation-delay: .04s; }
+.items .item:nth-child(4) { animation-delay: .06s; } .items .item:nth-child(5) { animation-delay: .08s; }
+.items .item:nth-child(6) { animation-delay: .1s; } .items .item:nth-child(n+7) { animation-delay: .12s; }
+@keyframes item-in { from { opacity: 0; transform: translateY(6px); } }
+.field.copied { animation: copied .65s var(--spring); }
+@keyframes copied { 40% { transform: scale(.98); background: var(--primary-container); color: var(--on-primary-container); } }
+@media (prefers-reduced-motion: reduce) { .items .item, .field.copied { animation: none; } }
