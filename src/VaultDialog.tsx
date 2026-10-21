@@ -68,7 +68,7 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
 
   const explain = (e: unknown) => {
     const code = errorCode(e);
-    return code === 'wrong_key' ? t.wrongKey : code === 'empty_key' ? t.masterPassword : `${t.fileError} (${String(e)})`;
+    return code === 'hello_cancel' ? t.helloFailed : code === 'wrong_key' ? t.wrongKey : code === 'empty_key' ? t.masterPassword : `${t.fileError} (${String(e)})`;
   };
 
   const submit = async (e: React.FormEvent) => {

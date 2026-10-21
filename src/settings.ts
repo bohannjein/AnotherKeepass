@@ -58,7 +58,8 @@ export const DEFAULTS = {
   autoLockSeconds: 240,
   clearSearch: true,
   clearSearchMinutes: 5,
-  quickUnlock: true,
+  helloUnlock: false,
+  helloRequirePassword: false,
   lockOnSession: true,
   lockOnUserSwitch: true,
   screenProtect: true,
@@ -214,7 +215,8 @@ export const SECTIONS: Section[] = [
       },
       {
         id: 'lock', items: [
-          { key: 'quickUnlock', type: 'toggle' },
+          { key: 'helloUnlock', type: 'toggle' },
+          { key: 'helloRequirePassword', type: 'toggle', dependsOn: 'helloUnlock' },
           { key: 'lockOnSession', type: 'toggle' },
           { key: 'lockOnUserSwitch', type: 'toggle' },
           { key: 'screenProtect', type: 'toggle' },

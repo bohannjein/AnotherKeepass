@@ -45,6 +45,7 @@ pub struct DesktopPrefs {
     pub ssh_enabled: bool,
     pub ssh_auth_sock: String,
     pub quick_unlock: bool,
+    pub hello_both: bool,
     pub tray_style: String,
     pub at_remember: u64,
     pub auto_reload: bool,
@@ -101,6 +102,7 @@ impl Default for DesktopPrefs {
             ssh_enabled: false,
             ssh_auth_sock: String::new(),
             quick_unlock: false,
+            hello_both: false,
             tray_style: "colorful".into(),
             at_remember: 10,
             auto_reload: true,
@@ -372,6 +374,7 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
     apply_screen_protect(&app, prefs.screen_protect);
     apply_keeshare(&prefs);
     crate::vault::quick_unlock_enable(prefs.quick_unlock);
+    crate::vault::HELLO_BOTH.store(prefs.hello_both, std::sync::atomic::Ordering::Relaxed);
     let mut problems = Vec::new();
 
     if let Some(tray) = app.tray_by_id(TRAY_ID) {

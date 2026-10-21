@@ -60,7 +60,7 @@ const DESKTOP_KEYS = [
   'atShortcut', 'atStartDelay', 'atCharDelay', 'atAlwaysAsk', 'atMatchTitle', 'atMatchUrl', 'atHideExpired',
   'browserEnabled', 'bChrome', 'bFirefox', 'bChromium', 'bEdge', 'bBrave', 'bVivaldi', 'bTor', 'bUnlock', 'bMatchScheme',
   'bBestMatch', 'bAllowExpired', 'bSearchAll', 'bNoAccessConfirm', 'bUpdateNoConfirm', 'bKph', 'bUpdateManifests',
-  'bCustomProxy', 'bProxyPath', 'bSkipBasicAuth', 'bLocalhostPasskeys', 'backupBeforeSave', 'backupPath', 'autoReload', 'atRelock', 'atRemember', 'trayStyle', 'quickUnlock', 'sshEnabled', 'sshAuthSock', 'ksImport', 'ksExport',
+  'bCustomProxy', 'bProxyPath', 'bSkipBasicAuth', 'bLocalhostPasskeys', 'backupBeforeSave', 'backupPath', 'autoReload', 'atRelock', 'atRemember', 'trayStyle', 'sshEnabled', 'sshAuthSock', 'ksImport', 'ksExport',
 ] as const;
 const KNOWN_KEY = 'anotherkeepass.vaults';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -139,7 +139,12 @@ export default function App() {
   const [desktopProblems, setDesktopProblems] = useState<string[]>([]);
   useEffect(() => {
     if (!settings || !backend.desktop) return;
-    const prefs = { ...Object.fromEntries(DESKTOP_KEYS.map(k => [k, settings[k]])), trayLabels: [t.trayShow, t.trayLockAll, t.trayQuit] };
+    const prefs = {
+      ...Object.fromEntries(DESKTOP_KEYS.map(k => [k, settings[k]])), trayLabels: [t.trayShow, t.trayLockAll, t.trayQuit],
+      // Windows Hello: instead of the password after a lock, or in addition to it on every unlock
+      quickUnlock: settings.helloUnlock && !settings.helloRequirePassword,
+      helloBoth: settings.helloUnlock && settings.helloRequirePassword,
+    };
     backend.desktopApply(prefs).then(setDesktopProblems).catch(e => { backend.log('error', 'desktopApply: ' + String(e)); setDesktopProblems([String(e)]); });
   }, [settings, t]);
   const onClosed = useCallback((id: string) => setOpen(o => { const n = { ...o }; delete n[id]; return n; }), []);

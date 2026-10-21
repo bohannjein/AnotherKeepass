@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { DEFAULTS, SECTIONS, clamp, mergePrefs, type PrefKey, type Prefs, type Setting } from './settings';
 import { settingsStrings, type SettingsStrings } from './i18n-settings';
 import { LANGS, type Strings } from './i18n';
@@ -37,7 +38,12 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
       ts.groups[g.id as keyof SettingsStrings['groups']]].some(x => x?.toLowerCase().includes(q))),
   }))).filter(r => r.items.length), [q, sections, ts]);
 
-  const set = (key: PrefKey, value: Prefs[PrefKey]) => onChange({ ...prefs, [key]: value });
+  const [confirmHello, setConfirmHello] = useState(false);
+  const set = (key: PrefKey, value: Prefs[PrefKey]) => {
+    // Windows Hello replaces the master passwords: only after an explicit OK
+    if (key === 'helloUnlock' && value === true && !prefs.helloUnlock) { setConfirmHello(true); return; }
+    onChange({ ...prefs, [key]: value });
+  };
 
   // a setting is active only if its whole dependsOn chain is switched on
   const enabled = (s: Setting): boolean => {
@@ -132,7 +138,20 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
       <input ref={fileInput} type="file" accept="application/json,.json" hidden
         onChange={e => { importPrefs(e.target.files?.[0]); e.target.value = ''; }} />
 
-      {confirmReset && (
+      {confirmHello && createPortal(
+        <div className="scrim" onClick={() => setConfirmHello(false)}>
+          <div className="dialog" role="alertdialog" aria-label={t.helloTitle} onClick={e => e.stopPropagation()}>
+            <h3><Icon n="fingerprint" />{t.helloTitle}</h3>
+            <p className="dialog-body">{t.helloBody}</p>
+            <p className="form-note"><Icon n="shield_lock" />{t.helloBoth}</p>
+            <div className="row">
+              <button className="btn text" onClick={() => setConfirmHello(false)}>{t.cancel}</button>
+              <button className="btn filled" onClick={() => { onChange({ ...prefs, helloUnlock: true }); setConfirmHello(false); }}>{t.helloOk}</button>
+            </div>
+          </div>
+        </div>
+      , document.body)}
+      {confirmReset && createPortal(
         <div className="scrim" onClick={() => setConfirmReset(false)}>
           <div className="dialog" role="alertdialog" aria-label={ts.ui.resetTitle} onClick={e => e.stopPropagation()}>
             <h3><Icon n="restart_alt" />{ts.ui.resetTitle}</h3>
@@ -148,7 +167,7 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 }

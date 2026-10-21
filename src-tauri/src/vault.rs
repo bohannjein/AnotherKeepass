@@ -570,10 +570,11 @@ pub async fn vault_open(
     keyfile: Option<String>,
 ) -> R<VaultDto> {
     let key = make_key(password.as_deref(), keyfile.as_deref())?;
-    open_with(app, state, path, key).await
+    open_with(app, state, path, key, true).await
 }
 
-async fn open_with(app: tauri::AppHandle, state: tauri::State<'_, Vaults>, path: String, key: DatabaseKey) -> R<VaultDto> {
+/// `second_factor`: in "password and Windows Hello" mode ask Hello once the key is known to be right.
+async fn open_with(app: tauri::AppHandle, state: tauri::State<'_, Vaults>, path: String, key: DatabaseKey, second_factor: bool) -> R<VaultDto> {
     // Argon2 takes ~1 s: run it off the main thread
     let p = path.clone();
     let k = key.clone();
@@ -593,6 +594,16 @@ async fn open_with(app: tauri::AppHandle, state: tauri::State<'_, Vaults>, path:
     .await
     .map_err(|e| format!("open:{e}"))??;
     log::info!("vault opened: {} entries, {} ms (key derivation + decrypt)", db.num_entries(), started.elapsed().as_millis());
+    if second_factor && HELLO_BOTH.load(std::sync::atomic::Ordering::Relaxed) {
+        let hwnd = crate::desktop::main_hwnd(&app);
+        let ok = tauri::async_runtime::spawn_blocking(move || {
+            // no Hello on this PC (any more): don't lock the user out, the password was right
+            !crate::hello::available() || crate::hello::verify(hwnd, "AnotherKeepass")
+        }).await.unwrap_or(false);
+        if !ok {
+            return Err("hello_cancel".into());
+        }
+    }
     let mut v = OpenVault { path: PathBuf::from(&path), db, key };
     if shared {
         write_db(&mut v)?; // KeeShare import changed the folder
@@ -664,6 +675,9 @@ pub fn lock_vaults(map: &mut HashMap<String, OpenVault>) {
 }
 
 /// Turning the option off forgets every kept key at once.
+/// "Password and Windows Hello": every unlock with the master password also needs Hello.
+pub static HELLO_BOTH: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 pub fn quick_unlock_enable(on: bool) {
     QUICK_UNLOCK.store(on, std::sync::atomic::Ordering::Relaxed);
     if !on {
@@ -689,7 +703,7 @@ pub async fn vault_quick_unlock(app: tauri::AppHandle, state: tauri::State<'_, V
     if !tauri::async_runtime::spawn_blocking(move || crate::hello::verify(hwnd, &message)).await.unwrap_or(false) {
         return Err("hello_cancel".into());
     }
-    open_with(app, state, path, key).await
+    open_with(app, state, path, key, false).await
 }
 
 #[tauri::command]

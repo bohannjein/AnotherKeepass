@@ -23,6 +23,7 @@ pub fn run() {
   desktop::apply_ssh(&prefs);
   desktop::apply_keeshare(&prefs);
   vault::quick_unlock_enable(prefs.quick_unlock);
+  vault::HELLO_BOTH.store(prefs.hello_both, std::sync::atomic::Ordering::Relaxed);
   let mut builder = tauri::Builder::default();
   // must be the first plugin: a second start only focuses the running window
   if prefs.single_instance {
