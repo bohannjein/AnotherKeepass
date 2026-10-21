@@ -462,7 +462,7 @@ pub fn on_session_event<R: Runtime>(app: &AppHandle<R>, code: u32) {
 /// Screenshots, screen sharing, Teams/TeamViewer/RDP recording see a black window
 /// (SetWindowDisplayAffinity WDA_EXCLUDEFROMCAPTURE via Tauri).
 pub fn apply_screen_protect<R: Runtime>(app: &AppHandle<R>, on: bool) {
-    for w in app.webview_windows().values() {
+    for w in app.webview_windows().values().filter(|w| w.label() != crate::quick::LABEL) {
         if let Err(e) = w.set_content_protected(on) {
             log::warn!("screen protection: {e}");
         }

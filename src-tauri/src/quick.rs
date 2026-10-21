@@ -21,7 +21,9 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .center()
         .visible(false)
         .build()?;
-    let _ = w.set_content_protected(desktop::prefs(app).screen_protect);
+    // always hidden from capture: TeamViewer & co. draw this hidden, transparent, topmost
+    // window as a white box in front of everything
+    let _ = w.set_content_protected(true);
     Ok(())
 }
 
