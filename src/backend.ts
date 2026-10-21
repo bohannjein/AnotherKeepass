@@ -47,6 +47,7 @@ export interface Health { vault: string; id: string; bits: number; weak: boolean
 export interface KeeAgent { allow: boolean; addAtOpen: boolean; removeAtClose: boolean; confirm: boolean; lifetime: number; attachment: string }
 /** KeeShare setting of a folder */
 export interface Share { kind: 'sync' | 'export' | 'import'; path: string; password: string }
+export interface Update { version: string; url: string; notes: string }
 export interface Totp { code: string; remaining: number; period: number }
 export interface AutoTypeCandidate { vault: string; id: string; title: string; username: string; sequence: string }
 export interface AutoTypePick { windowTitle: string; candidates: AutoTypeCandidate[] }
@@ -96,6 +97,8 @@ export interface Backend {
   /** desktop options mirrored to Rust; returns problems (e.g. invalid shortcut) */
   desktopApply(prefs: Record<string, unknown>): Promise<string[]>;
   windowMinimize(): Promise<void>;
+  /** newer GitHub release than this build, if any */
+  updateCheck(beta: boolean): Promise<Update | null>;
   /** minimizes only if the browser/Auto-Type asked for the unlock */
   windowAfterUnlock(): Promise<void>;
   autotypePerform(vault: string, id: string, sequence: string | null): Promise<void>;
@@ -154,6 +157,7 @@ const desktop: Backend = {
   readText: () => invoke('clipboard_read_text'),
   desktopApply: prefs => invoke('desktop_apply', { prefs }),
   windowMinimize: () => invoke('window_minimize'),
+  updateCheck: beta => invoke('update_check', { beta }),
   windowAfterUnlock: () => invoke('window_after_unlock'),
   autotypePerform: (vault, id, sequence) => invoke('autotype_perform', { vault, id, sequence }),
   autotypeEntry: (vault, id) => invoke('autotype_entry', { vault, id }),
@@ -313,6 +317,7 @@ const demo: Backend = {
   readText: () => navigator.clipboard.readText(),
   desktopApply: async () => [],
   windowMinimize: async () => {},
+  updateCheck: async () => null,
   windowAfterUnlock: async () => {},
   autotypePerform: async () => {},
   autotypeEntry: async () => {},

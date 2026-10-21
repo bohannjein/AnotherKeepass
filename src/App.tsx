@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { backend, demoAttachment, type AutoTypePick, type BrowserAsk, type Health, type Totp, type VaultData } from './backend';
+import { backend, demoAttachment, type AutoTypePick, type BrowserAsk, type Health, type Totp, type Update, type VaultData } from './backend';
 import { draftToInput, iconUrl, rawToItem, type Attachment, type Draft, type Field, type FieldKind, type Folder, type Item, type ItemType, type VaultInfo } from './model';
 import { DEMO_VAULTS } from './mock';
 import { openExternal, openOptions } from './open';
@@ -182,7 +182,20 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
   const [newMenu, setNewMenu] = useState(false);
   const [showGen, setShowGen] = useState(false);
   const [importFor, setImportFor] = useState<string | null>(null);
-  const [shareFor, setShareFor] = useState<Folder | null>(null); // target vault of the import dialog
+  const [shareFor, setShareFor] = useState<Folder | null>(null);
+  // update check: at most once a week, only when enabled
+  const [update, setUpdate] = useState<Update | null>(null);
+  useEffect(() => {
+    if (!settings.updateCheck || !backend.desktop) return;
+    const KEY = 'anotherkeepass.updateChecked';
+    let last = 0;
+    try { last = Number(localStorage.getItem(KEY) ?? 0); } catch { /* no storage */ }
+    if (Date.now() - last < 7 * 86_400_000) return;
+    backend.updateCheck(settings.updateBeta).then(u => {
+      try { localStorage.setItem(KEY, String(Date.now())); } catch { /* no storage */ }
+      if (u) { setUpdate(u); notify(t.updateAvailable.replace('{v}', u.version)); }
+    }).catch(e => backend.log('warn', 'update check: ' + String(e)));
+  }, [settings.updateCheck, settings.updateBeta]); // eslint-disable-line react-hooks/exhaustive-deps // target vault of the import dialog
   const [folderDialog, setFolderDialog] = useState<{ mode: 'create' | 'rename'; vault?: string; id?: string; name?: string; parent?: string } | null>(null);
   const openMenu = useContextMenu();
   const [vaultDialog, setVaultDialog] = useState<{ path?: string } | null>(null);
@@ -686,6 +699,10 @@ function Vaults({ t, settings, onSettings, open, known, onOpened, onUpdate, onCl
             onClick={() => onSettings({ ...settings, theme: settings.theme === 'dark' ? 'light' : 'dark' })}>
             <Icon n={settings.theme === 'dark' ? 'light_mode' : 'dark_mode'} />
           </button>
+          {update && (
+            <button className="icon-btn update-btn" title={t.updateAvailable.replace('{v}', update.version)} aria-label={t.updateAvailable.replace('{v}', update.version)}
+              onClick={() => openExternal(update.url)}><Icon n="system_update" /></button>
+          )}
           <button className="icon-btn" title={t.lock} aria-label={t.lock} onClick={onLock} style={{ marginLeft: 'auto' }}><Icon n="lock" /></button>
         </div>
       </aside>

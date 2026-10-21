@@ -116,7 +116,7 @@ export type Setting =
   | { key: PrefKey; type: 'number'; min: number; max: number; unit: 's' | 'ms' | 'min' | 'd' | '%' | ''; step?: number; planned?: boolean; dependsOn?: PrefKey; platform?: Platform }
   | { key: PrefKey; type: 'select'; options: string[]; planned?: boolean; dependsOn?: PrefKey; platform?: Platform }
   | { key: 'sshStatus' | 'sshAuthSockCurrent' | 'skProviderCurrent' | 'ksFingerprint'; type: 'info'; value: string; platform?: Platform }
-  | { key: 'reset' | 'import' | 'export' | 'ksGenerate' | 'bwConnect' | 'vwConnect'; type: 'action'; planned?: boolean; wip?: boolean };
+  | { key: 'reset' | 'import' | 'export' | 'updateNow' | 'ksGenerate' | 'bwConnect' | 'vwConnect'; type: 'action'; planned?: boolean; wip?: boolean };
 
 export type Platform = 'windows' | 'linux-mac';
 export interface Group { id: string; items: Setting[] }
@@ -136,8 +136,9 @@ export const SECTIONS: Section[] = [
           { key: 'recentCount', type: 'number', min: 1, max: 25, unit: '', dependsOn: 'rememberRecent' },
           { key: 'reopenLast', type: 'toggle', dependsOn: 'rememberRecent' },
           { key: 'rememberKeyfiles', type: 'toggle', dependsOn: 'rememberRecent' },
-          { key: 'updateCheck', type: 'toggle', planned: true },
-          { key: 'updateBeta', type: 'toggle', dependsOn: 'updateCheck', planned: true },
+          { key: 'updateCheck', type: 'toggle' },
+          { key: 'updateBeta', type: 'toggle', dependsOn: 'updateCheck' },
+          { key: 'updateNow', type: 'action' },
           { key: 'showExpiring', type: 'toggle' },
           { key: 'expiryDays', type: 'number', min: 0, max: 90, unit: 'd', dependsOn: 'showExpiring' },
         ],

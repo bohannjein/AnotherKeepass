@@ -69,6 +69,9 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
     if (key === 'export') exportPrefs();
     else if (key === 'import') fileInput.current?.click();
     else if (key === 'reset') setConfirmReset(true);
+    else if (key === 'updateNow') backend.updateCheck(prefs.updateBeta)
+      .then(u => onSnack(u ? t.updateAvailable.replace('{v}', u.version) : t.updateNone))
+      .catch(() => onSnack(t.updateFailed, true));
   };
 
   return (
@@ -173,7 +176,7 @@ function Row({ s, ts, prefs, disabled, set, onAction, t, ssh }: {
           <button className='wip-btn' disabled><Icon n={s.key === 'bwConnect' ? 'cloud' : 'dns'} />{label}<span className='pill'>{ts.ui.wip}</span></button>
         ) : (
           <button className={'btn ' + (s.key === 'reset' ? 'outlined' : 'tonal')} onClick={() => onAction(s.key)}>
-            <Icon n={{ export: 'download', import: 'upload', reset: 'restart_alt', ksGenerate: 'key', bwConnect: 'cloud', vwConnect: 'dns' }[s.key]} />{label}
+            <Icon n={{ export: 'download', import: 'upload', reset: 'restart_alt', updateNow: 'system_update', ksGenerate: 'key', bwConnect: 'cloud', vwConnect: 'dns' }[s.key]} />{label}
           </button>
         )}
       </div>

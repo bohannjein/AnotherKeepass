@@ -8,6 +8,7 @@ mod clipboard;
 mod desktop;
 mod favicon;
 mod health;
+mod update;
 mod keeshare;
 mod ssh;
 mod hello;
@@ -45,6 +46,7 @@ pub fn run() {
       vault::vault_rename,
       vault::entry_save,
       vault::entry_import,
+      update::update_check,
       vault::keeshare_get,
       vault::keeshare_set,
       ssh::ssh_settings,

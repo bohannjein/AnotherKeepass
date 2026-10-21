@@ -46,6 +46,7 @@ const en = {
     browserCustom: 'Custom browser', ssh: 'SSH agent', ksActivation: 'Activation', ksCert: 'Own certificate',
   },
   labels: {
+    updateNow: "Check for updates now",
     showPlanned: 'Show planned options',
     bwConnect: 'Connect Bitwarden account', vwConnect: 'Connect Vaultwarden server (self-hosted)',
     lang: 'Language', theme: 'Theme',
@@ -99,6 +100,8 @@ const en = {
     ksSigner: 'Signer name', ksFingerprint: 'Certificate fingerprint', ksGenerate: 'Generate new certificate',
   },
   hints: {
+    updateCheck: "Once a week, looks for a newer release on GitHub and shows a button to download it.",
+    updateBeta: "Also tell about test versions (may be less stable).",
     ksImport: "Folders shared as Import or Synchronize are updated from their shared file (right-click a folder → Share).",
     ksExport: "Folders shared as Export or Synchronize are written to their shared file on every save.",
     quickUnlock: "After locking, unlock again with face, fingerprint or PIN instead of the master password. The key stays in memory until you close the vault or quit the app.",
@@ -231,6 +234,7 @@ const de: SettingsStrings = {
     browserCustom: 'Benutzerdefinierter Browser', ssh: 'SSH-Agent', ksActivation: 'Aktivierung', ksCert: 'Eigenes Zertifikat',
   },
   labels: {
+    updateNow: "Jetzt nach Updates suchen",
     showPlanned: 'Geplante Optionen anzeigen',
     bwConnect: 'Bitwarden-Konto verbinden', vwConnect: 'Vaultwarden-Server verbinden (selbst gehostet)',
     lang: 'Sprache', theme: 'Design',
@@ -284,6 +288,8 @@ const de: SettingsStrings = {
     ksSigner: 'Name des Unterzeichners', ksFingerprint: 'Fingerabdruck des Zertifikats', ksGenerate: 'Neues Zertifikat generieren',
   },
   hints: {
+    updateCheck: "Sucht einmal pro Woche auf GitHub nach einer neueren Version und zeigt dann einen Button zum Herunterladen.",
+    updateBeta: "Auch Testversionen melden (eventuell weniger stabil).",
     ksImport: "Als „Importieren“ oder „Synchronisieren“ geteilte Ordner werden aus ihrer Datei aktualisiert (Rechtsklick auf Ordner → Teilen).",
     ksExport: "Als „Exportieren“ oder „Synchronisieren“ geteilte Ordner werden bei jedem Speichern in ihre Datei geschrieben.",
     quickUnlock: "Nach dem Sperren mit Gesicht, Fingerabdruck oder PIN statt Master-Passwort entsperren. Der Schlüssel bleibt im Speicher, bis du den Tresor schließt oder die App beendest.",
@@ -414,6 +420,7 @@ const fr: SettingsStrings = {
     browserCustom: 'Navigateur personnalisé', ssh: 'Agent SSH', ksActivation: 'Activation', ksCert: 'Certificat personnel',
   },
   labels: {
+    updateNow: "Rechercher des mises à jour",
     showPlanned: 'Afficher les options prévues',
     bwConnect: 'Connecter un compte Bitwarden', vwConnect: 'Connecter un serveur Vaultwarden (auto-hébergé)',
     lang: 'Langue', theme: 'Thème',
@@ -467,6 +474,8 @@ const fr: SettingsStrings = {
     ksSigner: 'Nom du signataire', ksFingerprint: 'Empreinte du certificat', ksGenerate: 'Générer un nouveau certificat',
   },
   hints: {
+    updateCheck: "Une fois par semaine, cherche une version plus récente sur GitHub et affiche un bouton pour la télécharger.",
+    updateBeta: "Signaler aussi les versions de test (parfois moins stables).",
     ksImport: "Les dossiers partagés en Import ou Synchronisation sont mis à jour depuis leur fichier (clic droit sur un dossier → Partager).",
     ksExport: "Les dossiers partagés en Export ou Synchronisation sont écrits dans leur fichier à chaque enregistrement.",
     quickUnlock: "Après le verrouillage, déverrouiller avec visage, empreinte ou PIN au lieu du mot de passe maître. La clé reste en mémoire jusqu’à la fermeture du coffre ou de l’application.",
@@ -597,6 +606,7 @@ const es: SettingsStrings = {
     browserCustom: 'Navegador personalizado', ssh: 'Agente SSH', ksActivation: 'Activación', ksCert: 'Certificado propio',
   },
   labels: {
+    updateNow: "Buscar actualizaciones ahora",
     showPlanned: 'Mostrar opciones previstas',
     bwConnect: 'Conectar cuenta de Bitwarden', vwConnect: 'Conectar servidor Vaultwarden (autoalojado)',
     lang: 'Idioma', theme: 'Tema',
@@ -650,6 +660,8 @@ const es: SettingsStrings = {
     ksSigner: 'Nombre del firmante', ksFingerprint: 'Huella del certificado', ksGenerate: 'Generar nuevo certificado',
   },
   hints: {
+    updateCheck: "Una vez por semana busca una versión más reciente en GitHub y muestra un botón para descargarla.",
+    updateBeta: "Avisar también de versiones de prueba (pueden ser menos estables).",
     ksImport: "Las carpetas compartidas como Importar o Sincronizar se actualizan desde su archivo (clic derecho en una carpeta → Compartir).",
     ksExport: "Las carpetas compartidas como Exportar o Sincronizar se escriben en su archivo en cada guardado.",
     quickUnlock: "Tras bloquear, desbloquear con cara, huella o PIN en lugar de la contraseña maestra. La clave queda en memoria hasta cerrar la bóveda o salir de la app.",

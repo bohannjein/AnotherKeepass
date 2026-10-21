@@ -971,3 +971,4 @@ kbd {
 .share-modes .choice small { font-weight: 400; font-size: 13px; opacity: .8; }
 .btn.text.danger { color: #ffb4ab; }
 :root[data-theme='light'] .btn.text.danger { color: #ba1a1a; }
+.update-btn { color: var(--primary); animation: pulse 1.6s var(--ease) infinite alternate; border-radius: var(--r-full); }
