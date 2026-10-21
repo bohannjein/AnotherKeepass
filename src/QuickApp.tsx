@@ -53,8 +53,12 @@ export default function QuickApp() {
 
   return (
     <div className="quick">
-      <CommandPalette items={items} placeholder={t.quickSearch} onClose={hide} autoFocusKey={opened}
-        footer={<><kbd>Enter</kbd> {t.password} <kbd>⇧ Enter</kbd> {t.username} <kbd>Ctrl Enter</kbd> {t.autoType} <kbd>Esc</kbd></>} />
+      <CommandPalette items={items} placeholder={t.quickSearch} onClose={hide} autoFocusKey={opened} empty={vaults.length ? t.noItems : t.quickLocked}
+        hints={[
+          { keys: '↵', label: t.password, icon: 'key' },
+          { keys: '⇧ ↵', label: t.username, icon: 'person' },
+          { keys: 'Ctrl ↵', label: t.autoType, icon: 'keyboard' },
+        ]} />
     </div>
   );
 }

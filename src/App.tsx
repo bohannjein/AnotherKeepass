@@ -977,8 +977,8 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       {palette && createPortal(
         <div className="scrim palette-scrim" onClick={() => setPalette(false)}>
           <div className="palette-dialog" role="dialog" aria-label={t.palette} onClick={e => e.stopPropagation()}>
-            <CommandPalette items={paletteItems} placeholder={t.paletteSearch} onClose={() => setPalette(false)}
-              footer={<><kbd>Enter</kbd> {t.paOpen} <kbd>Ctrl Enter</kbd> {t.password} <kbd>Esc</kbd></>} />
+            <CommandPalette items={paletteItems} placeholder={t.paletteSearch} onClose={() => setPalette(false)} empty={t.noItems}
+              hints={[{ keys: '↵', label: t.paOpen, icon: 'open_in_full' }, { keys: 'Ctrl ↵', label: t.password, icon: 'key' }]} />
           </div>
         </div>, document.body)}
       {exportFor && <ExportDialog t={t} vault={exportFor} onClose={() => setExportFor(null)} onDone={notify} />}

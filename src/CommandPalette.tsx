@@ -36,8 +36,10 @@ function rank(items: PaletteItem[], q: string) {
     .map(x => x.it);
 }
 
-export function CommandPalette({ items, placeholder, footer, onClose, autoFocusKey }: {
-  items: PaletteItem[]; placeholder: string; footer?: React.ReactNode; onClose: () => void; autoFocusKey?: unknown;
+export interface PaletteHint { keys: string; label: string; icon: string }
+
+export function CommandPalette({ items, placeholder, hints, empty, onClose, autoFocusKey }: {
+  items: PaletteItem[]; placeholder: string; hints?: PaletteHint[]; empty: string; onClose: () => void; autoFocusKey?: unknown;
 }) {
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
@@ -65,20 +67,25 @@ export function CommandPalette({ items, placeholder, footer, onClose, autoFocusK
   return (
     <div className="palette" onKeyDown={key}>
       <label className="palette-search">
-        <Icon n="search" />
+        <span className="palette-logo"><Icon n="shield_lock" fill /></span>
         <input ref={input} autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={placeholder} aria-label={placeholder} spellCheck={false} />
       </label>
       <div className="palette-list" ref={list} role="listbox">
+        {!shown.length && <div className="palette-empty"><span className="blob"><Icon n="search_off" /></span>{empty}</div>}
         {shown.map((it, i) => (
           <button key={it.id} role="option" aria-selected={i === sel} className={'palette-item' + (i === sel ? ' on' : '')}
             onMouseEnter={() => setSel(i)} onClick={e => (e.ctrlKey && it.alt ? it.alt() : it.run())}>
-            {it.image ? <span className="avatar sm favicon"><img src={it.image} alt="" /></span> : <span className="avatar sm other"><Icon n={it.icon} /></span>}
+            {it.image ? <span className="avatar favicon"><img src={it.image} alt="" /></span> : <span className="avatar pal"><Icon n={it.icon} /></span>}
             <span className="palette-text"><b>{it.label}</b>{it.sub && <small>{it.sub}</small>}</span>
             {it.hint && <span className="palette-hint">{it.hint}</span>}
           </button>
         ))}
       </div>
-      {footer && <div className="palette-footer">{footer}</div>}
+      {hints && (
+        <div className="palette-footer">
+          {hints.map(h => <span key={h.keys} className="hint-chip"><Icon n={h.icon} /><b>{h.keys}</b>{h.label}</span>)}
+        </div>
+      )}
     </div>
   );
 }
