@@ -46,6 +46,18 @@ jobs:
 
       - run: npm ci
 
+      # fail early with a readable annotation instead of after a full build
+      - name: Check update signing key
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::Secret TAURI_SIGNING_PRIVATE_KEY is empty or not visible here. It must be a Repository secret (Settings > Secrets and variables > Actions > Repository secrets)."
+            exit 1
+          fi
+          echo "::notice::update key present (${#KEY} characters)"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
