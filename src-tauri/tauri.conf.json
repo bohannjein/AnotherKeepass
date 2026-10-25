@@ -28,8 +28,8 @@
     }
   },
   "bundle": {
-    "publisher": "Johann",
-    "copyright": "Copyright (c) 2026 Johann. GPL-3.0-or-later",
+    "publisher": "bohannjein",
+    "copyright": "Copyright (c) 2026 bohannjein. GPL-3.0-or-later",
     "active": true,
     "targets": [
       "nsis",
