@@ -37,6 +37,7 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![desktop::AUTOSTART_ARG])))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(vault::Vaults::default())
@@ -67,6 +68,7 @@ pub fn run() {
             vault::vault_settings_set,
             vault::kdf_benchmark,
             update::update_check,
+            update::update_install,
             vault::keeshare_get,
             vault::keeshare_set,
             ssh::ssh_settings,

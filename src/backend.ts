@@ -133,6 +133,8 @@ export interface Backend {
   windowMinimize(): Promise<void>;
   /** newer GitHub release than this build, if any */
   updateCheck(beta: boolean): Promise<Update | null>;
+  /** false: not installable through the updater (open the release page) */
+  updateInstall(): Promise<boolean>;
   /** minimizes only if the browser/Auto-Type asked for the unlock */
   windowAfterUnlock(): Promise<void>;
   autotypePerform(vault: string, id: string, sequence: string | null): Promise<void>;
@@ -207,6 +209,7 @@ const desktop: Backend = {
   desktopApply: prefs => invoke('desktop_apply', { prefs }),
   windowMinimize: () => invoke('window_minimize'),
   updateCheck: beta => invoke('update_check', { beta }),
+  updateInstall: () => invoke('update_install'),
   windowAfterUnlock: () => invoke('window_after_unlock'),
   autotypePerform: (vault, id, sequence) => invoke('autotype_perform', { vault, id, sequence }),
   autotypeEntry: (vault, id) => invoke('autotype_entry', { vault, id }),
@@ -394,6 +397,7 @@ const demo: Backend = {
   desktopApply: async () => [],
   windowMinimize: async () => {},
   updateCheck: async () => null,
+  updateInstall: async () => false,
   windowAfterUnlock: async () => {},
   autotypePerform: async () => {},
   autotypeEntry: async () => {},

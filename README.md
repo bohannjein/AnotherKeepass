@@ -24,6 +24,20 @@ npm run dev          # browser preview with in-memory demo vaults (any password)
 npx tauri dev        # desktop app with real .kdbx files
 ```
 
+## Install and update
+
+Download the installer from the [releases](https://github.com/bohannjein/AnotherKeepass/releases).
+The app updates itself: Settings checks GitHub weekly, and an update is installed only if
+it carries the project's update signature (minisign, public key in `src-tauri/tauri.conf.json`).
+
+Releases are built by GitHub Actions from the tagged source (`.github/workflows/build.yml`).
+Windows code signing (SignPath Foundation) is being set up; until then Windows may warn about an
+unknown publisher, and Microsoft Defender's ML scanner may flag a fresh build.
+
+Making a release: bump the version in `package.json`, `src-tauri/Cargo.toml` and
+`src-tauri/tauri.conf.json`, add a `CHANGELOG.md` section, push a tag `vX.Y.Z`, check the
+draft release on GitHub and publish it.
+
 ## Build
 
 ```bash

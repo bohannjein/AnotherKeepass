@@ -581,7 +581,10 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
           </button>
           {update && (
             <button className="icon-btn update-btn" title={t.updateAvailable.replace('{v}', update.version)} aria-label={t.updateAvailable.replace('{v}', update.version)}
-              onClick={() => openExternal(update.url)}><Icon n="system_update" /></button>
+              onClick={() => setConfirm({
+                title: t.updateAvailable.replace('{v}', update.version), body: update.notes || t.updateBody, label: t.updateInstall, icon: 'system_update',
+                action: async () => { notify(t.updateInstalling); if ((await run(backend.updateInstall())) === false) openExternal(update.url); },
+              })}><Icon n="system_update" /></button>
           )}
           <button className="icon-btn" title={t.lock} aria-label={t.lock} onClick={onLock} style={{ marginLeft: 'auto' }}><Icon n="lock" /></button>
         </div>

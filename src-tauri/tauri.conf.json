@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "AnotherKeepass",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "app.anotherkeepass.desktop",
   "build": {
     "frontendDist": "../dist",
@@ -47,5 +47,16 @@
     },
     "shortDescription": "KeePass-compatible password manager",
     "category": "Utility"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE4OUY3NEFDMUY2QzRGN0IKUldSN1Qyd2ZySFNmR05YL0N5VjhxdGdYTHIrUXF6M1NncmYrTm83V0Naekg2SzlEeGl3YjhqVWwK",
+      "endpoints": [
+        "https://github.com/bohannjein/AnotherKeepass/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

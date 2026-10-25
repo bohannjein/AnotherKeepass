@@ -1,5 +1,6 @@
-//! Update check against the GitHub releases of the project. Only tells the UI about a newer
-//! version (link to the release page); installing stays a manual step for now.
+//! Updates from the GitHub releases of the project. The check tells the UI about a newer version
+//! (beta releases included when wanted); installing goes through the Tauri updater, which only
+//! accepts packages signed with the project's update key (public key in tauri.conf.json).
 
 use serde::Serialize;
 
@@ -52,6 +53,18 @@ pub async fn update_check(beta: bool) -> Result<Option<Update>, String> {
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Download, verify and install the newest stable release, then restart. Ok(false): nothing to
+/// install through the updater (e.g. a beta release), the UI opens the release page instead.
+#[tauri::command]
+pub async fn update_install(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let err = |e: tauri_plugin_updater::Error| format!("update:{e}");
+    let Some(update) = app.updater().map_err(err)?.check().await.map_err(err)? else { return Ok(false) };
+    log::info!("installing update {}", update.version);
+    update.download_and_install(|_, _| {}, || {}).await.map_err(err)?;
+    app.restart()
 }
 
 #[cfg(test)]

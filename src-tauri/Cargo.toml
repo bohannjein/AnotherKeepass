@@ -1,6 +1,6 @@
 [package]
 name = "anotherkeepass"
-version = "0.1.0"
+version = "0.2.0"
 description = "KeePass-compatible password manager"
 authors = ["AnotherKeepass"]
 license = "GPL-3.0-or-later"
@@ -55,6 +55,7 @@ pbkdf2 = "0.12"
 cbc = "0.1"
 zxcvbn = "3.1.1"
 psl = "2"
+tauri-plugin-updater = "2"
 
 [target."cfg(windows)".dependencies]
 windows = { version = "0.61", features = ["Security_Credentials_UI", "Win32_System_WinRT", "Win32_Foundation", "Foundation"] }
