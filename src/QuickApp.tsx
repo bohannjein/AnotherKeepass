@@ -14,7 +14,6 @@ const readSettings = () => {
 
 export default function QuickApp() {
   const [vaults, setVaults] = useState<VaultData[]>([]);
-  const [opened, setOpened] = useState(0);
   const settings = readSettings();
   const t = strings[(settings.lang ?? 'en') as Lang];
   const clearAfter = settings.clipboardClear === false ? null : settings.clipboardSeconds ?? 10;
@@ -24,7 +23,6 @@ export default function QuickApp() {
     document.documentElement.dataset.theme = readSettings().theme ?? 'dark';
     document.documentElement.dataset.accent = readSettings().accent ?? 'terracotta';
     backend.vaultsListing().then(setVaults).catch(() => setVaults([]));
-    setOpened(n => n + 1);
   }, []);
   useEffect(reload, [reload]);
   useEffect(() => backend.on('akp-locked', () => setVaults([])), []);
@@ -53,7 +51,7 @@ export default function QuickApp() {
 
   return (
     <div className="quick">
-      <CommandPalette items={items} placeholder={t.quickSearch} onClose={hide} autoFocusKey={opened} empty={vaults.length ? t.noItems : t.quickLocked}
+      <CommandPalette items={items} placeholder={t.quickSearch} onClose={hide} autoFocusKey={0} empty={vaults.length ? t.noItems : t.quickLocked}
         hints={[
           { keys: '↵', label: t.password, icon: 'key' },
           { keys: '⇧ ↵', label: t.username, icon: 'person' },

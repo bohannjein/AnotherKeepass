@@ -9,13 +9,16 @@ import { Icon } from './Icon';
 const ICON = { weak: 'gpp_bad', medium: 'gpp_maybe', strong: 'verified_user' } as const;
 
 export function PasswordStrength({ t, password, breachCheck }: { t: Strings; password: string; breachCheck?: boolean }) {
-  const [bits, setBits] = useState(0);
-  const [breached, setBreached] = useState<number | null>(null);
+  // results are tagged with the password they belong to; a newer password shows none
+  const [scored, setScored] = useState<{ pw: string; bits: number } | null>(null);
+  const [checked, setChecked] = useState<{ pw: string; n: number | null } | null>(null);
+  const bits = scored?.pw === password ? scored.bits : 0;
+  const breached = checked?.pw === password ? checked.n : null;
+  const setBreached = (n: number | null) => setChecked({ pw: password, n });
   const [checking, setChecking] = useState(false);
   useEffect(() => {
-    setBreached(null);
-    if (!password) { setBits(0); return; }
-    const timer = setTimeout(() => backend.passwordBits(password).then(setBits).catch(() => {}), 150);
+    if (!password) return;
+    const timer = setTimeout(() => backend.passwordBits(password).then(b => setScored({ pw: password, bits: b })).catch(() => {}), 150);
     return () => clearTimeout(timer);
   }, [password]);
   if (!password) return null;

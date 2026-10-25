@@ -3,14 +3,7 @@
 import type { Strings } from './i18n';
 import { Icon } from './Icon';
 import type { Item } from './model';
-
-export type Issue = 'breached' | 'weak' | 'reused' | 'old' | 'expired';
-export const ISSUES: Issue[] = ['breached', 'weak', 'reused', 'old', 'expired'];
-export const ISSUE_ICON: Record<Issue, string> = {
-  breached: 'gpp_maybe', weak: 'key_off', reused: 'repeat', old: 'hourglass_bottom', expired: 'event_busy',
-};
-export const issueName = (t: Strings, k: Issue) =>
-  ({ breached: t.hBreached, weak: t.hWeak, reused: t.hReused, old: t.hOld, expired: t.hExpired })[k];
+import { ISSUES, ISSUE_ICON, issueName, type Issue } from './ui';
 const issueHint = (t: Strings, k: Issue) =>
   ({ breached: t.hBreachedHint, weak: t.hWeakHint, reused: t.hReusedHint, old: t.hOldHint, expired: t.hExpiredHint })[k];
 

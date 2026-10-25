@@ -2,7 +2,7 @@
 // issue filter. Breach results belong to the vault state they were computed for.
 import { useCallback, useEffect, useState } from 'react';
 import { backend, type Health, type VaultData } from './backend';
-import { ISSUES, issueName as issueNameOf, type Issue } from './HealthOverview';
+import { ISSUES, issueName as issueNameOf, type Issue } from './ui';
 import { type Strings } from './i18n';
 import { type Notify } from './useSnack';
 

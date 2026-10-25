@@ -1,6 +1,6 @@
 // TOTP setup inside the edit form: read a QR code image (pick, drop or paste) and
 // preview the current code so the user sees the key works before saving.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { normalizeTotp } from './model';
 import { totp } from './totp';
 import type { Strings } from './i18n';
@@ -24,7 +24,7 @@ export function TotpSetup({ t, value, title, onChange, children }: {
   t: Strings; value: string; title: string; onChange: (v: string) => void; children: React.ReactNode;
 }) {
   const [error, setError] = useState('');
-  const [preview, setPreview] = useState<{ code: string; left: number } | null>(null);
+  const [tick, setPreview] = useState<{ uri: string; code: string; left: number } | null>(null);
   const [over, setOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -38,9 +38,10 @@ export function TotpSetup({ t, value, title, onChange, children }: {
   };
 
   // live preview with the in-browser TOTP (same algorithm as the backend)
+  const uri = useMemo(() => normalizeTotp(value, title), [value, title]);
+  const preview = uri && tick?.uri === uri ? tick : null; // only the secret currently typed counts
   useEffect(() => {
-    const uri = normalizeTotp(value, title);
-    if (!uri) { setPreview(null); return; }
+    if (!uri) return;
     const p = params(uri);
     const period = Number(p.get('period')) || 30;
     const digits = Number(p.get('digits')) || 6;
@@ -48,13 +49,13 @@ export function TotpSetup({ t, value, title, onChange, children }: {
     const tick = () => {
       const now = Date.now();
       totp(uri, now, digits, period)
-        .then(code => { if (live) { setPreview({ code, left: period - (Math.floor(now / 1000) % period) }); setError(e => e === t.invalidSecret ? '' : e); } })
+        .then(code => { if (live) { setPreview({ uri, code, left: period - (Math.floor(now / 1000) % period) }); setError(e => e === t.invalidSecret ? '' : e); } })
         .catch(() => { if (live) { setPreview(null); setError(t.invalidSecret); } });
     };
     tick();
     const id = setInterval(tick, 1000);
     return () => { live = false; clearInterval(id); };
-  }, [value, title, t.invalidSecret]);
+  }, [uri, t.invalidSecret]);
 
   return (
     <div className={'totp-setup' + (over ? ' over' : '')}

@@ -7,16 +7,12 @@ import { backend, errorCode, type VaultData } from './backend';
 import type { Strings } from './i18n';
 import { Icon } from './Icon';
 import { PasswordStrength } from './PasswordStrength';
+import { fileName, isRemote } from './ui';
 
 export interface Known { path: string; name: string; color: string; icon: string; keyfile?: string }
 
 const COLORS = ['--v-clay', '--v-moss', '--v-ochre'];
 const ICONS = ['shield_lock', 'cottage', 'apartment', 'work_history', 'savings', 'school'];
-export const fileName = (path: string) => {
-  const bw = path.match(/^bw:(?:https?:\/\/)?([^#/]+)[^#]*#(.+)$/);
-  return bw ? `${bw[2]} · ${bw[1]}` : path.replace(/^demo:/, '').split(/[\\/]/).pop() ?? path;
-};
-export const isRemote = (path: string) => path.startsWith('bw:');
 
 type Mode = 'open' | 'create' | 'server';
 
@@ -31,15 +27,17 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [keyfile, setKeyfile] = useState('');
+  // a key file picked for this path wins over the remembered one
+  const [picked, setPicked] = useState<{ path: string; file: string } | null>(null);
   // remembered key file of the selected vault (only stored when "remember key files" is on)
-  useEffect(() => { setKeyfile(known.find(k => k.path === path)?.keyfile ?? ''); }, [path, known]);
+  const keyfile = picked?.path === path ? picked.file : known.find(k => k.path === path)?.keyfile ?? '';
+  const setKeyfile = (file: string) => setPicked({ path, file });
   // quick unlock offered when this vault was locked (not closed) with the option on
-  const [quick, setQuick] = useState(false);
+  const [quickFor, setQuickFor] = useState<string | null>(null); // path that offers quick unlock
+  const quick = mode === 'open' && !!path && quickFor === path;
   useEffect(() => {
     let live = true;
-    setQuick(false);
-    if (mode === 'open' && path && backend.desktop) backend.quickAvailable(path).then(ok => { if (live) setQuick(ok); }).catch(() => {});
+    if (mode === 'open' && path && backend.desktop) backend.quickAvailable(path).then(ok => { if (live) setQuickFor(ok ? path : null); }).catch(() => {});
     return () => { live = false; };
   }, [mode, path]);
   const hello = async () => {

@@ -17,7 +17,7 @@ const fail = msg => { console.error('FAIL:', msg); process.exit(1); };
 setTimeout(() => fail('timeout'), 15000);
 
 let waiting;
-sock.on('data', d => { const w = waiting; waiting = null; w && w(JSON.parse(d.toString())); });
+sock.on('data', d => { const w = waiting; waiting = null; if (w) w(JSON.parse(d.toString())); });
 const send = obj => new Promise(res => { waiting = res; sock.write(JSON.stringify(obj)); });
 async function call(action, payload) {
   const nonce = nacl.randomBytes(24);

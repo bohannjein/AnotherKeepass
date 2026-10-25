@@ -17,11 +17,13 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
   const [confirmReset, setConfirmReset] = useState(false);
   const [query, setQuery] = useState('');
   // live SSH agent status for the SSH section
-  const [ssh, setSsh] = useState<{ path: string; reachable: boolean } | null>(null);
+  const [sshState, setSsh] = useState<{ path: string; reachable: boolean } | null>(null);
+  const sshShown = section === 'ssh' && prefs.sshEnabled;
+  const ssh = sshShown ? sshState : null;
   useEffect(() => {
-    if (section !== 'ssh' || !prefs.sshEnabled) { setSsh(null); return; }
+    if (!sshShown) return;
     backend.sshStatus(prefs.sshAuthSock).then(setSsh).catch(() => setSsh(null));
-  }, [section, prefs.sshEnabled, prefs.sshAuthSock]);
+  }, [sshShown, prefs.sshAuthSock]);
   const fileInput = useRef<HTMLInputElement>(null);
 
   // planned (not built) options stay hidden unless asked for; sections without visible options disappear

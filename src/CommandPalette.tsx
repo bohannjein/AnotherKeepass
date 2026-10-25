@@ -46,8 +46,7 @@ export function CommandPalette({ items, placeholder, hints, empty, onClose, auto
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const shown = useMemo(() => rank(items, q).slice(0, 60), [items, q]);
-  useEffect(() => { setSel(0); }, [q]);
-  useEffect(() => { setQ(''); input.current?.focus(); }, [autoFocusKey]);
+  useEffect(() => { input.current?.focus(); }, [autoFocusKey]);
   useEffect(() => { list.current?.querySelector('.on')?.scrollIntoView({ block: 'nearest' }); }, [sel]);
 
   const key = (e: React.KeyboardEvent) => {
@@ -68,7 +67,7 @@ export function CommandPalette({ items, placeholder, hints, empty, onClose, auto
     <div className="palette" onKeyDown={key}>
       <label className="palette-search">
         <span className="palette-logo"><Icon n="shield_lock" fill /></span>
-        <input ref={input} autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={placeholder} aria-label={placeholder} spellCheck={false} />
+        <input ref={input} autoFocus value={q} onChange={e => { setQ(e.target.value); setSel(0); }} placeholder={placeholder} aria-label={placeholder} spellCheck={false} />
       </label>
       <div className="palette-list" ref={list} role="listbox">
         {!shown.length && <div className="palette-empty"><span className="blob"><Icon n="search_off" /></span>{empty}</div>}

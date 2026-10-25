@@ -10,7 +10,7 @@ import { type Prefs } from './settings';
 import { settingsStrings } from './i18n-settings';
 import { Icon } from './Icon';
 import { SshPanel } from './SshPanel';
-import { previewable } from './TransferDialogs';
+import { previewable } from './ui';
 import { TotpSetup } from './TotpSetup';
 import { useContextMenu } from './ContextMenu';
 import { today } from './ui';
@@ -74,7 +74,7 @@ const fmtDate = (iso: string) => new Date(iso.length > 10 ? iso : iso + 'T00:00'
 function useTotp(get: (() => Promise<Totp>) | undefined, enabled: boolean) {
   const [s, setS] = useState<Totp | null>(null);
   const getRef = useRef(get);
-  getRef.current = get;
+  useEffect(() => { getRef.current = get; });
   useEffect(() => {
     if (!enabled || !getRef.current) return;
     let live = true;
@@ -280,7 +280,7 @@ export function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, 
   };
   const cancel = () => { setMenu(false); if (isNew) onDiscard(); else setDraft(null); };
   const keys = useRef({ startEdit: () => {}, cancel: () => {}, editing: false, trashed: false });
-  keys.current = { startEdit, cancel, editing: !!draft, trashed: !!item.trashed };
+  useEffect(() => { keys.current = { startEdit, cancel, editing: !!draft, trashed: !!item.trashed }; });
   useEffect(() => {
     const edit = () => { if (!keys.current.editing && !keys.current.trashed) keys.current.startEdit(); };
     const esc = () => { if (keys.current.editing) keys.current.cancel(); };

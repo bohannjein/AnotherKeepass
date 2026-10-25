@@ -6,7 +6,7 @@ import { type VaultInfo, type Folder, type Item } from './model';
 import { type Strings } from './i18n';
 import { Icon } from './Icon';
 import { PasswordStrength } from './PasswordStrength';
-import { isRemote } from './VaultDialog';
+import { isRemote } from './ui';
 import { type Confirm } from './useItemActions';
 
 export function FolderDialog({ t, mode, name: initialName, vault: initialVault, vaults, folders, parent: initialParent, onClose, onSubmit }: {
@@ -81,7 +81,7 @@ export function ShortcutsDialog({ t, onClose }: { t: Strings; onClose: () => voi
 export function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
   t: Strings; ask: BrowserAsk; vaultName: (id: string) => string; onAnswer: (answer: unknown) => void;
 }) {
-  const [name, setName] = useState('browser-' + new Date().toISOString().slice(0, 10));
+  const [name, setName] = useState(() => 'browser-' + new Date().toISOString().slice(0, 10));
   const [allow, setAllow] = useState<string[]>(ask.kind === 'access' ? ask.entries.map(e => e.uuid) : []);
   const [remember, setRemember] = useState(true);
   const [target, setTarget] = useState<string | null>(null); // passkey: entry to update / to sign in with

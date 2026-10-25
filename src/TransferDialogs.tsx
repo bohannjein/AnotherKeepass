@@ -6,6 +6,7 @@ import { backend, errorCode, type VaultData } from './backend';
 import type { Strings } from './i18n';
 import { Icon } from './Icon';
 import type { VaultInfo } from './model';
+import { IMAGE } from './ui';
 
 const fileName = (p: string) => p.split(/[\\/]/).pop() ?? p;
 
@@ -62,6 +63,7 @@ export function ExportDialog({ t, vault, onClose, onDone }: {
 
 /** Printable emergency kit: where the vault is and room to write the master password by hand. */
 function EmergencySheet({ t, vault, onClose }: { t: Strings; vault: VaultInfo; onClose: () => void }) {
+  const [created] = useState(() => new Date().toLocaleDateString()); // date printed on the sheet
   useEffect(() => {
     const done = () => onClose();
     window.addEventListener('afterprint', done);
@@ -76,7 +78,7 @@ function EmergencySheet({ t, vault, onClose }: { t: Strings; vault: VaultInfo; o
         <tbody>
           <tr><th>{t.vault}</th><td>{vault.name}</td></tr>
           <tr><th>{t.file}</th><td>{vault.id}</td></tr>
-          <tr><th>{t.sheetCreated}</th><td>{new Date().toLocaleDateString()}</td></tr>
+          <tr><th>{t.sheetCreated}</th><td>{created}</td></tr>
           <tr><th>{t.masterPassword}</th><td className="write-here" /></tr>
           <tr><th>{t.keyfile}</th><td className="write-here" /></tr>
           <tr><th>{t.sheetNotes}</th><td className="write-here tall" /></tr>
@@ -131,9 +133,6 @@ export function MergeDialog({ t, vault, onClose, onMerged }: {
     </div>, document.body);
 }
 
-const IMAGE = /\.(png|jpe?g|gif|webp|bmp|svg|ico)$/i;
-const TEXT = /\.(txt|md|log|json|xml|ya?ml|csv|ini|conf|cfg|pem|pub|key|crt|cer|asc|sh|ps1|toml)$/i;
-export const previewable = (name: string) => IMAGE.test(name) || TEXT.test(name);
 
 export function AttachmentPreview({ t, name, load, onClose }: { t: Strings; name: string; load: () => Promise<Uint8Array>; onClose: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
