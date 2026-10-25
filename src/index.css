@@ -392,7 +392,8 @@ button { cursor: pointer; border: 0; background: none; }
 }
 .choice:hover { background: var(--surface-high); }
 .choice.on { border-color: var(--primary); background: var(--primary-container); color: var(--on-primary-container); border-radius: var(--r-l); }
-.choice .ms { margin-left: auto; }
+/* only the trailing check mark is pushed to the right; icons inside tiles stay centred */
+.choice > .ms:last-child { margin-left: auto; }
 .theme-tile { flex-direction: column; align-items: stretch; padding: 12px; gap: 10px; }
 .preview { height: 90px; border-radius: var(--r-s); display: grid; grid-template-columns: 30% 1fr; gap: 6px; padding: 8px; }
 .preview i { border-radius: 8px; display: block; }
@@ -915,7 +916,9 @@ kbd {
 
 .health { height: 100%; overflow-y: auto; padding: clamp(16px, 4vw, 40px); display: grid; align-content: start; gap: 28px; }
 .health-hero { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
-.health-ring { position: relative; width: 168px; height: 168px; flex: none; }
+/* scales with the pane; the number scales with the ring (container units) */
+.health-hero { container-type: inline-size; }
+.health-ring { position: relative; width: clamp(120px, 30cqw, 200px); aspect-ratio: 1; flex: none; container-type: inline-size; }
 .health-ring::before { content: ''; position: absolute; inset: 10px; background: var(--surface-high); border-radius: 46% 54% 60% 40% / 52% 40% 60% 48%; animation: morph 8s ease-in-out infinite alternate; }
 .health-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
 .health-ring circle { fill: none; stroke-width: 12; stroke-linecap: round; }
@@ -925,13 +928,12 @@ kbd {
 .ok .health-ring .value { stroke: var(--ring-ok); }
 .bad .health-ring .value { stroke: var(--ring-bad); }
 @keyframes ring-in { from { stroke-dashoffset: 339.3; } }
-/* the number is centred on the ring (cap height trimmed, so digits sit on the true middle);
-   the % hangs to the right and does not pull the number off centre */
+/* number and % together are centred on the ring (cap height trimmed, so the digits sit on the
+   true middle); sizes follow the ring width */
 .health-ring > div { position: absolute; inset: 0; display: grid; place-items: center; }
-.health-ring b { position: relative; font-size: 52px; font-weight: 800; letter-spacing: -.04em; line-height: 1; text-box: trim-both cap alphabetic; font-variant-numeric: tabular-nums; }
-.health-ring span { position: absolute; left: 100%; bottom: 0; margin-left: 2px; font-size: 20px; font-weight: 700; letter-spacing: 0; color: var(--on-surface-var); }
-/* a centred circle behind the number: the drifting blob made the centre look off */
-.health-ring::before { inset: 22px; border-radius: 50%; animation: none; }
+.health-ring b { font-size: 30cqw; font-weight: 800; letter-spacing: -.04em; line-height: 1; text-box: trim-both cap alphabetic; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.health-ring span { font-size: 12cqw; font-weight: 700; letter-spacing: 0; margin-left: .04em; color: var(--on-surface-var); }
+.health-ring::before { inset: 13%; border-radius: 50%; animation: none; }
 .health-mood { flex: 1; min-width: 200px; display: grid; gap: 8px; }
 .health-mood h2 { font-size: clamp(26px, 3vw, 34px); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
 .health-mood p { color: var(--on-surface-var); font-size: 15px; }
