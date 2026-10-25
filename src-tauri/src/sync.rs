@@ -356,10 +356,8 @@ pub fn after_change(map: &mut HashMap<String, OpenVault>, id: &str) {
                 }
             }
         }
-        if ca {
-            if let Err(e) = a.persist() {
-                problem = Some(e);
-            }
+        if ca && let Err(e) = a.persist() {
+            problem = Some(e);
         }
         if let Some(app) = APP.get() {
             let _ = app.emit("akp-vault-updated", a.listing(&aid));

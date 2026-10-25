@@ -278,9 +278,8 @@ where
                 }
             }
             note = notes.recv() => {
-                if let Ok(n) = note {
-                    if conn.write_all(n.as_bytes()).await.is_err() { return; }
-                }
+                if let Ok(n) = note
+                    && conn.write_all(n.as_bytes()).await.is_err() { return; }
             }
         }
     }

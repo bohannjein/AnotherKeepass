@@ -263,7 +263,7 @@ pub fn import_one(db: &mut Database, g: GroupId, vault: &Path, share: &Share) ->
         }
         for sg in groups.into_iter().rev().filter(|x| !keep_g.contains(x)) {
             if let Some(m) = db.group_mut(sg) {
-                let _ = m.remove();
+                m.remove();
                 changed = true;
             }
         }

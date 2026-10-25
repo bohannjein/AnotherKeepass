@@ -51,7 +51,7 @@ pub fn prelogin(server: &str, email: &str) -> Result<Kdf, LoginError> {
         .map_err(transport)?
         .into_json()
         .map_err(|e| LoginError::Other(e.to_string()))?;
-    let n = |k: &str| v.get(k).or_else(|| v.get(&capitalize(k))).and_then(Value::as_u64);
+    let n = |k: &str| v.get(k).or_else(|| v.get(capitalize(k))).and_then(Value::as_u64);
     Ok(Kdf {
         kind: n("kdf").unwrap_or(0) as u8,
         iterations: n("kdfIterations").unwrap_or(600_000) as u32,

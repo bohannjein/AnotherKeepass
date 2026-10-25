@@ -585,7 +585,7 @@ fn get_logins(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
     if found.is_empty() {
         return Err(E_ALL_DENIED);
     }
-    found.sort_by(|a, b| b.2.cmp(&a.2));
+    found.sort_by_key(|f| std::cmp::Reverse(f.2));
     if prefs.best_match {
         let top = found[0].2;
         found.retain(|f| f.2 == top);

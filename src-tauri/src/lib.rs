@@ -134,10 +134,10 @@ pub fn run() {
             let _ = sync::APP.set(handle.clone());
             let host = std::sync::Arc::new(browser_server::AppHost::new(handle.clone()));
             app.manage(host.clone());
-            if prefs.browser_enabled {
-                if let Err(e) = browser_server::start(host) {
-                    log::warn!("{e}");
-                }
+            if prefs.browser_enabled
+                && let Err(e) = browser_server::start(host)
+            {
+                log::warn!("{e}");
             }
             desktop::create_tray(handle, &prefs)?;
             if let Err(e) = quick::create(handle) {

@@ -413,10 +413,10 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
         if old.tray_style != prefs.tray_style {
             let _ = tray.set_icon(tray_image(&app, &prefs.tray_style));
         }
-        if old.tray_labels != prefs.tray_labels {
-            if let Ok(menu) = build_tray_menu(&app, &prefs.tray_labels) {
-                let _ = tray.set_menu(Some(menu));
-            }
+        if old.tray_labels != prefs.tray_labels
+            && let Ok(menu) = build_tray_menu(&app, &prefs.tray_labels)
+        {
+            let _ = tray.set_menu(Some(menu));
         }
     }
     let autolaunch = app.autolaunch();
@@ -427,10 +427,10 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
             problems.push(format!("autostart:{e}"));
         }
     }
-    if prefs.browser_enabled {
-        if let Err(e) = crate::browser_server::start(app.state::<std::sync::Arc<crate::browser_server::AppHost>>().inner().clone()) {
-            problems.push(e);
-        }
+    if prefs.browser_enabled
+        && let Err(e) = crate::browser_server::start(app.state::<std::sync::Arc<crate::browser_server::AppHost>>().inner().clone())
+    {
+        problems.push(e);
     }
     problems.extend(crate::browser_server::sync_manifests(&prefs));
     // also retry after a failed registration at start, so the UI gets to see the problem
@@ -501,10 +501,10 @@ pub fn watch_session(app: AppHandle) {
     static APP: OnceLock<AppHandle> = OnceLock::new();
 
     unsafe extern "system" fn proc(h: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESULT {
-        if msg == WM_WTSSESSION_CHANGE {
-            if let Some(app) = APP.get() {
-                on_session_event(app, w as u32);
-            }
+        if msg == WM_WTSSESSION_CHANGE
+            && let Some(app) = APP.get()
+        {
+            on_session_event(app, w as u32);
         }
         unsafe { DefWindowProcW(h, msg, w, l) }
     }

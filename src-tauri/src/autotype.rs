@@ -234,23 +234,23 @@ pub fn register_shortcuts<R: Runtime>(app: &AppHandle<R>, autotype: &str, quick:
     let mut problems = Vec::new();
     // the settings page records "Meta" for the Windows key
     let norm = |s: &str| s.replace("Meta", "Super");
-    if !autotype.trim().is_empty() {
-        if let Err(e) = gs.on_shortcut(norm(autotype).as_str(), |app, _, e| {
+    if !autotype.trim().is_empty()
+        && let Err(e) = gs.on_shortcut(norm(autotype).as_str(), |app, _, e| {
             if e.state == ShortcutState::Pressed {
                 on_hotkey(app);
             }
-        }) {
-            problems.push(format!("shortcut:{e}"));
-        }
+        })
+    {
+        problems.push(format!("shortcut:{e}"));
     }
-    if !quick.trim().is_empty() {
-        if let Err(e) = gs.on_shortcut(norm(quick).as_str(), |app, _, e| {
+    if !quick.trim().is_empty()
+        && let Err(e) = gs.on_shortcut(norm(quick).as_str(), |app, _, e| {
             if e.state == ShortcutState::Pressed {
                 crate::quick::toggle(app);
             }
-        }) {
-            problems.push(format!("quickShortcut:{e}"));
-        }
+        })
+    {
+        problems.push(format!("quickShortcut:{e}"));
     }
     problems
 }
@@ -327,10 +327,8 @@ pub fn perform<R: Runtime>(app: &AppHandle<R>, vault: &str, id: &str, sequence: 
     if let Some(w) = desktop::main_window(app) {
         let _ = w.minimize();
     }
-    if to_target {
-        if let Some(h) = app.state::<Target>().0.lock().ok().and_then(|t| *t) {
-            focus(h);
-        }
+    if to_target && let Some(h) = app.state::<Target>().0.lock().ok().and_then(|t| *t) {
+        focus(h);
     }
     type_actions(actions, p.at_start_delay.max(100), p.at_char_delay)?;
     if let Ok(mut l) = LAST.lock() {

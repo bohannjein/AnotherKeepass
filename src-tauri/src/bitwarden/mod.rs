@@ -170,10 +170,10 @@ fn build(sync: &Value, title: &str, user: &SymKey, orgs: &HashMap<String, SymKey
         let Some(id) = field(f, "id").as_str() else { continue };
         let name = field(f, "name").as_str().map(|n| crypto::decrypt_str(n, user)).transpose()?.unwrap_or_default();
         let Ok(uuid) = Uuid::parse_str(id) else { continue };
-        if let Some(mut r) = db.group_mut(root) {
-            if let Ok(mut g) = r.add_group_with_id(GroupId::from_uuid(uuid)) {
-                g.name = name.clone();
-            }
+        if let Some(mut r) = db.group_mut(root)
+            && let Ok(mut g) = r.add_group_with_id(GroupId::from_uuid(uuid))
+        {
+            g.name = name.clone();
         }
         snap.folders.insert(id.to_string(), name);
     }
@@ -219,7 +219,6 @@ fn build(sync: &Value, title: &str, user: &SymKey, orgs: &HashMap<String, SymKey
         e.times.last_modification = parse_time(field(c, "revisionDate").as_str()).or(Some(Times::now()));
         e.times.creation = parse_time(field(c, "creationDate").as_str()).or(e.times.last_modification);
         let eid = e.id();
-        drop(g);
         // canonical form = what reading the entry gives (so "unchanged" compares equal)
         let entry = db.entry(eid).ok_or("bw_build")?;
         let (canon, meta) = mapping::read_entry(&entry);
@@ -250,10 +249,10 @@ pub fn open(path: &str, password: &str, second: Option<(u8, String)>) -> Result<
     else {
         return Err(format!("offline_no_cache:{unreachable}"));
     };
-    if let Some((kind, iterations, memory, parallelism)) = acct.kdf {
-        if crypto::kdf_weaker(&kdf, &Kdf { kind, iterations, memory, parallelism }) {
-            return Err("bw:kdf_weakened".into());
-        }
+    if let Some((kind, iterations, memory, parallelism)) = acct.kdf
+        && crypto::kdf_weaker(&kdf, &Kdf { kind, iterations, memory, parallelism })
+    {
+        return Err("bw:kdf_weakened".into());
     }
     let master = crypto::master_key(password, &email, &kdf)?;
     let hash = crypto::server_hash(&master, password);

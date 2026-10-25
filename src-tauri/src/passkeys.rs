@@ -330,6 +330,7 @@ pub fn check_get(pk: &Value, origin: &str) -> Result<(String, Vec<String>), u32>
 }
 
 /// Assertion for a stored passkey.
+#[allow(clippy::too_many_arguments)] // mirrors the WebAuthn assertion inputs one to one
 pub fn assert(pk: &Value, origin: &str, rp: &str, cred_id: &str, user_handle: &str, pem: &str, be: bool, bs: bool) -> Result<Value, u32> {
     let data = auth_data(rp, be, bs, None);
     let client = client_data("webauthn.get", pk["challenge"].as_str().unwrap_or_default(), origin);
@@ -391,7 +392,7 @@ mod tests {
         let (rp, _) = check_get(&get, "https://login.example.com").unwrap();
         let a = assert(&get, "https://login.example.com", &rp, &id, "dXNlcjE", &pem, true, true).unwrap();
         let mut signed = from_b64(a["response"]["authenticatorData"].as_str().unwrap()).unwrap();
-        signed.extend(Sha256::digest(&from_b64(a["response"]["clientDataJSON"].as_str().unwrap()).unwrap()));
+        signed.extend(Sha256::digest(from_b64(a["response"]["clientDataJSON"].as_str().unwrap()).unwrap()));
         let sig = Signature::from_der(&from_b64(a["response"]["signature"].as_str().unwrap()).unwrap()).unwrap();
         assert!(vk.verify(&signed, &sig).is_ok());
         assert_eq!(signed[32], 0x1d); // UP UV BE BS

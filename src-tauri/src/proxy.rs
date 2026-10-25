@@ -16,11 +16,8 @@ pub fn run() {
         let (mut sock_rd, mut sock_wr) = tokio::io::split(sock);
         let to_app = async {
             let mut stdin = tokio::io::stdin();
-            loop {
-                let len = match stdin.read_u32_le().await {
-                    Ok(l) => l as usize,
-                    Err(_) => break,
-                };
+            while let Ok(len) = stdin.read_u32_le().await {
+                let len = len as usize;
                 if len > 4 * 1024 * 1024 {
                     break;
                 }

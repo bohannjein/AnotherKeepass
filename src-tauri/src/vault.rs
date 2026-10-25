@@ -242,10 +242,10 @@ fn write_db(v: &mut OpenVault) -> R<()> {
     }
     upgrade_to_kdbx4(v)?;
     let pattern = BACKUP_PATTERN.lock().ok().and_then(|p| p.clone());
-    if let Some(target) = pattern.and_then(|p| backup_target(&v.path, &p)).filter(|_| v.path.is_file()) {
-        if let Err(e) = fs::copy(&v.path, &target) {
-            log::warn!("backup before save failed: {e}");
-        }
+    if let Some(target) = pattern.and_then(|p| backup_target(&v.path, &p)).filter(|_| v.path.is_file())
+        && let Err(e) = fs::copy(&v.path, &target)
+    {
+        log::warn!("backup before save failed: {e}");
     }
     let mut buf = Vec::new();
     v.db.save(&mut buf, v.key.clone()).map_err(|e| format!("save:{e}"))?;
@@ -884,10 +884,8 @@ pub static HELLO_BOTH: std::sync::atomic::AtomicBool = std::sync::atomic::Atomic
 
 pub fn quick_unlock_enable(on: bool) {
     QUICK_UNLOCK.store(on, std::sync::atomic::Ordering::Relaxed);
-    if !on {
-        if let Ok(mut q) = QUICK_KEYS.lock() {
-            *q = None;
-        }
+    if !on && let Ok(mut q) = QUICK_KEYS.lock() {
+        *q = None;
     }
 }
 

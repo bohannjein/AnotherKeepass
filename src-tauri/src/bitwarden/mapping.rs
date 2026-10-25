@@ -420,7 +420,7 @@ mod tests {
         let e = db.entry(id).unwrap();
         assert_eq!(e.get("UserName"), Some("octo"));
         assert_eq!(e.get("KP2A_URL"), Some("https://gist.github.com"));
-        assert!(e.fields.get("Password (2)").is_some(), "custom field named like a built-in gets a unique name");
+        assert!(e.fields.contains_key("Password (2)"), "custom field named like a built-in gets a unique name");
         // reading the untouched entry gives the identical plain cipher → no upload
         let (back, meta2) = read_entry(&e);
         assert_eq!(back, p);
