@@ -925,9 +925,13 @@ kbd {
 .ok .health-ring .value { stroke: var(--ring-ok); }
 .bad .health-ring .value { stroke: var(--ring-bad); }
 @keyframes ring-in { from { stroke-dashoffset: 339.3; } }
-.health-ring > div { position: absolute; inset: 0; display: flex; align-items: baseline; justify-content: center; padding-top: 52px; }
-.health-ring b { font-size: 52px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
-.health-ring span { font-size: 20px; font-weight: 700; color: var(--on-surface-var); }
+/* the number is centred on the ring (cap height trimmed, so digits sit on the true middle);
+   the % hangs to the right and does not pull the number off centre */
+.health-ring > div { position: absolute; inset: 0; display: grid; place-items: center; }
+.health-ring b { position: relative; font-size: 52px; font-weight: 800; letter-spacing: -.04em; line-height: 1; text-box: trim-both cap alphabetic; font-variant-numeric: tabular-nums; }
+.health-ring span { position: absolute; left: 100%; bottom: 0; margin-left: 2px; font-size: 20px; font-weight: 700; letter-spacing: 0; color: var(--on-surface-var); }
+/* a centred circle behind the number: the drifting blob made the centre look off */
+.health-ring::before { inset: 22px; border-radius: 50%; animation: none; }
 .health-mood { flex: 1; min-width: 200px; display: grid; gap: 8px; }
 .health-mood h2 { font-size: clamp(26px, 3vw, 34px); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
 .health-mood p { color: var(--on-surface-var); font-size: 15px; }

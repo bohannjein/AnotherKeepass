@@ -24,7 +24,7 @@ export function HealthOverview({ t, total, counts, breachesChecked, checking, ca
             <circle cx="64" cy="64" r={r} className="track" />
             <circle cx="64" cy="64" r={r} className="value" strokeDasharray={c} strokeDashoffset={c * (1 - score / 100)} />
           </svg>
-          <div><b>{score}</b><span>%</span></div>
+          <div><b>{score}<span>%</span></b></div>
         </div>
         <div className="health-mood">
           <h2>{mood === 'good' ? t.hMoodGood : mood === 'ok' ? t.hMoodOk : t.hMoodBad}</h2>
