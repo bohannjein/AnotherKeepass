@@ -332,7 +332,10 @@ pub fn sync_manifests(p: &desktop::DesktopPrefs) -> Vec<String> {
             } else {
                 json!({ "name": HOST_NAME, "description": "AnotherKeepass browser integration", "path": exe, "type": "stdio", "allowed_origins": CHROMIUM_ORIGINS })
             };
-            if let Err(e) = std::fs::write(&file, serde_json::to_vec_pretty(&manifest).unwrap_or_default()) {
+            let bytes = serde_json::to_vec_pretty(&manifest).unwrap_or_default();
+            if std::fs::read(&file).ok().as_ref() != Some(&bytes)
+                && let Err(e) = std::fs::write(&file, &bytes)
+            {
                 problems.push(format!("manifest:{e}"));
                 continue;
             }

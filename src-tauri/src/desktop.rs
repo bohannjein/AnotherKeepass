@@ -24,6 +24,19 @@ use crate::vault::Vaults;
 pub const IDENTIFIER: &str = "app.anotherkeepass.desktop";
 /// Passed by the autostart entry so we can tell a login start from a manual one.
 pub const AUTOSTART_ARG: &str = "--autostart";
+
+/// Current autostart command line (HKCU Run value written by tauri-plugin-autostart).
+#[cfg(windows)]
+fn autostart_entry() -> Option<String> {
+    use winreg::{RegKey, enums::HKEY_CURRENT_USER};
+    let run = RegKey::predef(HKEY_CURRENT_USER).open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Run").ok()?;
+    run.get_value("AnotherKeepass").ok()
+}
+
+#[cfg(not(windows))]
+fn autostart_entry() -> Option<String> {
+    None
+}
 const TRAY_ID: &str = "main";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -412,13 +425,18 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
             let _ = tray.set_menu(Some(menu));
         }
     }
+    // Touch the Run key only when it has to change: an unsigned exe rewriting its autostart
+    // entry on every start looks like malware persistence to Defender's behaviour model.
     let autolaunch = app.autolaunch();
-    // enable() also rewrites entries from older versions that lack AUTOSTART_ARG
-    if prefs.autostart || autolaunch.is_enabled().unwrap_or(false) {
-        let r = if prefs.autostart { autolaunch.enable() } else { autolaunch.disable() };
-        if let Err(e) = r {
-            problems.push(format!("autostart:{e}"));
-        }
+    let entry = autostart_entry();
+    let r = match (prefs.autostart, entry) {
+        // also rewrites entries from older versions that lack AUTOSTART_ARG
+        (true, e) if !e.as_deref().is_some_and(|e| e.contains(AUTOSTART_ARG)) => autolaunch.enable(),
+        (false, Some(_)) => autolaunch.disable(),
+        _ => Ok(()),
+    };
+    if let Err(e) = r {
+        problems.push(format!("autostart:{e}"));
     }
     if prefs.browser_enabled
         && let Err(e) = crate::browser_server::start(app.state::<std::sync::Arc<crate::browser_server::AppHost>>().inner().clone())
