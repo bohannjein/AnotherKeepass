@@ -1,8 +1,10 @@
 //! Quick access: a small always-on-top search window on a global shortcut (like 1Password /
 //! Proton Pass). Enter copies the password, Ctrl+Enter types it via Auto-Type into the window
-//! that was active before. Hides itself when it loses focus.
+//! that was active before. The window is created on the shortcut and destroyed when it closes or
+//! loses focus: a hidden, transparent, always-on-top window lingering in the background got drawn
+//! as an empty white box by screen hooks (e.g. TeamViewer) once capture protection was off.
 
-use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
 
 use crate::{
     autotype::Target,
@@ -12,8 +14,8 @@ use crate::{
 
 pub const LABEL: &str = "quick";
 
-pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    let w = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html?quick=1".into()))
+fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html?quick=1".into()))
         .title("AnotherKeepass")
         .inner_size(640.0, 460.0)
         .resizable(false)
@@ -23,19 +25,16 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .always_on_top(true)
         .skip_taskbar(true)
         .center()
-        .visible(false)
+        .focused(true)
+        .content_protected(desktop::prefs(app).screen_protect)
         .build()?;
-    // always hidden from capture: TeamViewer & co. draw this hidden, transparent, topmost
-    // window as a white box in front of everything
-    let _ = w.set_content_protected(true);
     Ok(())
 }
 
 /// Shortcut pressed: show the search (vaults unlocked) or the main window to unlock first.
 pub fn toggle<R: Runtime>(app: &AppHandle<R>) {
-    let Some(w) = app.get_webview_window(LABEL) else { return };
-    if w.is_visible().unwrap_or(false) {
-        let _ = w.hide();
+    if let Some(w) = app.get_webview_window(LABEL) {
+        let _ = w.destroy();
         return;
     }
     if app.state::<Vaults>().0.lock().map(|m| m.is_empty()).unwrap_or(true) {
@@ -46,10 +45,10 @@ pub fn toggle<R: Runtime>(app: &AppHandle<R>) {
     if let Ok(mut t) = app.state::<Target>().0.lock() {
         *t = crate::autotype::foreground_hwnd();
     }
-    let _ = w.center();
-    let _ = w.show();
-    let _ = w.set_focus();
-    let _ = app.emit_to(LABEL, "akp-quick-open", ());
+    // a press right after closing can still find the label taken; the next press works
+    if let Err(e) = create(app) {
+        log::warn!("quick access window: {e}");
+    }
 }
 
 /// All open vaults (the quick window has no state of its own).
@@ -62,6 +61,6 @@ pub fn vaults_listing(state: tauri::State<'_, Vaults>) -> Result<Vec<VaultDto>, 
 #[tauri::command]
 pub fn quick_hide(app: AppHandle) {
     if let Some(w) = app.get_webview_window(LABEL) {
-        let _ = w.hide();
+        let _ = w.destroy();
     }
 }

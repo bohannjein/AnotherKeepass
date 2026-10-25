@@ -140,9 +140,6 @@ pub fn run() {
                 log::warn!("{e}");
             }
             desktop::create_tray(handle, &prefs)?;
-            if let Err(e) = quick::create(handle) {
-                log::warn!("quick access window: {e}");
-            }
             for p in autotype::register_shortcuts(handle, &prefs.at_shortcut, &prefs.quick_shortcut) {
                 log::warn!("{p}");
                 desktop::SHORTCUT_FAILED.store(true, std::sync::atomic::Ordering::Relaxed);

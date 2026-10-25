@@ -337,16 +337,9 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>, p: &DesktopPrefs) -> tauri::R
 pub fn on_window_event<R: Runtime>(window: &tauri::Window<R>, event: &WindowEvent) {
     let app = window.app_handle();
     if window.label() == crate::quick::LABEL {
-        // quick access: gone as soon as it loses focus, never really closed
-        match event {
-            WindowEvent::Focused(false) => {
-                let _ = window.hide();
-            }
-            WindowEvent::CloseRequested { api, .. } => {
-                api.prevent_close();
-                let _ = window.hide();
-            }
-            _ => {}
+        // quick access: gone as soon as it loses focus (see quick.rs)
+        if let WindowEvent::Focused(false) = event {
+            let _ = window.destroy();
         }
         return;
     }
@@ -479,7 +472,7 @@ pub fn on_session_event<R: Runtime>(app: &AppHandle<R>, code: u32) {
 /// Screenshots, screen sharing, Teams/TeamViewer/RDP recording see a black window
 /// (SetWindowDisplayAffinity WDA_EXCLUDEFROMCAPTURE via Tauri).
 pub fn apply_screen_protect<R: Runtime>(app: &AppHandle<R>, on: bool) {
-    for w in app.webview_windows().values().filter(|w| w.label() != crate::quick::LABEL) {
+    for w in app.webview_windows().values() {
         if let Err(e) = w.set_content_protected(on) {
             log::warn!("screen protection: {e}");
         }

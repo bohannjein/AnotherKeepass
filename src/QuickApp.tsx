@@ -26,7 +26,7 @@ export default function QuickApp() {
     backend.vaultsListing().then(setVaults).catch(() => setVaults([]));
     setOpened(n => n + 1);
   }, []);
-  useEffect(() => { reload(); return backend.on('akp-quick-open', reload); }, [reload]);
+  useEffect(reload, [reload]);
   useEffect(() => backend.on('akp-locked', () => setVaults([])), []);
 
   const hide = () => invoke('quick_hide');
