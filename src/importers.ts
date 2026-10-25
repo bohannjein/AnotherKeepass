@@ -25,9 +25,9 @@ const std = (key: keyof Strings, value: unknown): Field | null => {
   const kind = DEFAULT_KIND[key];
   return { key, value: v, kind, protected: kind === 'hidden' || kind === 'totp' || undefined };
 };
-const custom = (label: string, value: unknown, kind?: Field['kind']): Field | null => {
+const custom = (label: unknown, value: unknown, kind?: Field['kind']): Field | null => {
   const v = str(value);
-  return v ? { label: label || 'Field', value: v, kind, protected: kind === 'hidden' || kind === 'totp' || undefined } : null;
+  return v ? { label: str(label) || 'Field', value: v, kind, protected: kind === 'hidden' || kind === 'totp' || undefined } : null;
 };
 const str = (v: unknown) => v == null ? '' : String(v).trim();
 const compact = (fs: (Field | null)[]) => fs.filter((f): f is Field => !!f);
@@ -36,7 +36,9 @@ const extraUrls = (urls: string[]) => urls.filter(Boolean).map((u, i) => custom(
 const entry = (e: Omit<Partial<ImportEntry>, 'fields'> & { fields: (Field | null)[] }): ImportEntry => {
   const fields = compact(e.fields);
   const login = fields.some(f => f.key && ['username', 'password', 'website', 'totp'].includes(f.key));
-  return { type: e.type ?? (login ? 'login' : 'note'), title: e.title || '', path: e.path ?? [], fields, note: e.note ?? '', tags: e.tags ?? [], pinned: e.pinned };
+  // exports can be damaged or hand-edited: everything that becomes text is forced to text here
+  const texts = (a: unknown) => (Array.isArray(a) ? a : []).map(str).filter(Boolean);
+  return { type: e.type ?? (login ? 'login' : 'note'), title: str(e.title), path: texts(e.path), fields, note: str(e.note), tags: texts(e.tags), pinned: e.pinned === true || undefined };
 };
 
 /** ImportEntry → what Rust stores (same mapping as the editor). */
