@@ -39,11 +39,21 @@ pub fn entropy_bits(pw: &str) -> f64 {
         return 0.0;
     }
     let mut pool = 0;
-    if chars.iter().any(|c| c.is_ascii_lowercase()) { pool += 26; }
-    if chars.iter().any(|c| c.is_ascii_uppercase()) { pool += 26; }
-    if chars.iter().any(|c| c.is_ascii_digit()) { pool += 10; }
-    if chars.iter().any(|c| c.is_ascii_punctuation() || *c == ' ') { pool += 33; }
-    if chars.iter().any(|c| !c.is_ascii()) { pool += 100; }
+    if chars.iter().any(|c| c.is_ascii_lowercase()) {
+        pool += 26;
+    }
+    if chars.iter().any(|c| c.is_ascii_uppercase()) {
+        pool += 26;
+    }
+    if chars.iter().any(|c| c.is_ascii_digit()) {
+        pool += 10;
+    }
+    if chars.iter().any(|c| c.is_ascii_punctuation() || *c == ' ') {
+        pool += 33;
+    }
+    if chars.iter().any(|c| !c.is_ascii()) {
+        pool += 100;
+    }
     // repeated or sequential characters add almost nothing ("aaaa", "1234", "abcd")
     let mut effective = 1.0;
     for w in chars.windows(2) {
@@ -59,8 +69,26 @@ pub fn entropy_bits(pw: &str) -> f64 {
 }
 
 const COMMON: &[&str] = &[
-    "password", "passwort", "123456", "qwerty", "qwertz", "letmein", "welcome", "willkommen", "admin", "iloveyou",
-    "monkey", "dragon", "sunshine", "princess", "football", "fussball", "hallo", "geheim", "secret", "abc123",
+    "password",
+    "passwort",
+    "123456",
+    "qwerty",
+    "qwertz",
+    "letmein",
+    "welcome",
+    "willkommen",
+    "admin",
+    "iloveyou",
+    "monkey",
+    "dragon",
+    "sunshine",
+    "princess",
+    "football",
+    "fussball",
+    "hallo",
+    "geheim",
+    "secret",
+    "abc123",
 ];
 
 /// When the current password was set: walk back through history while it stays the same.
@@ -103,16 +131,19 @@ fn report(vaults: &HashMap<String, crate::vault::OpenVault>) -> Vec<Health> {
             *by_password.entry(pw.to_string()).or_default() += 1;
             let bits = entropy_bits(pw);
             let age_days = password_since(&e).map(|t| (now - t).num_days()).unwrap_or(0);
-            rows.push((pw.to_string(), Health {
-                vault: vid.clone(),
-                id: e.id().to_string(),
-                bits: bits as u32,
-                weak: bits < WEAK_BITS,
-                reused: 0,
-                age_days,
-                old: age_days > OLD_DAYS,
-                expired: e.times.expires == Some(true) && e.times.expiry < now,
-            }));
+            rows.push((
+                pw.to_string(),
+                Health {
+                    vault: vid.clone(),
+                    id: e.id().to_string(),
+                    bits: bits as u32,
+                    weak: bits < WEAK_BITS,
+                    reused: 0,
+                    age_days,
+                    old: age_days > OLD_DAYS,
+                    expired: e.times.expires == Some(true) && e.times.expiry < now,
+                },
+            ));
         }
     }
     rows.into_iter()
@@ -139,7 +170,12 @@ pub fn health_breach_prefixes(state: tauri::State<'_, Vaults>) -> Result<Vec<Str
     let map = state.0.lock().map_err(|_| "lock")?;
     let mut p: Vec<String> = map
         .values()
-        .flat_map(|v| v.db().iter_all_entries().filter_map(|e| e.get("Password").filter(|p| !p.is_empty()).map(|p| sha1_hex(p)[..5].to_string())).collect::<Vec<_>>())
+        .flat_map(|v| {
+            v.db()
+                .iter_all_entries()
+                .filter_map(|e| e.get("Password").filter(|p| !p.is_empty()).map(|p| sha1_hex(p)[..5].to_string()))
+                .collect::<Vec<_>>()
+        })
         .collect();
     p.sort();
     p.dedup();

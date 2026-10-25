@@ -9,12 +9,12 @@ use std::{
     sync::Mutex,
 };
 
-use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use chrono::{NaiveDate, NaiveDateTime};
 use keepass::{
-    config::{DatabaseConfig, DatabaseVersion, InnerCipherConfig, KdfConfig},
-    db::{fields, EntryId, GroupId, Times, Value},
     Database, DatabaseKey,
+    config::{DatabaseConfig, DatabaseVersion, InnerCipherConfig, KdfConfig},
+    db::{EntryId, GroupId, Times, Value, fields},
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -220,8 +220,12 @@ fn backup_target(vault: &Path, pattern: &str) -> Option<PathBuf> {
     while let Some(start) = name.find("{TIME:") {
         let end = start + name[start..].find('}')?;
         let fmt = name[start + 6..end]
-            .replace("yyyy", "%Y").replace("MM", "%m").replace("dd", "%d")
-            .replace("HH", "%H").replace("mm", "%M").replace("ss", "%S");
+            .replace("yyyy", "%Y")
+            .replace("MM", "%m")
+            .replace("dd", "%d")
+            .replace("HH", "%H")
+            .replace("mm", "%M")
+            .replace("ss", "%S");
         name.replace_range(start..=end, &chrono::Local::now().format(&fmt).to_string());
     }
     let name = name.replace("{TIME}", &chrono::Local::now().format("%Y%m%d%H%M%S").to_string());
@@ -273,64 +277,66 @@ pub(crate) fn stamp(p: &Path) {
 /// only local state is an open edit form, and saving that afterwards lands in the fresh file.
 pub fn watch_files(app: tauri::AppHandle) {
     use tauri::{Emitter, Manager};
-    std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_secs(2));
-        if !crate::desktop::prefs(&app).auto_reload {
-            continue;
-        }
-        // KeeShare containers changed by others → import into the vault that shares them
-        let containers: Vec<(String, PathBuf)> = {
-            let state = app.state::<Vaults>();
-            let Ok(map) = state.0.lock() else { continue };
-            let stamps = STAMPS.lock().ok().and_then(|s| s.clone()).unwrap_or_default();
-            map.iter()
-                .flat_map(|(id, v)| crate::keeshare::watched(&v.db, &v.path).into_iter().map(move |c| (id.clone(), c)))
-                .filter(|(_, c)| matches!((mtime(c), stamps.get(c)), (Some(now), Some(seen)) if now != *seen))
-                .collect()
-        };
-        for (id, c) in containers {
-            stamp(&c);
-            let state = app.state::<Vaults>();
-            let Ok(mut map) = state.0.lock() else { continue };
-            let Some(v) = map.get_mut(&id) else { continue };
-            if crate::keeshare::import_all(&mut v.db, &v.path.clone()) {
-                if let Err(e) = write_db(v) {
-                    log::warn!("keeshare save: {e}");
-                    continue;
-                }
-                log::info!("keeshare: imported changes");
-                let _ = app.emit("akp-vault-updated", dto(&id, v));
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            if !crate::desktop::prefs(&app).auto_reload {
+                continue;
             }
-        }
-        let changed: Vec<(String, PathBuf, DatabaseKey)> = {
-            let state = app.state::<Vaults>();
-            let Ok(map) = state.0.lock() else { continue };
-            let stamps = STAMPS.lock().ok().and_then(|s| s.clone()).unwrap_or_default();
-            map.iter()
-                .filter(|(_, v)| matches!((mtime(&v.path), stamps.get(&v.path)), (Some(now), Some(seen)) if now != *seen))
-                .map(|(id, v)| (id.clone(), v.path.clone(), v.key.clone()))
-                .collect()
-        };
-        for (id, path, key) in changed {
-            stamp(&path); // also on failure: don't retry a broken file every 2 s
-            // key derivation outside the lock, the UI keeps working meanwhile
-            let db = fs::File::open(&path)
-                .map_err(|e| e.to_string())
-                .and_then(|mut f| Database::open(&mut f, key).map_err(|e| e.to_string()));
-            let db = match db {
-                Ok(db) => db,
-                Err(e) => {
-                    log::warn!("reload after external change failed: {e}");
-                    continue;
-                }
+            // KeeShare containers changed by others → import into the vault that shares them
+            let containers: Vec<(String, PathBuf)> = {
+                let state = app.state::<Vaults>();
+                let Ok(map) = state.0.lock() else { continue };
+                let stamps = STAMPS.lock().ok().and_then(|s| s.clone()).unwrap_or_default();
+                map.iter()
+                    .flat_map(|(id, v)| crate::keeshare::watched(&v.db, &v.path).into_iter().map(move |c| (id.clone(), c)))
+                    .filter(|(_, c)| matches!((mtime(c), stamps.get(c)), (Some(now), Some(seen)) if now != *seen))
+                    .collect()
             };
-            let state = app.state::<Vaults>();
-            let Ok(mut map) = state.0.lock() else { continue };
-            let Some(v) = map.get_mut(&id) else { continue };
-            v.db = db;
-            log::info!("vault reloaded after external change");
-            let _ = app.emit("akp-vault-updated", dto(&id, v));
-            let _ = app.emit("akp-vault-reloaded", ());
+            for (id, c) in containers {
+                stamp(&c);
+                let state = app.state::<Vaults>();
+                let Ok(mut map) = state.0.lock() else { continue };
+                let Some(v) = map.get_mut(&id) else { continue };
+                if crate::keeshare::import_all(&mut v.db, &v.path.clone()) {
+                    if let Err(e) = write_db(v) {
+                        log::warn!("keeshare save: {e}");
+                        continue;
+                    }
+                    log::info!("keeshare: imported changes");
+                    let _ = app.emit("akp-vault-updated", dto(&id, v));
+                }
+            }
+            let changed: Vec<(String, PathBuf, DatabaseKey)> = {
+                let state = app.state::<Vaults>();
+                let Ok(map) = state.0.lock() else { continue };
+                let stamps = STAMPS.lock().ok().and_then(|s| s.clone()).unwrap_or_default();
+                map.iter()
+                    .filter(|(_, v)| matches!((mtime(&v.path), stamps.get(&v.path)), (Some(now), Some(seen)) if now != *seen))
+                    .map(|(id, v)| (id.clone(), v.path.clone(), v.key.clone()))
+                    .collect()
+            };
+            for (id, path, key) in changed {
+                stamp(&path); // also on failure: don't retry a broken file every 2 s
+                // key derivation outside the lock, the UI keeps working meanwhile
+                let db = fs::File::open(&path)
+                    .map_err(|e| e.to_string())
+                    .and_then(|mut f| Database::open(&mut f, key).map_err(|e| e.to_string()));
+                let db = match db {
+                    Ok(db) => db,
+                    Err(e) => {
+                        log::warn!("reload after external change failed: {e}");
+                        continue;
+                    }
+                };
+                let state = app.state::<Vaults>();
+                let Ok(mut map) = state.0.lock() else { continue };
+                let Some(v) = map.get_mut(&id) else { continue };
+                v.db = db;
+                log::info!("vault reloaded after external change");
+                let _ = app.emit("akp-vault-updated", dto(&id, v));
+                let _ = app.emit("akp-vault-reloaded", ());
+            }
         }
     });
 }
@@ -401,10 +407,7 @@ fn dto(id: &str, v: &OpenVault) -> VaultDto {
                     .history
                     .as_ref()
                     .map(|h| {
-                        h.get_entries()
-                            .iter()
-                            .map(|old| old.times.last_modification.as_ref().map(fmt_time).unwrap_or_default())
-                            .collect()
+                        h.get_entries().iter().map(|old| old.times.last_modification.as_ref().map(fmt_time).unwrap_or_default()).collect()
                     })
                     .unwrap_or_default(),
             }
@@ -413,9 +416,11 @@ fn dto(id: &str, v: &OpenVault) -> VaultDto {
 
     VaultDto {
         id: id.to_string(),
-        name: db.meta.database_name.clone().unwrap_or_else(|| {
-            v.path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
-        }),
+        name: db
+            .meta
+            .database_name
+            .clone()
+            .unwrap_or_else(|| v.path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()),
         path: v.path.to_string_lossy().into_owned(),
         root: root.to_string(),
         recycle_bin: bin.map(|b| b.to_string()),
@@ -502,7 +507,11 @@ pub fn vault_settings_set(state: tauri::State<'_, Vaults>, vault: String, settin
         db.config.kdf_config = match settings.kdf.as_str() {
             "aes" => KdfConfig::Aes { rounds: settings.iterations.max(100_000) },
             k => {
-                let (iterations, memory, parallelism) = (settings.iterations.clamp(1, 1000), settings.memory_mib.clamp(1, 4096) * 1024 * 1024, settings.parallelism.clamp(1, 64));
+                let (iterations, memory, parallelism) = (
+                    settings.iterations.clamp(1, 1000),
+                    settings.memory_mib.clamp(1, 4096) * 1024 * 1024,
+                    settings.parallelism.clamp(1, 64),
+                );
                 if k == "argon2d" {
                     KdfConfig::Argon2 { iterations, memory, parallelism, version: argon2::Version::Version13 }
                 } else {
@@ -667,12 +676,7 @@ fn parse_expiry(s: &str) -> Option<NaiveDateTime> {
 /// Strong defaults for new files (the crate default uses only 1 MiB Argon2 memory).
 pub(crate) fn new_config() -> DatabaseConfig {
     let mut c = DatabaseConfig::default();
-    c.kdf_config = KdfConfig::Argon2id {
-        iterations: 10,
-        memory: 64 * 1024 * 1024,
-        parallelism: 2,
-        version: argon2::Version::Version13,
-    };
+    c.kdf_config = KdfConfig::Argon2id { iterations: 10, memory: 64 * 1024 * 1024, parallelism: 2, version: argon2::Version::Version13 };
     c
 }
 
@@ -751,9 +755,7 @@ pub async fn vault_sync(state: tauri::State<'_, Vaults>, vault: String) -> R<Vau
 /// Vaultwarden email 2FA: send the login code.
 #[tauri::command]
 pub async fn bw_send_email(path: String, password: String) -> R<()> {
-    tauri::async_runtime::spawn_blocking(move || crate::bitwarden::send_email_code(&path, &password))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || crate::bitwarden::send_email_code(&path, &password)).await.map_err(|e| e.to_string())?
 }
 
 /// Vaultwarden: close and forget this device's token and offline copy.
@@ -765,7 +767,13 @@ pub fn bw_sign_out(state: tauri::State<'_, Vaults>, path: String) -> R<()> {
 }
 
 /// `second_factor`: in "password and Windows Hello" mode ask Hello once the key is known to be right.
-async fn open_with(app: tauri::AppHandle, state: tauri::State<'_, Vaults>, path: String, key: DatabaseKey, second_factor: bool) -> R<VaultDto> {
+async fn open_with(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Vaults>,
+    path: String,
+    key: DatabaseKey,
+    second_factor: bool,
+) -> R<VaultDto> {
     // Argon2 takes ~1 s: run it off the main thread
     let p = path.clone();
     let k = key.clone();
@@ -790,7 +798,9 @@ async fn open_with(app: tauri::AppHandle, state: tauri::State<'_, Vaults>, path:
         let ok = tauri::async_runtime::spawn_blocking(move || {
             // no Hello on this PC (any more): don't lock the user out, the password was right
             !crate::hello::available() || crate::hello::verify(hwnd, "AnotherKeepass")
-        }).await.unwrap_or(false);
+        })
+        .await
+        .unwrap_or(false);
         if !ok {
             return Err("hello_cancel".into());
         }
@@ -901,12 +911,7 @@ pub async fn vault_quick_unlock(app: tauri::AppHandle, state: tauri::State<'_, V
 }
 
 #[tauri::command]
-pub fn vault_change_key(
-    state: tauri::State<'_, Vaults>,
-    id: String,
-    password: Option<String>,
-    keyfile: Option<String>,
-) -> R<()> {
+pub fn vault_change_key(state: tauri::State<'_, Vaults>, id: String, password: Option<String>, keyfile: Option<String>) -> R<()> {
     let key = make_key(password.as_deref(), keyfile.as_deref())?;
     with_vault(&state, &id, |v| {
         v.key = key;
@@ -1062,7 +1067,12 @@ fn import_items(db: &mut Database, parent: Option<&str>, items: Vec<ImportInput>
 }
 
 #[tauri::command]
-pub fn entry_import(state: tauri::State<'_, Vaults>, vault: String, parent: Option<String>, items: Vec<ImportInput>) -> R<(usize, VaultDto)> {
+pub fn entry_import(
+    state: tauri::State<'_, Vaults>,
+    vault: String,
+    parent: Option<String>,
+    items: Vec<ImportInput>,
+) -> R<(usize, VaultDto)> {
     let mut n = 0;
     let d = mutate(&state, &vault, |db| {
         n = import_items(db, parent.as_deref(), items)?;
@@ -1077,11 +1087,7 @@ pub fn entry_import(state: tauri::State<'_, Vaults>, vault: String, parent: Opti
 pub fn entry_secrets(state: tauri::State<'_, Vaults>, vault: String, id: String) -> R<HashMap<String, String>> {
     with_vault(&state, &vault, |v| {
         let e = v.db.entry(EntryId::from(parse_uuid(&id)?)).ok_or("not_found")?;
-        Ok(e.fields
-            .iter()
-            .filter(|(_, val)| val.is_protected())
-            .map(|(k, val)| (k.clone(), val.get().clone()))
-            .collect())
+        Ok(e.fields.iter().filter(|(_, val)| val.is_protected()).map(|(k, val)| (k.clone(), val.get().clone())).collect())
     })
 }
 
@@ -1297,13 +1303,7 @@ pub fn entry_restore(state: tauri::State<'_, Vaults>, vault: String, id: String)
         let eid = EntryId::from(parse_uuid(&id)?);
         let root = db.root().id();
         let bin = db.recycle_bin().map(|g| g.id());
-        let target = db
-            .entry(eid)
-            .ok_or("not_found")?
-            .previous_parent()
-            .map(|g| g.id())
-            .filter(|g| Some(*g) != bin)
-            .unwrap_or(root);
+        let target = db.entry(eid).ok_or("not_found")?.previous_parent().map(|g| g.id()).filter(|g| Some(*g) != bin).unwrap_or(root);
         let mut e = db.entry_mut(eid).ok_or("not_found")?;
         e.move_to(target).map_err(|_| "not_found")?;
         e.times.location_changed = Some(Times::now());
@@ -1344,21 +1344,11 @@ pub fn trash_empty(state: tauri::State<'_, Vaults>, vault: String) -> R<VaultDto
 }
 
 #[tauri::command]
-pub fn entry_history_restore(
-    state: tauri::State<'_, Vaults>,
-    vault: String,
-    id: String,
-    index: usize,
-) -> R<VaultDto> {
+pub fn entry_history_restore(state: tauri::State<'_, Vaults>, vault: String, id: String, index: usize) -> R<VaultDto> {
     mutate(&state, &vault, |db| {
         let eid = EntryId::from(parse_uuid(&id)?);
-        let old = db
-            .entry(eid)
-            .ok_or("not_found")?
-            .history
-            .as_ref()
-            .and_then(|h| h.get_entries().get(index).cloned())
-            .ok_or("not_found")?;
+        let old =
+            db.entry(eid).ok_or("not_found")?.history.as_ref().and_then(|h| h.get_entries().get(index).cloned()).ok_or("not_found")?;
         {
             let mut e = db.entry_mut(eid).ok_or("not_found")?;
             let mut t = e.track_changes();
@@ -1374,13 +1364,7 @@ pub fn entry_history_restore(
 }
 
 #[tauri::command]
-pub fn attachment_save(
-    state: tauri::State<'_, Vaults>,
-    vault: String,
-    id: String,
-    name: String,
-    dest: String,
-) -> R<()> {
+pub fn attachment_save(state: tauri::State<'_, Vaults>, vault: String, id: String, name: String, dest: String) -> R<()> {
     with_vault(&state, &vault, |v| {
         let e = v.db.entry(EntryId::from(parse_uuid(&id)?)).ok_or("not_found")?;
         let a = e.attachment_by_name(&name).ok_or("not_found")?;
@@ -1558,9 +1542,14 @@ mod tests {
     fn import_creates_folders_once() {
         let mut db = Database::new();
         let item = |title: &str| ItemInput {
-            id: Some("ignored".into()), folder: String::new(),
+            id: Some("ignored".into()),
+            folder: String::new(),
             fields: vec![FieldDto { name: "Title".into(), value: Some(title.into()), protected: false }],
-            tags: vec![], custom_data: HashMap::new(), expires: None, keep_attachments: vec![], add_attachments: vec![],
+            tags: vec![],
+            custom_data: HashMap::new(),
+            expires: None,
+            keep_attachments: vec![],
+            add_attachments: vec![],
         };
         let items = vec![
             ImportInput { path: vec!["Work".into(), "Mail".into()], item: item("a") },
@@ -1667,23 +1656,31 @@ mod tests {
         let mut v = OpenVault { path, db, key: make_key(Some("compat-pw"), None).unwrap(), remote: None };
         write_db(&mut v).unwrap();
         state.0.lock().unwrap().insert(p.clone(), v);
-        save_for_test(&state, &p, ItemInput {
-            id: None,
-            folder: work,
-            fields: vec![
-                FieldDto { name: "Title".into(), value: Some("Mail".into()), protected: false },
-                FieldDto { name: "UserName".into(), value: Some("bob".into()), protected: false },
-                FieldDto { name: "Password".into(), value: Some("s3cret-Pa55".into()), protected: true },
-                FieldDto { name: "URL".into(), value: Some("https://example.org".into()), protected: false },
-                FieldDto { name: "otp".into(), value: Some("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&period=30&digits=6".into()), protected: true },
-                FieldDto { name: "Card number".into(), value: Some("4111".into()), protected: true },
-            ],
-            tags: vec!["pinned".into()],
-            custom_data: HashMap::from([(CD_TYPE.into(), "login".into())]),
-            expires: None,
-            keep_attachments: vec![],
-            add_attachments: vec![NewAttachment { name: "hello.txt".into(), base64: B64.encode(b"hello from AnotherKeepass") }],
-        });
+        save_for_test(
+            &state,
+            &p,
+            ItemInput {
+                id: None,
+                folder: work,
+                fields: vec![
+                    FieldDto { name: "Title".into(), value: Some("Mail".into()), protected: false },
+                    FieldDto { name: "UserName".into(), value: Some("bob".into()), protected: false },
+                    FieldDto { name: "Password".into(), value: Some("s3cret-Pa55".into()), protected: true },
+                    FieldDto { name: "URL".into(), value: Some("https://example.org".into()), protected: false },
+                    FieldDto {
+                        name: "otp".into(),
+                        value: Some("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&period=30&digits=6".into()),
+                        protected: true,
+                    },
+                    FieldDto { name: "Card number".into(), value: Some("4111".into()), protected: true },
+                ],
+                tags: vec!["pinned".into()],
+                custom_data: HashMap::from([(CD_TYPE.into(), "login".into())]),
+                expires: None,
+                keep_attachments: vec![],
+                add_attachments: vec![NewAttachment { name: "hello.txt".into(), base64: B64.encode(b"hello from AnotherKeepass") }],
+            },
+        );
     }
 
     #[test]
@@ -1698,20 +1695,24 @@ mod tests {
         let (id, folder) = (e.id().to_string(), e.parent().id().to_string());
         let state = Vaults::default();
         state.0.lock().unwrap().insert(p.clone(), OpenVault { path, db, key, remote: None });
-        save_for_test(&state, &p, ItemInput {
-            id: Some(id),
-            folder,
-            fields: vec![
-                FieldDto { name: "Title".into(), value: Some("Mail edited".into()), protected: false },
-                FieldDto { name: "UserName".into(), value: Some("alice".into()), protected: false },
-                FieldDto { name: "Password".into(), value: None, protected: true },
-            ],
-            tags: vec![],
-            custom_data: HashMap::new(),
-            expires: Some("2031-12-31".into()),
-            keep_attachments: vec![],
-            add_attachments: vec![],
-        });
+        save_for_test(
+            &state,
+            &p,
+            ItemInput {
+                id: Some(id),
+                folder,
+                fields: vec![
+                    FieldDto { name: "Title".into(), value: Some("Mail edited".into()), protected: false },
+                    FieldDto { name: "UserName".into(), value: Some("alice".into()), protected: false },
+                    FieldDto { name: "Password".into(), value: None, protected: true },
+                ],
+                tags: vec![],
+                custom_data: HashMap::new(),
+                expires: Some("2031-12-31".into()),
+                keep_attachments: vec![],
+                add_attachments: vec![],
+            },
+        );
     }
 
     fn save_for_test(state: &Vaults, vault: &str, item: ItemInput) -> String {

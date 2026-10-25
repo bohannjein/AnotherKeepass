@@ -3,10 +3,10 @@
 
 use std::{fs, path::Path};
 
-use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use keepass::{
-    db::{merge::MergeEventType, Database, EntryId, GroupId},
     DatabaseKey,
+    db::{Database, EntryId, GroupId, merge::MergeEventType},
 };
 use serde::Serialize;
 
@@ -37,14 +37,23 @@ fn group_path(db: &Database, g: GroupId) -> Option<String> {
 }
 
 pub fn to_csv(db: &Database) -> String {
-    let mut out = String::from("\"Group\",\"Title\",\"Username\",\"Password\",\"URL\",\"Notes\",\"TOTP\",\"Icon\",\"Last Modified\",\"Created\"\n");
+    let mut out =
+        String::from("\"Group\",\"Title\",\"Username\",\"Password\",\"URL\",\"Notes\",\"TOTP\",\"Icon\",\"Last Modified\",\"Created\"\n");
     for e in db.iter_all_entries() {
         let Some(path) = group_path(db, e.parent().id()) else { continue };
         let f = |k: &str| e.get(k).unwrap_or_default().to_string();
         let time = |t: Option<&chrono::NaiveDateTime>| t.map(|t| t.format("%Y-%m-%dT%H:%M:%SZ").to_string()).unwrap_or_default();
         let row = [
-            path, f("Title"), f("UserName"), f("Password"), f("URL"), f("Notes"), f("otp"), "0".into(),
-            time(e.times.last_modification.as_ref()), time(e.times.creation.as_ref()),
+            path,
+            f("Title"),
+            f("UserName"),
+            f("Password"),
+            f("URL"),
+            f("Notes"),
+            f("otp"),
+            "0".into(),
+            time(e.times.last_modification.as_ref()),
+            time(e.times.creation.as_ref()),
         ];
         out.push_str(&row.iter().map(|c| csv_cell(c)).collect::<Vec<_>>().join(","));
         out.push('\n');

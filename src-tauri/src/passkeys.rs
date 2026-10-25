@@ -4,11 +4,11 @@
 //! so passkeys move freely between AnotherKeepass and KeePassXC.
 
 use base64::{
-    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
     Engine,
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
 };
 use rand_core::{OsRng, RngCore};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 pub const USERNAME: &str = "KPEX_PASSKEY_USERNAME";
@@ -64,7 +64,9 @@ pub fn origin_allowed(origin: &str, localhost: bool) -> bool {
     if !localhost {
         return false;
     }
-    url::Url::parse(origin).ok().and_then(|u| u.host_str().map(|h| h.trim_end_matches('.').to_string()))
+    url::Url::parse(origin)
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h.trim_end_matches('.').to_string()))
         .is_some_and(|h| h == "localhost" || h.ends_with(".localhost"))
 }
 
@@ -83,11 +85,7 @@ fn rp_id(requested: Option<&str>, domain: &str) -> Result<String, u32> {
     let Some(rp) = requested.map(|r| r.trim().to_ascii_lowercase()).filter(|r| !r.is_empty()) else {
         return Ok(domain.to_string());
     };
-    if rp == domain || (domain.ends_with(&format!(".{rp}")) && rp.contains('.')) {
-        Ok(rp)
-    } else {
-        Err(E_RPID_MISMATCH)
-    }
+    if rp == domain || (domain.ends_with(&format!(".{rp}")) && rp.contains('.')) { Ok(rp) } else { Err(E_RPID_MISMATCH) }
 }
 
 fn client_data(kind: &str, challenge: &str, origin: &str) -> String {
@@ -130,13 +128,22 @@ fn cose_key(alg: i64, x: &[u8], y: &[u8]) -> Vec<u8> {
     let mut o = Vec::new();
     if alg == ES256 {
         cbor_head(&mut o, 5, 5);
-        for (k, v) in [(1, 2), (3, ES256), (-1, 1)] { cbor_int(&mut o, k); cbor_int(&mut o, v); }
-        cbor_int(&mut o, -2); cbor_bytes(&mut o, x);
-        cbor_int(&mut o, -3); cbor_bytes(&mut o, y);
+        for (k, v) in [(1, 2), (3, ES256), (-1, 1)] {
+            cbor_int(&mut o, k);
+            cbor_int(&mut o, v);
+        }
+        cbor_int(&mut o, -2);
+        cbor_bytes(&mut o, x);
+        cbor_int(&mut o, -3);
+        cbor_bytes(&mut o, y);
     } else {
         cbor_head(&mut o, 5, 4);
-        for (k, v) in [(1, 1), (3, EDDSA), (-1, 6)] { cbor_int(&mut o, k); cbor_int(&mut o, v); }
-        cbor_int(&mut o, -2); cbor_bytes(&mut o, x);
+        for (k, v) in [(1, 1), (3, EDDSA), (-1, 6)] {
+            cbor_int(&mut o, k);
+            cbor_int(&mut o, v);
+        }
+        cbor_int(&mut o, -2);
+        cbor_bytes(&mut o, x);
     }
     o
 }
@@ -209,9 +216,15 @@ fn sign(pem: &str, data: &[u8]) -> Result<Vec<u8>, u32> {
 /// authenticatorData: rpIdHash | flags | counter (always 0) | [attested credential data]
 fn auth_data(rp: &str, be: bool, bs: bool, attested: Option<(&[u8], &[u8])>) -> Vec<u8> {
     let mut flags = 0x01 | 0x04; // UP, UV
-    if be { flags |= 0x08; }
-    if bs { flags |= 0x10; }
-    if attested.is_some() { flags |= 0x40; }
+    if be {
+        flags |= 0x08;
+    }
+    if bs {
+        flags |= 0x10;
+    }
+    if attested.is_some() {
+        flags |= 0x40;
+    }
     let mut d = Sha256::digest(rp.as_bytes()).to_vec();
     d.push(flags);
     d.extend([0, 0, 0, 0]);
@@ -250,16 +263,20 @@ pub fn check_create(pk: &Value, origin: &str) -> Result<Registration, u32> {
     let domain = effective_domain(origin)?;
     let rp_id = rp_id(pk["rp"]["id"].as_str(), &domain)?;
     // first supported algorithm the site lists (empty list = defaults, ES256 first)
-    let algs: Vec<i64> = pk["pubKeyCredParams"].as_array().map(|a| {
-        a.iter().filter(|p| p["type"] == "public-key").filter_map(|p| p["alg"].as_i64()).collect()
-    }).unwrap_or_default();
+    let algs: Vec<i64> = pk["pubKeyCredParams"]
+        .as_array()
+        .map(|a| a.iter().filter(|p| p["type"] == "public-key").filter_map(|p| p["alg"].as_i64()).collect())
+        .unwrap_or_default();
     let alg = if algs.is_empty() { ES256 } else { *algs.iter().find(|a| [ES256, EDDSA].contains(a)).ok_or(E_NO_ALGORITHMS)? };
     Ok(Registration {
         rp_name: pk["rp"]["name"].as_str().unwrap_or(&rp_id).to_string(),
         rp_id,
         username: pk["user"]["name"].as_str().unwrap_or_default().to_string(),
         user_handle,
-        exclude: pk["excludeCredentials"].as_array().map(|a| a.iter().filter_map(|c| c["id"].as_str().map(String::from)).collect()).unwrap_or_default(),
+        exclude: pk["excludeCredentials"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|c| c["id"].as_str().map(String::from)).collect())
+            .unwrap_or_default(),
         alg,
         challenge: challenge.to_string(),
         origin: origin.to_string(),
@@ -295,13 +312,20 @@ pub fn create(r: &Registration, attachment: Option<&str>) -> Result<(Value, Stri
 pub fn check_get(pk: &Value, origin: &str) -> Result<(String, Vec<String>), u32> {
     let domain = effective_domain(origin)?;
     let rp = rp_id(pk["rpId"].as_str(), &domain)?;
-    let allowed = pk["allowCredentials"].as_array().map(|a| {
-        a.iter()
-            .filter(|c| c["type"] == "public-key")
-            .filter(|c| c["transports"].as_array().is_none_or(|t| t.is_empty() || t.iter().any(|x| ["internal", "nfc", "usb"].contains(&x.as_str().unwrap_or_default()))))
-            .filter_map(|c| c["id"].as_str().map(String::from))
-            .collect()
-    }).unwrap_or_default();
+    let allowed = pk["allowCredentials"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter(|c| c["type"] == "public-key")
+                .filter(|c| {
+                    c["transports"].as_array().is_none_or(|t| {
+                        t.is_empty() || t.iter().any(|x| ["internal", "nfc", "usb"].contains(&x.as_str().unwrap_or_default()))
+                    })
+                })
+                .filter_map(|c| c["id"].as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
     Ok((rp, allowed))
 }
 
@@ -352,7 +376,7 @@ mod tests {
 
     #[test]
     fn register_then_sign_verifies() {
-        use p256::ecdsa::{signature::Verifier, Signature, VerifyingKey};
+        use p256::ecdsa::{Signature, VerifyingKey, signature::Verifier};
         use p256::pkcs8::DecodePublicKey;
         let reg = check_create(&options(), "https://login.example.com").unwrap();
         assert_eq!(reg.alg, ES256);

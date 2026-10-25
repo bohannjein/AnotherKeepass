@@ -24,7 +24,7 @@ pub fn apply() {}
 
 #[cfg(windows)]
 fn dll_search_order() {
-    use windows_sys::Win32::System::LibraryLoader::{SetDefaultDllDirectories, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS};
+    use windows_sys::Win32::System::LibraryLoader::{LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, SetDefaultDllDirectories};
     unsafe {
         SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
     }
@@ -43,10 +43,10 @@ pub fn security_descriptor(sddl: &str) -> Result<windows_sys::Win32::Security::P
 #[cfg(windows)]
 fn restrict_process_access() -> Result<(), String> {
     use windows_sys::Win32::Foundation::LocalFree;
-    use windows_sys::Win32::Security::Authorization::{SetSecurityInfo, SE_KERNEL_OBJECT};
-    use windows_sys::Win32::Security::{GetSecurityDescriptorDacl, DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION};
-    use windows_sys::Win32::System::Threading::GetCurrentProcess;
     use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+    use windows_sys::Win32::Security::Authorization::{SE_KERNEL_OBJECT, SetSecurityInfo};
+    use windows_sys::Win32::Security::{DACL_SECURITY_INFORMATION, GetSecurityDescriptorDacl, PROTECTED_DACL_SECURITY_INFORMATION};
+    use windows_sys::Win32::System::Threading::GetCurrentProcess;
     // our user: SYNCHRONIZE | PROCESS_QUERY_(LIMITED_)INFORMATION | PROCESS_TERMINATE (taskkill needs both); SYSTEM: everything.
     // The user's SID, not OW: the process owner can be the Administrators group, and then
     // nobody could end the process (Task Manager, taskkill).
@@ -67,8 +67,15 @@ fn restrict_process_access() -> Result<(), String> {
         if GetSecurityDescriptorDacl(sd, &mut present, &mut dacl, &mut defaulted) == 0 {
             Err("dacl".to_string())
         } else {
-            let r = SetSecurityInfo(GetCurrentProcess(), SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-                std::ptr::null_mut(), std::ptr::null_mut(), dacl, std::ptr::null());
+            let r = SetSecurityInfo(
+                GetCurrentProcess(),
+                SE_KERNEL_OBJECT,
+                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                dacl,
+                std::ptr::null(),
+            );
             if r == 0 { Ok(()) } else { Err(format!("SetSecurityInfo {r}")) }
         }
     };
@@ -78,8 +85,8 @@ fn restrict_process_access() -> Result<(), String> {
 
 #[cfg(windows)]
 fn crash_reports_without_memory() {
-    use windows_sys::Win32::System::Diagnostics::Debug::{SetErrorMode, SEM_FAILCRITICALERRORS, SEM_NOGPFAULTERRORBOX};
-    use windows_sys::Win32::System::ErrorReporting::{WerSetFlags, WER_FAULT_REPORTING_FLAG_NOHEAP};
+    use windows_sys::Win32::System::Diagnostics::Debug::{SEM_FAILCRITICALERRORS, SEM_NOGPFAULTERRORBOX, SetErrorMode};
+    use windows_sys::Win32::System::ErrorReporting::{WER_FAULT_REPORTING_FLAG_NOHEAP, WerSetFlags};
     unsafe {
         WerSetFlags(WER_FAULT_REPORTING_FLAG_NOHEAP);
         SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
@@ -90,7 +97,7 @@ fn crash_reports_without_memory() {
 #[cfg(windows)]
 fn user_sid_of(process: windows_sys::Win32::Foundation::HANDLE) -> Option<Vec<u8>> {
     use windows_sys::Win32::Foundation::CloseHandle;
-    use windows_sys::Win32::Security::{GetLengthSid, GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
+    use windows_sys::Win32::Security::{GetLengthSid, GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser};
     use windows_sys::Win32::System::Threading::OpenProcessToken;
     unsafe {
         let mut token = std::ptr::null_mut();
@@ -136,17 +143,29 @@ pub fn pipe_server_is_me(pipe: windows_sys::Win32::Foundation::HANDLE) -> bool {
 pub fn pipe_owner_trusted(pipe: windows_sys::Win32::Foundation::HANDLE) -> bool {
     use windows_sys::Win32::Foundation::LocalFree;
     use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_KERNEL_OBJECT};
-    use windows_sys::Win32::Security::{IsWellKnownSid, WinBuiltinAdministratorsSid, WinLocalSystemSid, OWNER_SECURITY_INFORMATION};
+    use windows_sys::Win32::Security::{IsWellKnownSid, OWNER_SECURITY_INFORMATION, WinBuiltinAdministratorsSid, WinLocalSystemSid};
     use windows_sys::Win32::System::Threading::GetCurrentProcess;
     unsafe {
         let (mut owner, mut sd) = (std::ptr::null_mut(), std::ptr::null_mut());
-        if GetSecurityInfo(pipe, SE_KERNEL_OBJECT, OWNER_SECURITY_INFORMATION, &mut owner, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut(), &mut sd) != 0 {
+        if GetSecurityInfo(
+            pipe,
+            SE_KERNEL_OBJECT,
+            OWNER_SECURITY_INFORMATION,
+            &mut owner,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut sd,
+        ) != 0
+        {
             return false;
         }
         let me = user_sid_of(GetCurrentProcess());
         let len = windows_sys::Win32::Security::GetLengthSid(owner) as usize;
         let owner_bytes = std::slice::from_raw_parts(owner as *const u8, len).to_vec();
-        let ok = IsWellKnownSid(owner, WinLocalSystemSid) != 0 || IsWellKnownSid(owner, WinBuiltinAdministratorsSid) != 0 || me.as_deref() == Some(&owner_bytes[..]);
+        let ok = IsWellKnownSid(owner, WinLocalSystemSid) != 0
+            || IsWellKnownSid(owner, WinBuiltinAdministratorsSid) != 0
+            || me.as_deref() == Some(&owner_bytes[..]);
         LocalFree(sd as _);
         ok
     }
@@ -155,11 +174,20 @@ pub fn pipe_owner_trusted(pipe: windows_sys::Win32::Foundation::HANDLE) -> bool 
 /// Encrypt for the current Windows user (DPAPI). Prefixed so plain old files still load.
 #[cfg(windows)]
 pub fn protect(data: &[u8]) -> Option<Vec<u8>> {
-    use windows_sys::Win32::Security::Cryptography::{CryptProtectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB};
+    use windows_sys::Win32::Security::Cryptography::{CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN, CryptProtectData};
     let input = CRYPT_INTEGER_BLOB { cbData: data.len() as u32, pbData: data.as_ptr() as *mut u8 };
     let mut out = CRYPT_INTEGER_BLOB { cbData: 0, pbData: std::ptr::null_mut() };
     unsafe {
-        if CryptProtectData(&input, std::ptr::null(), std::ptr::null(), std::ptr::null(), std::ptr::null(), CRYPTPROTECT_UI_FORBIDDEN, &mut out) == 0 {
+        if CryptProtectData(
+            &input,
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            CRYPTPROTECT_UI_FORBIDDEN,
+            &mut out,
+        ) == 0
+        {
             return None;
         }
         let mut v = b"DPAPI1".to_vec();
@@ -171,12 +199,21 @@ pub fn protect(data: &[u8]) -> Option<Vec<u8>> {
 
 #[cfg(windows)]
 pub fn unprotect(data: &[u8]) -> Option<Vec<u8>> {
-    use windows_sys::Win32::Security::Cryptography::{CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB};
+    use windows_sys::Win32::Security::Cryptography::{CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN, CryptUnprotectData};
     let body = data.strip_prefix(b"DPAPI1")?;
     let input = CRYPT_INTEGER_BLOB { cbData: body.len() as u32, pbData: body.as_ptr() as *mut u8 };
     let mut out = CRYPT_INTEGER_BLOB { cbData: 0, pbData: std::ptr::null_mut() };
     unsafe {
-        if CryptUnprotectData(&input, std::ptr::null_mut(), std::ptr::null(), std::ptr::null(), std::ptr::null(), CRYPTPROTECT_UI_FORBIDDEN, &mut out) == 0 {
+        if CryptUnprotectData(
+            &input,
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            CRYPTPROTECT_UI_FORBIDDEN,
+            &mut out,
+        ) == 0
+        {
             return None;
         }
         let v = std::slice::from_raw_parts(out.pbData, out.cbData as usize).to_vec();
@@ -186,9 +223,13 @@ pub fn unprotect(data: &[u8]) -> Option<Vec<u8>> {
 }
 
 #[cfg(not(windows))]
-pub fn protect(_data: &[u8]) -> Option<Vec<u8>> { None }
+pub fn protect(_data: &[u8]) -> Option<Vec<u8>> {
+    None
+}
 #[cfg(not(windows))]
-pub fn unprotect(_data: &[u8]) -> Option<Vec<u8>> { None }
+pub fn unprotect(_data: &[u8]) -> Option<Vec<u8>> {
+    None
+}
 
 #[cfg(all(test, windows))]
 mod tests {

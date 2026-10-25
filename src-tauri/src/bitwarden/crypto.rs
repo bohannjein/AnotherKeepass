@@ -1,8 +1,8 @@
 //! Bitwarden/Vaultwarden key handling: master key (PBKDF2 / Argon2id), server password
 //! hash, HKDF stretch, EncStrings (type 0 / 2 AES-CBC(+HMAC), type 4 RSA-OAEP for org keys).
 
-use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
-use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use aes::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
+use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use hmac::{Hmac, Mac};
 use rand_core::{OsRng, RngCore};
 use sha2::{Digest, Sha256};

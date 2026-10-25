@@ -10,17 +10,17 @@ pub mod mapping;
 
 use std::{collections::HashMap, fs, path::PathBuf};
 
-use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use keepass::{
-    db::{EntryId, GroupId, Times},
     Database,
+    db::{EntryId, GroupId, Times},
 };
 use rsa::pkcs8::DecodePrivateKey;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
-use api::{field, LoginError, Session};
+use api::{LoginError, Session, field};
 use crypto::{Kdf, SymKey};
 use mapping::{Meta, Plain};
 
@@ -61,13 +61,15 @@ struct Account {
 
 fn account_file(path: &str) -> Option<PathBuf> {
     use sha2::{Digest, Sha256};
-    let base = std::env::var_os("APPDATA").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
+    let base =
+        std::env::var_os("APPDATA").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
     let name: String = Sha256::digest(path.as_bytes()).iter().take(12).map(|b| format!("{b:02x}")).collect();
     Some(base.join(crate::desktop::IDENTIFIER).join("vaultwarden").join(format!("{name}.json")))
 }
 
 fn load_account(path: &str) -> Account {
-    let mut a: Account = account_file(path).and_then(|f| fs::read(f).ok())
+    let mut a: Account = account_file(path)
+        .and_then(|f| fs::read(f).ok())
         .and_then(|b| crate::hardening::unprotect(&b).or(Some(b)))
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default();
@@ -135,7 +137,9 @@ fn org_keys(profile: &Value, private: Option<&rsa::RsaPrivateKey>) -> HashMap<St
     for o in field(profile, "organizations").as_array().into_iter().flatten() {
         let (Some(id), Some(k)) = (field(o, "id").as_str(), field(o, "key").as_str()) else { continue };
         match crypto::decrypt_rsa(k, pk).and_then(|b| SymKey::from_bytes(&b)) {
-            Ok(key) => { out.insert(id.to_string(), key); }
+            Ok(key) => {
+                out.insert(id.to_string(), key);
+            }
             Err(e) => log::warn!("vaultwarden org key: {e}"),
         }
     }
@@ -200,7 +204,9 @@ fn build(sync: &Value, title: &str, user: &SymKey, orgs: &HashMap<String, SymKey
         let folder = field(c, "folderId").as_str().map(String::from);
         let parent = if deleted {
             bin
-        } else if let Some(g) = folder.as_deref().and_then(|f| Uuid::parse_str(f).ok()).map(GroupId::from_uuid).filter(|g| db.group(*g).is_some()) {
+        } else if let Some(g) =
+            folder.as_deref().and_then(|f| Uuid::parse_str(f).ok()).map(GroupId::from_uuid).filter(|g| db.group(*g).is_some())
+        {
             g
         } else if let Some(g) = meta.org.as_deref().and_then(|o| org_group.get(o)) {
             *g
@@ -240,7 +246,8 @@ pub fn open(path: &str, password: &str, second: Option<(u8, String)>) -> Result<
         }
         Err(e) => return Err(format!("bw:{e:?}")),
     };
-    let Some(kdf) = kdf.or_else(|| acct.kdf.map(|(kind, iterations, memory, parallelism)| Kdf { kind, iterations, memory, parallelism })) else {
+    let Some(kdf) = kdf.or_else(|| acct.kdf.map(|(kind, iterations, memory, parallelism)| Kdf { kind, iterations, memory, parallelism }))
+    else {
         return Err(format!("offline_no_cache:{unreachable}"));
     };
     if let Some((kind, iterations, memory, parallelism)) = acct.kdf {
@@ -256,7 +263,10 @@ pub fn open(path: &str, password: &str, second: Option<(u8, String)>) -> Result<
         Some((p, code)) => api::login(&server, &email, &hash, &acct.device_id, Some((*p, code.as_str()))),
         None => match acct.remember.clone() {
             Some(token) => match api::login(&server, &email, &hash, &acct.device_id, Some((5, token.as_str()))) {
-                Err(LoginError::TwoFactor(p)) => { acct.remember = None; Err(LoginError::TwoFactor(p)) }
+                Err(LoginError::TwoFactor(p)) => {
+                    acct.remember = None;
+                    Err(LoginError::TwoFactor(p))
+                }
                 other => other,
             },
             None => api::login(&server, &email, &hash, &acct.device_id, None),
@@ -315,7 +325,10 @@ pub fn pull(r: &mut Remote, title: &str) -> Result<Database, String> {
 }
 
 fn with_account(db: &mut Database, path: &str, acct: &Account) {
-    let item = |s: &str| keepass::db::CustomDataItem { value: Some(keepass::db::CustomDataValue::String(s.to_string())), last_modification_time: Some(Times::now()) };
+    let item = |s: &str| keepass::db::CustomDataItem {
+        value: Some(keepass::db::CustomDataValue::String(s.to_string())),
+        last_modification_time: Some(Times::now()),
+    };
     db.meta.custom_data.insert(CD_ACCOUNT.into(), item(path));
     for (k, v) in &acct.browser {
         db.meta.custom_data.insert(k.clone(), item(v));
@@ -324,9 +337,15 @@ fn with_account(db: &mut Database, path: &str, acct: &Account) {
 
 /// Browser associations live in the vault's meta data; for accounts they are kept locally.
 fn keep_associations(path: &str, db: &Database) {
-    let assoc: HashMap<String, String> = db.meta.custom_data.iter()
+    let assoc: HashMap<String, String> = db
+        .meta
+        .custom_data
+        .iter()
         .filter(|(k, _)| k.starts_with("KPXC_BROWSER_"))
-        .filter_map(|(k, v)| match &v.value { Some(keepass::db::CustomDataValue::String(s)) => Some((k.clone(), s.clone())), _ => None })
+        .filter_map(|(k, v)| match &v.value {
+            Some(keepass::db::CustomDataValue::String(s)) => Some((k.clone(), s.clone())),
+            _ => None,
+        })
         .collect();
     let mut acct = load_account(path);
     if acct.browser != assoc {
@@ -422,7 +441,8 @@ pub fn push(r: &mut Remote, db: &Database) -> Result<Database, String> {
         }
     }
     // gone locally: to the server's trash; permanently only what already was in the trash
-    let gone: Vec<(String, bool)> = r.snapshot.ciphers.iter().filter(|(id, _)| !seen.contains(id)).map(|(id, c)| (id.clone(), c.2)).collect();
+    let gone: Vec<(String, bool)> =
+        r.snapshot.ciphers.iter().filter(|(id, _)| !seen.contains(id)).map(|(id, c)| (id.clone(), c.2)).collect();
     for (id, was_trashed) in gone {
         if was_trashed { session.delete_cipher(&id)? } else { session.trash_cipher(&id)? }
     }
@@ -505,15 +525,21 @@ mod tests {
             for stream in listener.incoming().flatten() {
                 let mut reader = BufReader::new(stream.try_clone().unwrap());
                 let mut line = String::new();
-                if reader.read_line(&mut line).is_err() { continue; }
+                if reader.read_line(&mut line).is_err() {
+                    continue;
+                }
                 let mut parts = line.split_whitespace();
                 let (method, path) = (parts.next().unwrap_or("").to_string(), parts.next().unwrap_or("").to_string());
                 let mut len = 0;
                 loop {
                     let mut h = String::new();
                     reader.read_line(&mut h).unwrap();
-                    if h.trim().is_empty() { break; }
-                    if let Some(v) = h.to_lowercase().strip_prefix("content-length:") { len = v.trim().parse().unwrap_or(0); }
+                    if h.trim().is_empty() {
+                        break;
+                    }
+                    if let Some(v) = h.to_lowercase().strip_prefix("content-length:") {
+                        len = v.trim().parse().unwrap_or(0);
+                    }
                 }
                 let mut body = vec![0; len];
                 reader.read_exact(&mut body).unwrap();
@@ -521,10 +547,21 @@ mod tests {
                 log2.lock().unwrap().push((method.clone(), path.clone(), body.clone()));
                 let (code, reply) = match (method.as_str(), path.split('?').next().unwrap()) {
                     ("POST", "/identity/accounts/prelogin") => (200, json!({ "kdf": 0, "kdfIterations": 5000 })),
-                    ("POST", "/identity/connect/token") if body.contains("twoFactorToken=123456") || body.contains("twoFactorToken=remember-me") =>
-                        (200, json!({ "access_token": "acc", "refresh_token": "ref", "Key": protected_user_key, "PrivateKey": null, "TwoFactorToken": "remember-me" })),
-                    ("POST", "/identity/connect/token") => (400, json!({ "error": "invalid_grant", "error_description": "Two factor required.", "TwoFactorProviders": ["0"] })),
-                    ("GET", "/api/sync") => (200, json!({ "profile": { "id": "user-1", "organizations": [] }, "folders": [], "ciphers": *state.lock().unwrap() })),
+                    ("POST", "/identity/connect/token")
+                        if body.contains("twoFactorToken=123456") || body.contains("twoFactorToken=remember-me") =>
+                    {
+                        (
+                            200,
+                            json!({ "access_token": "acc", "refresh_token": "ref", "Key": protected_user_key, "PrivateKey": null, "TwoFactorToken": "remember-me" }),
+                        )
+                    }
+                    ("POST", "/identity/connect/token") => {
+                        (400, json!({ "error": "invalid_grant", "error_description": "Two factor required.", "TwoFactorProviders": ["0"] }))
+                    }
+                    ("GET", "/api/sync") => (
+                        200,
+                        json!({ "profile": { "id": "user-1", "organizations": [] }, "folders": [], "ciphers": *state.lock().unwrap() }),
+                    ),
                     ("PUT", p) if p.starts_with("/api/ciphers/") => {
                         let id = p.trim_start_matches("/api/ciphers/").to_string();
                         let mut c: Value = serde_json::from_str(&body).unwrap();
@@ -544,7 +581,11 @@ mod tests {
                 };
                 let text = reply.to_string();
                 let mut s = stream;
-                let _ = write!(s, "HTTP/1.1 {code} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{text}", text.len());
+                let _ = write!(
+                    s,
+                    "HTTP/1.1 {code} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{text}",
+                    text.len()
+                );
                 let _ = s.flush();
             }
         });
@@ -563,10 +604,14 @@ mod tests {
         let protected = encrypt(&ub, &crypto::stretch(&master));
         let e = |s: &str| json!(encrypt(s.as_bytes(), &user));
         let id1 = "cccccccc-0000-0000-0000-000000000001";
-        let m = mock(user.clone(), protected, vec![
-            json!({ "id": id1, "type": 1, "name": e("Mail"), "revisionDate": "2026-10-21T10:00:00Z", "login": { "username": e("me"), "password": e("old"), "uris": [] } }),
-            json!({ "id": "cccccccc-0000-0000-0000-000000000002", "type": 2, "name": e("Note"), "secureNote": { "type": 0 } }),
-        ]);
+        let m = mock(
+            user.clone(),
+            protected,
+            vec![
+                json!({ "id": id1, "type": 1, "name": e("Mail"), "revisionDate": "2026-10-21T10:00:00Z", "login": { "username": e("me"), "password": e("old"), "uris": [] } }),
+                json!({ "id": "cccccccc-0000-0000-0000-000000000002", "type": 2, "name": e("Note"), "secureNote": { "type": 0 } }),
+            ],
+        );
         let path = format!("bw:{}#{}", m.url, email);
 
         // 1. second factor needed, 2. with the code it works, 3. remembered device skips it

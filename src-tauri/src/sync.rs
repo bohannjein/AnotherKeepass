@@ -8,13 +8,13 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
-use keepass::db::{CustomDataItem, CustomDataValue, EntryId, EntryRef, GroupId, Times};
 use keepass::Database;
+use keepass::db::{CustomDataItem, CustomDataValue, EntryId, EntryRef, GroupId, Times};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter};
 
-use crate::vault::{ensure_recycle_bin, OpenVault};
+use crate::vault::{OpenVault, ensure_recycle_bin};
 
 pub const CD_LINK: &str = "AnotherKeepass.SyncWith";
 const CD_STATE: &str = "AnotherKeepass.SyncState";
@@ -39,8 +39,14 @@ fn cd(db: &Database, key: &str) -> Option<String> {
 
 fn set_cd(db: &mut Database, key: &str, value: Option<String>) {
     match value {
-        Some(v) => { db.meta.custom_data.insert(key.into(), CustomDataItem { value: Some(CustomDataValue::String(v)), last_modification_time: Some(Times::now()) }); }
-        None => { db.meta.custom_data.remove(key); }
+        Some(v) => {
+            db.meta
+                .custom_data
+                .insert(key.into(), CustomDataItem { value: Some(CustomDataValue::String(v)), last_modification_time: Some(Times::now()) });
+        }
+        None => {
+            db.meta.custom_data.remove(key);
+        }
     }
 }
 
@@ -93,7 +99,11 @@ fn ensure_path(db: &mut Database, names: &[String]) -> GroupId {
         cur = match found {
             Some(id) => id,
             None => match db.group_mut(cur) {
-                Some(mut g) => { let mut c = g.add_group(); c.name = n.clone(); c.id() }
+                Some(mut g) => {
+                    let mut c = g.add_group();
+                    c.name = n.clone();
+                    c.id()
+                }
                 None => cur,
             },
         };
@@ -130,7 +140,8 @@ fn copy_over(src_db: &Database, src: EntryId, dst_db: &mut Database, dst: Option
     let path = norm_path(src_db, &s);
     let (fields, src_tags, times) = (s.fields.clone(), s.tags.clone(), s.times.clone());
     let pinned = src_tags.iter().any(|t| t == "pinned");
-    let ours: Vec<(String, CustomDataItem)> = s.custom_data.iter().filter(|(k, _)| k.starts_with("AnotherKeepass.")).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let ours: Vec<(String, CustomDataItem)> =
+        s.custom_data.iter().filter(|(k, _)| k.starts_with("AnotherKeepass.")).map(|(k, v)| (k.clone(), v.clone())).collect();
     let folder = ensure_path(dst_db, &path);
     let id = match dst.filter(|d| dst_db.entry(*d).is_some()) {
         Some(d) => {
@@ -141,7 +152,8 @@ fn copy_over(src_db: &Database, src: EntryId, dst_db: &mut Database, dst: Option
             let mut t = e.track_changes();
             let mut m = t.as_mut();
             // passkeys and other strings the source doesn't know stay on the target
-            let keep: Vec<(String, keepass::db::Value<String>)> = m.fields.iter().filter(|(k, _)| k.starts_with("KPEX_")).map(|(k, v)| (k.clone(), v.clone())).collect();
+            let keep: Vec<(String, keepass::db::Value<String>)> =
+                m.fields.iter().filter(|(k, _)| k.starts_with("KPEX_")).map(|(k, v)| (k.clone(), v.clone())).collect();
             m.fields = fields;
             for (k, v) in keep {
                 m.fields.entry(k).or_insert(v);
@@ -246,7 +258,8 @@ pub fn sync(a: &mut Database, b: &mut Database) -> (bool, bool) {
             free_b.entry(key_of(&e)).or_default().push(e.id());
         }
     }
-    let new_a: Vec<EntryId> = a.iter_all_entries()
+    let new_a: Vec<EntryId> = a
+        .iter_all_entries()
         .filter(|e| !used_a.contains(&e.id().to_string()) && !in_bin(a, Some(e.parent().id())))
         .map(|e| e.id())
         .collect();
@@ -268,7 +281,10 @@ pub fn sync(a: &mut Database, b: &mut Database) -> (bool, bool) {
                 ib
             }
             None => match copy_over(a, ia, b, None) {
-                Some(n) => { cb = true; n }
+                Some(n) => {
+                    cb = true;
+                    n
+                }
                 None => continue,
             },
         };
@@ -310,7 +326,8 @@ pub(crate) fn remap(a: &mut Database, renamed: &[(String, String)]) -> bool {
 /// After a vault changed or was unlocked: sync it with its partner if both are open.
 pub fn after_change(map: &mut HashMap<String, OpenVault>, id: &str) {
     let pairs: Vec<(String, String)> = match map.get(id) {
-        Some(v) if v.remote.is_some() => map.iter()
+        Some(v) if v.remote.is_some() => map
+            .iter()
             .filter(|(_, x)| x.remote.is_none() && link_of(x.db()).as_deref() == Some(id))
             .map(|(k, _)| (k.clone(), id.to_string()))
             .collect(),
@@ -377,12 +394,19 @@ mod tests {
         e.id()
     }
     fn titles(db: &Database) -> Vec<String> {
-        let mut t: Vec<String> = db.iter_all_entries().filter(|e| !in_bin(db, Some(e.parent().id()))).map(|e| e.get_title().unwrap_or_default().to_string()).collect();
+        let mut t: Vec<String> = db
+            .iter_all_entries()
+            .filter(|e| !in_bin(db, Some(e.parent().id())))
+            .map(|e| e.get_title().unwrap_or_default().to_string())
+            .collect();
         t.sort();
         t
     }
     fn pw(db: &Database, title: &str) -> String {
-        db.iter_all_entries().find(|e| e.get_title() == Some(title) && !in_bin(db, Some(e.parent().id()))).and_then(|e| e.get("Password").map(String::from)).unwrap_or_default()
+        db.iter_all_entries()
+            .find(|e| e.get_title() == Some(title) && !in_bin(db, Some(e.parent().id())))
+            .and_then(|e| e.get("Password").map(String::from))
+            .unwrap_or_default()
     }
 
     #[test]

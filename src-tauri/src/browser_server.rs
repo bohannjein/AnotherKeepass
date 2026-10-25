@@ -5,13 +5,14 @@
 use std::{
     collections::HashMap,
     sync::{
+        Arc, Mutex, OnceLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
-        mpsc, Arc, Mutex, OnceLock,
+        mpsc,
     },
     time::Duration,
 };
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -30,9 +31,8 @@ use crate::{
 pub fn pipe_name() -> String {
     // same pipe as KeePassXC 2.7 (checked against an installed KeePassXC), so keepassxc-proxy finds us;
     // AKP_PIPE_NAME overrides it for tests next to a running KeePassXC
-    std::env::var("AKP_PIPE_NAME").unwrap_or_else(|_| {
-        format!(r"\\.\pipe\org.keepassxc.KeePassXC.BrowserServer_{}", std::env::var("USERNAME").unwrap_or_default())
-    })
+    std::env::var("AKP_PIPE_NAME")
+        .unwrap_or_else(|_| format!(r"\\.\pipe\org.keepassxc.KeePassXC.BrowserServer_{}", std::env::var("USERNAME").unwrap_or_default()))
 }
 
 #[cfg(unix)]
@@ -100,7 +100,9 @@ impl Host for AppHost {
             Ask::Access { host, entries } => json!({ "id": id, "kind": "access", "host": host, "entries": entries }),
             Ask::Update { title, username } => json!({ "id": id, "kind": "update", "title": title, "username": username }),
             Ask::Delete { title, username } => json!({ "id": id, "kind": "delete", "title": title, "username": username }),
-            Ask::PasskeyRegister { rp_id, username, existing } => json!({ "id": id, "kind": "passkeyRegister", "rpId": rp_id, "username": username, "existing": existing }),
+            Ask::PasskeyRegister { rp_id, username, existing } => {
+                json!({ "id": id, "kind": "passkeyRegister", "rpId": rp_id, "username": username, "existing": existing })
+            }
             Ask::PasskeyGet { rp_id, entries } => json!({ "id": id, "kind": "passkeyGet", "rpId": rp_id, "entries": entries }),
         };
         let _ = self.app.emit("akp-browser-ask", payload);
@@ -180,7 +182,8 @@ fn create_pipe(first: bool) -> std::io::Result<Listener> {
 fn create_pipe_named(name: &str, first: bool) -> std::io::Result<Listener> {
     use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
     let sd = crate::hardening::security_descriptor("D:P(A;;GA;;;OW)(A;;GA;;;SY)").map_err(std::io::Error::other)?;
-    let mut sa = SECURITY_ATTRIBUTES { nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32, lpSecurityDescriptor: sd, bInheritHandle: 0 };
+    let mut sa =
+        SECURITY_ATTRIBUTES { nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32, lpSecurityDescriptor: sd, bInheritHandle: 0 };
     let r = unsafe {
         tokio::net::windows::named_pipe::ServerOptions::new()
             .first_pipe_instance(first)
@@ -296,7 +299,7 @@ const FIREFOX_ID: &str = "keepassxc-browser@keepassxc.org";
 /// Previous values (usually KeePassXC's) are backed up and restored when switched off.
 #[cfg(windows)]
 pub fn sync_manifests(p: &desktop::DesktopPrefs) -> Vec<String> {
-    use winreg::{enums::HKEY_CURRENT_USER, RegKey};
+    use winreg::{RegKey, enums::HKEY_CURRENT_USER};
     let mut problems = Vec::new();
     let Some(dir) = std::env::var_os("LOCALAPPDATA").map(|d| std::path::PathBuf::from(d).join("AnotherKeepass")) else {
         return vec!["manifest:no LOCALAPPDATA".into()];
@@ -307,7 +310,8 @@ pub fn sync_manifests(p: &desktop::DesktopPrefs) -> Vec<String> {
         std::env::current_exe().unwrap_or_default()
     };
     let backup_file = dir.join("manifest-backup.json");
-    let mut backup: HashMap<String, String> = std::fs::read(&backup_file).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    let mut backup: HashMap<String, String> =
+        std::fs::read(&backup_file).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
     let on = p.browser_enabled && p.b_update_manifests;
     // (registry key, firefox?, enabled)
     let targets = [
@@ -338,15 +342,23 @@ pub fn sync_manifests(p: &desktop::DesktopPrefs) -> Vec<String> {
                     backup.insert(key_path.clone(), prev);
                 }
                 match hkcu.create_subkey(&key_path) {
-                    Ok((k, _)) => { let _ = k.set_value("", &file.to_string_lossy().to_string()); }
+                    Ok((k, _)) => {
+                        let _ = k.set_value("", &file.to_string_lossy().to_string());
+                    }
                     Err(e) => problems.push(format!("manifest:{e}")),
                 }
             }
         } else if ours {
             // switched off: give the slot back to whoever had it (e.g. KeePassXC)
             match backup.remove(&key_path) {
-                Some(prev) => { if let Ok(k) = hkcu.open_subkey_with_flags(&key_path, winreg::enums::KEY_SET_VALUE) { let _ = k.set_value("", &prev); } }
-                None => { let _ = hkcu.delete_subkey(&key_path); }
+                Some(prev) => {
+                    if let Ok(k) = hkcu.open_subkey_with_flags(&key_path, winreg::enums::KEY_SET_VALUE) {
+                        let _ = k.set_value("", &prev);
+                    }
+                }
+                None => {
+                    let _ = hkcu.delete_subkey(&key_path);
+                }
             }
         }
     }
@@ -363,7 +375,7 @@ pub fn sync_manifests(_p: &desktop::DesktopPrefs) -> Vec<String> {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
-    use crate::browser::tests::{test_vault, TestHost};
+    use crate::browser::tests::{TestHost, test_vault};
 
     /// our pipe: only this user; a client sees the server as "me" and the owner as trusted
     #[test]
@@ -380,13 +392,15 @@ mod tests {
             let f = std::fs::OpenOptions::new().access_mode(0x8000_0000 | 0x4000_0000 | 0x0002_0000).open(&name).unwrap();
             assert!(crate::hardening::pipe_owner_trusted(f.as_raw_handle() as _), "owner check accepts our own pipe");
             Ok::<_, std::io::Error>(())
-        }).unwrap();
+        })
+        .unwrap();
         // a second "first instance" (squatting the name) is refused
         with_runtime(|| {
             let _a = create_pipe_named(&name, true).unwrap();
             assert!(create_pipe_named(&name, true).is_err());
             Ok::<_, std::io::Error>(())
-        }).unwrap();
+        })
+        .unwrap();
     }
 
     /// Real named pipe + tweetnacl client (scripts/browser-e2e.cjs), like the extension behind a proxy.
@@ -398,7 +412,11 @@ mod tests {
         // SAFETY: set before any other thread of this test reads the environment
         unsafe { std::env::set_var("AKP_PIPE_NAME", &name) };
         let (vaults, _) = test_vault();
-        let host: Arc<dyn Host> = Arc::new(TestHost { vaults, prefs: BrowserPrefs { enabled: true, match_scheme: true, ..Default::default() }, answer_access: true });
+        let host: Arc<dyn Host> = Arc::new(TestHost {
+            vaults,
+            prefs: BrowserPrefs { enabled: true, match_scheme: true, ..Default::default() },
+            answer_access: true,
+        });
         let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap();
         rt.block_on(async {
             let first = listen_first().unwrap();

@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use super::crypto::Kdf;
 
@@ -70,9 +70,7 @@ pub fn field<'a>(v: &'a Value, key: &str) -> &'a Value {
     if let Some(x) = v.get(key) {
         return x;
     }
-    v.as_object()
-        .and_then(|o| o.iter().find(|(k, _)| k.eq_ignore_ascii_case(key)).map(|(_, x)| x))
-        .unwrap_or(&Value::Null)
+    v.as_object().and_then(|o| o.iter().find(|(k, _)| k.eq_ignore_ascii_case(key)).map(|(_, x)| x)).unwrap_or(&Value::Null)
 }
 
 pub struct TokenResponse {
@@ -85,13 +83,7 @@ pub struct TokenResponse {
 }
 
 /// Password grant. `second`: (provider, code); provider 5 = remember token.
-pub fn login(
-    server: &str,
-    email: &str,
-    hash: &str,
-    device_id: &str,
-    second: Option<(u8, &str)>,
-) -> Result<TokenResponse, LoginError> {
+pub fn login(server: &str, email: &str, hash: &str, device_id: &str, second: Option<(u8, &str)>) -> Result<TokenResponse, LoginError> {
     let provider = second.map(|(p, _)| p.to_string());
     let mut form: Vec<(&str, &str)> = vec![
         ("grant_type", "password"),
@@ -127,7 +119,11 @@ pub fn login(
     };
     let s = |k: &str| field(&v, k).as_str().map(String::from);
     Ok(TokenResponse {
-        session: Session { server: base(server), access: s("access_token").unwrap_or_default(), refresh: s("refresh_token").unwrap_or_default() },
+        session: Session {
+            server: base(server),
+            access: s("access_token").unwrap_or_default(),
+            refresh: s("refresh_token").unwrap_or_default(),
+        },
         key: s("Key").ok_or_else(|| LoginError::Other("no key in token response".into()))?,
         private_key: s("PrivateKey"),
         remember: s("TwoFactorToken"),
@@ -161,7 +157,8 @@ impl Session {
     /// Authorized request; an expired access token is refreshed once.
     fn call(&mut self, method: &str, path: &str, body: Option<&Value>) -> Result<Value, String> {
         for attempt in 0..2 {
-            let req = agent().request(method, &format!("{}/api{}", self.server, path)).set("Authorization", &format!("Bearer {}", self.access));
+            let req =
+                agent().request(method, &format!("{}/api{}", self.server, path)).set("Authorization", &format!("Bearer {}", self.access));
             let res = match body {
                 Some(b) => req.send_json(b.clone()),
                 None => req.call(),

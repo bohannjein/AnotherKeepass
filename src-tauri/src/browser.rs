@@ -7,14 +7,14 @@
 
 use std::collections::HashMap;
 
-use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use crypto_box::{
-    aead::{rand_core::RngCore, Aead, OsRng},
     PublicKey, SalsaBox, SecretKey,
+    aead::{Aead, OsRng, rand_core::RngCore},
 };
-use keepass::db::{fields, CustomDataItem, CustomDataValue, Entry, EntryId, GroupId, Times};
 use keepass::Database;
-use serde_json::{json, Map, Value};
+use keepass::db::{CustomDataItem, CustomDataValue, Entry, EntryId, GroupId, Times, fields};
+use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -83,14 +83,30 @@ pub struct BrowserPrefs {
 /// Questions for the user. Answers come back as JSON (None = denied / timed out).
 pub enum Ask {
     Associate,
-    Access { host: String, entries: Vec<Value> },
-    Update { title: String, username: String },
+    Access {
+        host: String,
+        entries: Vec<Value>,
+    },
+    Update {
+        title: String,
+        username: String,
+    },
     /// the extension wants to delete an entry
-    Delete { title: String, username: String },
+    Delete {
+        title: String,
+        username: String,
+    },
     /// new passkey; `existing` = entries of the same account that could take it instead
-    PasskeyRegister { rp_id: String, username: String, existing: Vec<Value> },
+    PasskeyRegister {
+        rp_id: String,
+        username: String,
+        existing: Vec<Value>,
+    },
     /// sign in with one of these passkeys
-    PasskeyGet { rp_id: String, entries: Vec<Value> },
+    PasskeyGet {
+        rp_id: String,
+        entries: Vec<Value>,
+    },
 }
 
 /// What the protocol needs from the app (implemented by the Tauri app and by tests).
@@ -119,7 +135,13 @@ pub struct Session {
 
 impl Default for Session {
     fn default() -> Self {
-        Self { secret: SecretKey::generate(&mut OsRng), client: None, client_b64: String::new(), associated: false, vaults: Default::default() }
+        Self {
+            secret: SecretKey::generate(&mut OsRng),
+            client: None,
+            client_b64: String::new(),
+            associated: false,
+            vaults: Default::default(),
+        }
     }
 }
 
@@ -291,7 +313,9 @@ fn save_and_notify(host: &dyn Host, id: &str, v: &mut OpenVault) -> Result<(), u
 fn associated_vaults(host: &dyn Host, keys: &[(String, String)]) -> Vec<String> {
     let Ok(map) = host.vaults().0.lock() else { return vec![] };
     map.iter()
-        .filter(|(_, v)| keys.iter().any(|(id, key)| cd_string(v.db().meta.custom_data.get(&format!("{ASSOC_PREFIX}{id}"))).as_deref() == Some(key)))
+        .filter(|(_, v)| {
+            keys.iter().any(|(id, key)| cd_string(v.db().meta.custom_data.get(&format!("{ASSOC_PREFIX}{id}"))).as_deref() == Some(key))
+        })
         .map(|(id, _)| id.clone())
         .collect()
 }
@@ -304,9 +328,10 @@ fn allowed_vaults(host: &dyn Host, s: &Session, p: &Value) -> std::collections::
 }
 
 fn keys_of(p: &Value) -> Vec<(String, String)> {
-    p["keys"].as_array().map(|a| {
-        a.iter().filter_map(|k| Some((k["id"].as_str()?.to_string(), k["key"].as_str()?.to_string()))).collect()
-    }).unwrap_or_default()
+    p["keys"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|k| Some((k["id"].as_str()?.to_string(), k["key"].as_str()?.to_string()))).collect())
+        .unwrap_or_default()
 }
 
 // ---------------------------------------------------------------- actions
@@ -363,7 +388,10 @@ fn site(raw: &str) -> Option<Site> {
     // compare without scheme (checked separately) and without www.
     let port = u.port().map(|p| format!(":{p}")).unwrap_or_default();
     let no_query = format!("{host}{port}{}", u.path().trim_end_matches('/'));
-    let full = match u.query() { Some(q) => format!("{no_query}?{q}"), None => no_query.clone() };
+    let full = match u.query() {
+        Some(q) => format!("{no_query}?{q}"),
+        None => no_query.clone(),
+    };
     Some(Site { scheme: u.scheme().into(), host, port: u.port(), full, no_query })
 }
 
@@ -411,7 +439,8 @@ fn host_in(settings: &Value, list: &str, host: &str) -> bool {
 fn set_permission(e: &mut Entry, host: &str, allow: bool) {
     let mut s = entry_settings(e);
     let (add, remove) = if allow { ("Allow", "Deny") } else { ("Deny", "Allow") };
-    let mut list: Vec<String> = s[add].as_array().map(|a| a.iter().filter_map(|h| h.as_str().map(String::from)).collect()).unwrap_or_default();
+    let mut list: Vec<String> =
+        s[add].as_array().map(|a| a.iter().filter_map(|h| h.as_str().map(String::from)).collect()).unwrap_or_default();
     if !list.iter().any(|h| h == host) {
         list.push(host.to_string());
     }
@@ -479,11 +508,17 @@ fn get_logins(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
                 let mut g = Some(e.parent().id());
                 let mut trashed = false;
                 while let Some(gid) = g {
-                    if Some(gid) == bin { trashed = true; break; }
+                    if Some(gid) == bin {
+                        trashed = true;
+                        break;
+                    }
                     g = db.group(gid).and_then(|x| x.parent().map(|p| p.id()));
                 }
                 let expired = e.times.expires == Some(true) && e.times.expiry < now;
-                if trashed || (expired && !prefs.allow_expired) || cd_string(e.custom_data.get("BrowserHideEntry")).as_deref() == Some("true") {
+                if trashed
+                    || (expired && !prefs.allow_expired)
+                    || cd_string(e.custom_data.get("BrowserHideEntry")).as_deref() == Some("true")
+                {
                     continue;
                 }
                 let sc = entry_score(&e, &page, form.as_ref(), prefs.match_scheme);
@@ -491,9 +526,13 @@ fn get_logins(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
                     continue;
                 }
                 let st = entry_settings(&e);
-                let perm = if host_in(&st, "Deny", &page.host) { Some(false) }
-                    else if host_in(&st, "Allow", &page.host) || prefs.no_access_confirm || basic_auth_ok { Some(true) }
-                    else { None };
+                let perm = if host_in(&st, "Deny", &page.host) {
+                    Some(false)
+                } else if host_in(&st, "Allow", &page.host) || prefs.no_access_confirm || basic_auth_ok {
+                    Some(true)
+                } else {
+                    None
+                };
                 found.push((vid.clone(), e.id(), sc, perm));
             }
         }
@@ -512,8 +551,11 @@ fn get_logins(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
     };
     if !unknown.is_empty() {
         let answer = host.ask(Ask::Access { host: page.host.clone(), entries: unknown.clone() });
-        let allowed: Vec<String> = answer.as_ref().and_then(|a| a["allow"].as_array())
-            .map(|a| a.iter().filter_map(|u| u.as_str().map(String::from)).collect()).unwrap_or_default();
+        let allowed: Vec<String> = answer
+            .as_ref()
+            .and_then(|a| a["allow"].as_array())
+            .map(|a| a.iter().filter_map(|u| u.as_str().map(String::from)).collect())
+            .unwrap_or_default();
         let remember = answer.as_ref().and_then(|a| a["remember"].as_bool()).unwrap_or(false);
         for f in found.iter_mut().filter(|f| f.3.is_none()) {
             f.3 = Some(allowed.contains(&uuid_hex(f.1.uuid())));
@@ -526,7 +568,9 @@ fn get_logins(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
                 let Some(uuid) = u["uuid"].as_str().and_then(parse_uuid_hex) else { continue };
                 if let Some(mut e) = map.get_mut(&vid).and_then(|v| v.db_mut().entry_mut(EntryId::from(uuid))) {
                     set_permission(&mut e, &page.host, allowed.contains(&uuid_hex(uuid)));
-                    if !touched.contains(&vid) { touched.push(vid); }
+                    if !touched.contains(&vid) {
+                        touched.push(vid);
+                    }
                 }
             }
             for vid in touched {
@@ -547,19 +591,17 @@ fn get_logins(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
         found.retain(|f| f.2 == top);
     }
     let map = host.vaults().0.lock().map_err(|_| E_NO_LOGINS)?;
-    let entries: Vec<Value> = found.iter().filter_map(|(vid, id, _, _)| {
-        let db = map.get(vid)?.db();
-        let e = db.entry(*id)?;
-        let expired = e.times.expires == Some(true) && e.times.expiry < now;
-        Some(entry_json(&e, &e.parent().name, prefs.kph, expired))
-    }).collect();
+    let entries: Vec<Value> = found
+        .iter()
+        .filter_map(|(vid, id, _, _)| {
+            let db = map.get(vid)?.db();
+            let e = db.entry(*id)?;
+            let expired = e.times.expires == Some(true) && e.times.expiry < now;
+            Some(entry_json(&e, &e.parent().name, prefs.kph, expired))
+        })
+        .collect();
     let hash = active_hash_locked(&map, host);
-    Ok(params(&[
-        ("count", json!(entries.len())),
-        ("entries", json!(entries)),
-        ("hash", json!(hash)),
-        ("id", p["id"].clone()),
-    ]))
+    Ok(params(&[("count", json!(entries.len())), ("entries", json!(entries)), ("hash", json!(hash)), ("id", p["id"].clone())]))
 }
 
 fn active_hash_locked(map: &HashMap<String, OpenVault>, host: &dyn Host) -> String {
@@ -610,14 +652,23 @@ fn set_login(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
             let allowed = allowed_vaults(host, s, p);
             let (title, username) = {
                 let map = host.vaults().0.lock().map_err(|_| E_CANCELLED_OR_DENIED)?;
-                let e = map.iter().filter(|(k, _)| allowed.contains(*k)).find_map(|(_, v)| v.db().entry(EntryId::from(uuid))).ok_or(E_NO_VALID_UUID)?;
+                let e = map
+                    .iter()
+                    .filter(|(k, _)| allowed.contains(*k))
+                    .find_map(|(_, v)| v.db().entry(EntryId::from(uuid)))
+                    .ok_or(E_NO_VALID_UUID)?;
                 (e.get_title().unwrap_or_default().to_string(), e.get_username().unwrap_or_default().to_string())
             };
             host.ask(Ask::Update { title, username }).filter(|a| a["ok"].as_bool() == Some(true)).ok_or(E_CANCELLED_OR_DENIED)?;
         }
         let allowed = allowed_vaults(host, s, p);
         let mut map = host.vaults().0.lock().map_err(|_| E_CANCELLED_OR_DENIED)?;
-        let target = map.iter().filter(|(k, _)| allowed.contains(*k)).find(|(_, v)| v.db().entry(EntryId::from(uuid)).is_some()).map(|(k, _)| k.clone()).ok_or(E_NO_VALID_UUID)?;
+        let target = map
+            .iter()
+            .filter(|(k, _)| allowed.contains(*k))
+            .find(|(_, v)| v.db().entry(EntryId::from(uuid)).is_some())
+            .map(|(k, _)| k.clone())
+            .ok_or(E_NO_VALID_UUID)?;
         let v = map.get_mut(&target).ok_or(E_NO_VALID_UUID)?;
         {
             let mut e = v.db_mut().entry_mut(EntryId::from(uuid)).ok_or(E_NO_VALID_UUID)?;
@@ -632,8 +683,12 @@ fn set_login(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
         let mut map = host.vaults().0.lock().map_err(|_| E_CANCELLED_OR_DENIED)?;
         let v = map.get_mut(&vid).ok_or(E_DB_NOT_OPENED)?;
         let db = v.db_mut();
-        let group = p["groupUuid"].as_str().and_then(parse_uuid_hex).map(GroupId::from_uuid)
-            .filter(|g| db.group(*g).is_some()).unwrap_or_else(|| default_group(db));
+        let group = p["groupUuid"]
+            .as_str()
+            .and_then(parse_uuid_hex)
+            .map(GroupId::from_uuid)
+            .filter(|g| db.group(*g).is_some())
+            .unwrap_or_else(|| default_group(db));
         let title = site(&url).map(|s| s.host).unwrap_or_else(|| url.clone());
         {
             let mut g = db.group_mut(group).ok_or(E_CANCELLED_OR_DENIED)?;
@@ -678,11 +733,7 @@ fn database_groups(host: &dyn Host, s: &mut Session) -> ActionResult {
     let map = host.vaults().0.lock().map_err(|_| E_NO_GROUPS)?;
     let db = map.get(&vid).ok_or(E_NO_GROUPS)?.db();
     let tree = group_tree(db, db.root().id(), db.recycle_bin().map(|g| g.id()));
-    Ok(params(&[
-        ("defaultGroup", json!("")),
-        ("defaultGroupAlwaysAllow", json!(false)),
-        ("groups", json!({ "groups": [tree] })),
-    ]))
+    Ok(params(&[("defaultGroup", json!("")), ("defaultGroupAlwaysAllow", json!(false)), ("groups", json!({ "groups": [tree] }))]))
 }
 
 fn create_group(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
@@ -722,13 +773,19 @@ fn delete_entry(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
     let allowed = allowed_vaults(host, s, p);
     let (title, username) = {
         let map = host.vaults().0.lock().map_err(|_| E_NO_VALID_UUID)?;
-        let e = map.iter().filter(|(k, _)| allowed.contains(*k)).find_map(|(_, v)| v.db().entry(EntryId::from(uuid))).ok_or(E_NO_VALID_UUID)?;
+        let e =
+            map.iter().filter(|(k, _)| allowed.contains(*k)).find_map(|(_, v)| v.db().entry(EntryId::from(uuid))).ok_or(E_NO_VALID_UUID)?;
         (e.get_title().unwrap_or_default().to_string(), e.get_username().unwrap_or_default().to_string())
     };
     // deleting from a web page always needs a yes
     host.ask(Ask::Delete { title, username }).filter(|a| a["ok"].as_bool() == Some(true)).ok_or(E_CANCELLED_OR_DENIED)?;
     let mut map = host.vaults().0.lock().map_err(|_| E_NO_VALID_UUID)?;
-    let vid = map.iter().filter(|(k, _)| allowed.contains(*k)).find(|(_, v)| v.db().entry(EntryId::from(uuid)).is_some()).map(|(k, _)| k.clone()).ok_or(E_NO_VALID_UUID)?;
+    let vid = map
+        .iter()
+        .filter(|(k, _)| allowed.contains(*k))
+        .find(|(_, v)| v.db().entry(EntryId::from(uuid)).is_some())
+        .map(|(k, _)| k.clone())
+        .ok_or(E_NO_VALID_UUID)?;
     let v = map.get_mut(&vid).ok_or(E_NO_VALID_UUID)?;
     v.trash_entry(EntryId::from(uuid)).map_err(|_| E_NO_VALID_UUID)?;
     save_and_notify(host, &vid, v)?;
@@ -766,10 +823,15 @@ fn passkey_entries(host: &dyn Host, vaults: &[String], rp: &str) -> Vec<(String,
             let mut g = Some(e.parent().id());
             let mut trashed = false;
             while let Some(gid) = g {
-                if Some(gid) == bin { trashed = true; break; }
+                if Some(gid) == bin {
+                    trashed = true;
+                    break;
+                }
                 g = db.group(gid).and_then(|x| x.parent().map(|p| p.id()));
             }
-            if trashed { continue; }
+            if trashed {
+                continue;
+            }
             let cred = e.get(passkeys::GENERATED_USER_ID).map(String::from).unwrap_or_else(|| field(&e, passkeys::CREDENTIAL_ID));
             out.push((vid.clone(), e.id(), cred));
         }
@@ -825,13 +887,18 @@ fn passkeys_register(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResul
     // same account already has a passkey here → offer to replace it
     let existing: Vec<Value> = {
         let map = host.vaults().0.lock().map_err(|_| E_CANCELLED_OR_DENIED)?;
-        known.iter()
-            .filter(|(v, id, _)| map.get(v).and_then(|x| x.db().entry(*id)).is_some_and(|e| field(&e, passkeys::USER_HANDLE) == reg.user_handle))
+        known
+            .iter()
+            .filter(|(v, id, _)| {
+                map.get(v).and_then(|x| x.db().entry(*id)).is_some_and(|e| field(&e, passkeys::USER_HANDLE) == reg.user_handle)
+            })
             .filter_map(|(v, id, _)| entry_brief(&map, v, *id))
             .collect()
     };
-    let Some(answer) = host.ask(Ask::PasskeyRegister { rp_id: reg.rp_id.clone(), username: reg.username.clone(), existing })
-        .filter(|a| a["ok"].as_bool() == Some(true)) else {
+    let Some(answer) = host
+        .ask(Ask::PasskeyRegister { rp_id: reg.rp_id.clone(), username: reg.username.clone(), existing })
+        .filter(|a| a["ok"].as_bool() == Some(true))
+    else {
         return passkey_reply(passkeys::error(passkeys::E_CANCELED));
     };
     let attachment = pk["authenticatorSelection"]["authenticatorAttachment"].as_str();
@@ -906,7 +973,11 @@ fn passkeys_get(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
     let candidates: Vec<(String, EntryId, String)> = {
         let map = host.vaults().0.lock().map_err(|_| E_CANCELLED_OR_DENIED)?;
         all.into_iter()
-            .filter(|(v, id, cred)| allowed.contains(cred) || (allowed.is_empty() && map.get(v).and_then(|x| x.db().entry(*id)).is_some_and(|e| !field(&e, passkeys::USER_HANDLE).is_empty())))
+            .filter(|(v, id, cred)| {
+                allowed.contains(cred)
+                    || (allowed.is_empty()
+                        && map.get(v).and_then(|x| x.db().entry(*id)).is_some_and(|e| !field(&e, passkeys::USER_HANDLE).is_empty()))
+            })
             .collect()
     };
     if candidates.is_empty() {
@@ -916,14 +987,25 @@ fn passkeys_get(host: &dyn Host, s: &mut Session, p: &Value) -> ActionResult {
         let map = host.vaults().0.lock().map_err(|_| E_CANCELLED_OR_DENIED)?;
         candidates.iter().filter_map(|(v, id, _)| entry_brief(&map, v, *id)).collect()
     };
-    let Some(choice) = host.ask(Ask::PasskeyGet { rp_id: rp.clone(), entries: briefs }).and_then(|a| a["uuid"].as_str().and_then(parse_uuid_hex)) else {
+    let Some(choice) =
+        host.ask(Ask::PasskeyGet { rp_id: rp.clone(), entries: briefs }).and_then(|a| a["uuid"].as_str().and_then(parse_uuid_hex))
+    else {
         return passkey_reply(passkeys::error(passkeys::E_CANCELED));
     };
     let (vid, id, cred) = candidates.into_iter().find(|(_, id, _)| id.uuid() == choice).ok_or(E_NO_VALID_UUID)?;
     let map = host.vaults().0.lock().map_err(|_| E_CANCELLED_OR_DENIED)?;
     let e = map.get(&vid).and_then(|v| v.db().entry(id)).ok_or(E_NO_VALID_UUID)?;
     let flag = |k: &str| e.get(k).map(|v| v == "1" || v.eq_ignore_ascii_case("true")).unwrap_or(true);
-    let reply = passkeys::assert(pk, origin, &rp, &cred, &field(&e, passkeys::USER_HANDLE), &field(&e, passkeys::PRIVATE_KEY), flag(passkeys::FLAG_BE), flag(passkeys::FLAG_BS));
+    let reply = passkeys::assert(
+        pk,
+        origin,
+        &rp,
+        &cred,
+        &field(&e, passkeys::USER_HANDLE),
+        &field(&e, passkeys::PRIVATE_KEY),
+        flag(passkeys::FLAG_BE),
+        flag(passkeys::FLAG_BS),
+    );
     passkey_reply(reply.unwrap_or_else(passkeys::error))
 }
 
@@ -939,27 +1021,40 @@ pub(crate) mod tests {
     }
 
     impl Host for TestHost {
-        fn vaults(&self) -> &Vaults { &self.vaults }
-        fn prefs(&self) -> BrowserPrefs { self.prefs.clone() }
-        fn active_vault(&self) -> Option<String> { None }
+        fn vaults(&self) -> &Vaults {
+            &self.vaults
+        }
+        fn prefs(&self) -> BrowserPrefs {
+            self.prefs.clone()
+        }
+        fn active_vault(&self) -> Option<String> {
+            None
+        }
         fn ask(&self, ask: Ask) -> Option<Value> {
             match ask {
                 Ask::Associate => Some(json!({ "name": "test-browser" })),
-                Ask::Access { entries, .. } => self.answer_access.then(|| json!({
-                    "allow": entries.iter().map(|e| e["uuid"].clone()).collect::<Vec<_>>(), "remember": true })),
+                Ask::Access { entries, .. } => self.answer_access.then(|| {
+                    json!({
+                    "allow": entries.iter().map(|e| e["uuid"].clone()).collect::<Vec<_>>(), "remember": true })
+                }),
                 Ask::Update { .. } | Ask::Delete { .. } => Some(json!({ "ok": true })),
                 Ask::PasskeyRegister { .. } => Some(json!({ "ok": true })),
                 Ask::PasskeyGet { entries, .. } => entries.first().map(|e| json!({ "uuid": e["uuid"] })),
             }
         }
         fn vault_changed(&self, _dto: VaultDto) {}
-        fn lock_all(&self) { self.vaults.0.lock().unwrap().clear(); }
+        fn lock_all(&self) {
+            self.vaults.0.lock().unwrap().clear();
+        }
         fn show_window(&self) {}
         fn autotype_search(&self, _search: &str) {}
     }
 
     /// Client side of the protocol, like keepassxc-browser does it with tweetnacl.
-    struct Client { secret: SecretKey, host_pk: Option<PublicKey> }
+    struct Client {
+        secret: SecretKey,
+        host_pk: Option<PublicKey>,
+    }
 
     impl Client {
         fn call(&mut self, host: &dyn Host, s: &mut Session, action: &str, payload: Value) -> Value {
@@ -1027,13 +1122,21 @@ pub(crate) mod tests {
     #[test]
     fn full_protocol_flow() {
         let (vaults, vid) = test_vault();
-        let host = TestHost { vaults, prefs: BrowserPrefs { enabled: true, unlock: true, match_scheme: true, ..Default::default() }, answer_access: true };
+        let host = TestHost {
+            vaults,
+            prefs: BrowserPrefs { enabled: true, unlock: true, match_scheme: true, ..Default::default() },
+            answer_access: true,
+        };
         let mut s = Session::default();
         let mut c = Client { secret: SecretKey::generate(&mut OsRng), host_pk: None };
 
         // key exchange (plain)
         let n = SalsaBox::generate_nonce(&mut OsRng);
-        let r = handle(&host, &mut s, &json!({ "action": "change-public-keys", "publicKey": B64.encode(c.secret.public_key().as_bytes()), "nonce": B64.encode(n), "clientID": "c" }));
+        let r = handle(
+            &host,
+            &mut s,
+            &json!({ "action": "change-public-keys", "publicKey": B64.encode(c.secret.public_key().as_bytes()), "nonce": B64.encode(n), "clientID": "c" }),
+        );
         assert_eq!(r["success"], "true");
         c.host_pk = Some(PublicKey::from_slice(&B64.decode(r["publicKey"].as_str().unwrap()).unwrap()).unwrap());
 
@@ -1041,9 +1144,16 @@ pub(crate) mod tests {
         assert_eq!(hash["hash"].as_str().unwrap().len(), 64);
 
         // anything but the key exchange must be encrypted, and auto-type needs an association
-        let plain = handle(&host, &mut s, &json!({ "action": "request-autotype", "search": "github.com", "nonce": B64.encode(SalsaBox::generate_nonce(&mut OsRng)) }));
+        let plain = handle(
+            &host,
+            &mut s,
+            &json!({ "action": "request-autotype", "search": "github.com", "nonce": B64.encode(SalsaBox::generate_nonce(&mut OsRng)) }),
+        );
         assert_eq!(plain["errorCode"], "4");
-        assert_eq!(c.call(&host, &mut s, "request-autotype", json!({ "action": "request-autotype", "search": "github.com" }))["errorCode"], "8");
+        assert_eq!(
+            c.call(&host, &mut s, "request-autotype", json!({ "action": "request-autotype", "search": "github.com" }))["errorCode"],
+            "8"
+        );
         assert_eq!(c.call(&host, &mut s, "lock-database", json!({ "action": "lock-database" }))["errorCode"], "8");
 
         // logins need an association first
@@ -1063,23 +1173,42 @@ pub(crate) mod tests {
         let n = SalsaBox::generate_nonce(&mut OsRng);
         let r = handle(&host, &mut s2, &json!({ "action": "change-public-keys", "publicKey": client_pk, "nonce": B64.encode(n) }));
         c.host_pk = Some(PublicKey::from_slice(&B64.decode(r["publicKey"].as_str().unwrap()).unwrap()).unwrap());
-        assert_eq!(c.call(&host, &mut s2, "test-associate", json!({ "action": "test-associate", "id": "test-browser", "key": "wrong" }))["errorCode"], "8");
-        assert_eq!(c.call(&host, &mut s2, "test-associate", json!({ "action": "test-associate", "id": "test-browser", "key": id_key }))["success"], "true");
+        assert_eq!(
+            c.call(&host, &mut s2, "test-associate", json!({ "action": "test-associate", "id": "test-browser", "key": "wrong" }))["errorCode"],
+            "8"
+        );
+        assert_eq!(
+            c.call(&host, &mut s2, "test-associate", json!({ "action": "test-associate", "id": "test-browser", "key": id_key }))["success"],
+            "true"
+        );
 
         let keys = json!([{ "id": "test-browser", "key": id_key }]);
-        let logins = c.call(&host, &mut s2, "get-logins", json!({ "action": "get-logins", "url": "https://github.com/session", "keys": keys }));
+        let logins =
+            c.call(&host, &mut s2, "get-logins", json!({ "action": "get-logins", "url": "https://github.com/session", "keys": keys }));
         assert_eq!(logins["count"], 1);
         assert_eq!(logins["entries"][0]["login"], "octo");
         assert_eq!(logins["entries"][0]["password"], "s3cret");
         // "remember" stored the permission KeePassXC-style
-        let allow = host.vaults.0.lock().unwrap()[&vid].db().iter_all_entries().find(|e| e.get_title() == Some("GitHub"))
-            .and_then(|e| cd_string(e.custom_data.get(ENTRY_SETTINGS))).unwrap();
+        let allow = host.vaults.0.lock().unwrap()[&vid]
+            .db()
+            .iter_all_entries()
+            .find(|e| e.get_title() == Some("GitHub"))
+            .and_then(|e| cd_string(e.custom_data.get(ENTRY_SETTINGS)))
+            .unwrap();
         assert!(allow.contains("\"Allow\":[\"github.com\"]"), "{allow}");
 
-        assert_eq!(c.call(&host, &mut s2, "get-logins", json!({ "action": "get-logins", "url": "https://nothing.test", "keys": keys }))["errorCode"], "15");
+        assert_eq!(
+            c.call(&host, &mut s2, "get-logins", json!({ "action": "get-logins", "url": "https://nothing.test", "keys": keys }))["errorCode"],
+            "15"
+        );
 
         // save a new login from the browser, then find it
-        let set = c.call(&host, &mut s2, "set-login", json!({ "action": "set-login", "url": "https://shop.test/login", "login": "me", "password": "pw1", "id": "test-browser" }));
+        let set = c.call(
+            &host,
+            &mut s2,
+            "set-login",
+            json!({ "action": "set-login", "url": "https://shop.test/login", "login": "me", "password": "pw1", "id": "test-browser" }),
+        );
         assert_eq!(set["error"], "success");
         let found = c.call(&host, &mut s2, "get-logins", json!({ "action": "get-logins", "url": "https://shop.test", "keys": keys }));
         assert_eq!(found["entries"][0]["login"], "me");
@@ -1098,17 +1227,40 @@ pub(crate) mod tests {
         // passkeys: register, then sign in with it
         let create = json!({ "challenge": "AAAAAAAAAAAAAAAAAAAAAAAAAAAA", "rp": { "id": "shop.test", "name": "Shop" },
             "user": { "id": "dXNlcjE", "name": "alice" }, "pubKeyCredParams": [{ "type": "public-key", "alg": -7 }] });
-        let reg = c.call(&host, &mut s2, "passkeys-register", json!({ "action": "passkeys-register", "publicKey": create, "origin": "https://shop.test", "keys": keys }));
+        let reg = c.call(
+            &host,
+            &mut s2,
+            "passkeys-register",
+            json!({ "action": "passkeys-register", "publicKey": create, "origin": "https://shop.test", "keys": keys }),
+        );
         let cred_id = reg["response"]["id"].as_str().expect("credential").to_string();
         let get = json!({ "challenge": "BBBBBBBBBBBBBBBBBBBBBBBBBBBB", "rpId": "shop.test", "allowCredentials": [{ "type": "public-key", "id": cred_id }] });
-        let login = c.call(&host, &mut s2, "passkeys-get", json!({ "action": "passkeys-get", "publicKey": get, "origin": "https://shop.test", "keys": keys }));
+        let login = c.call(
+            &host,
+            &mut s2,
+            "passkeys-get",
+            json!({ "action": "passkeys-get", "publicKey": get, "origin": "https://shop.test", "keys": keys }),
+        );
         assert_eq!(login["response"]["id"], cred_id.as_str());
         assert!(login["response"]["response"]["signature"].as_str().is_some_and(|s| !s.is_empty()));
         let mut excluded = create.clone();
         excluded["excludeCredentials"] = json!([{ "type": "public-key", "id": cred_id }]);
-        let again = c.call(&host, &mut s2, "passkeys-register", json!({ "action": "passkeys-register", "publicKey": excluded, "origin": "https://shop.test", "keys": keys }));
+        let again = c.call(
+            &host,
+            &mut s2,
+            "passkeys-register",
+            json!({ "action": "passkeys-register", "publicKey": excluded, "origin": "https://shop.test", "keys": keys }),
+        );
         assert_eq!(again["response"]["errorCode"], 21);
-        assert_eq!(c.call(&host, &mut s2, "passkeys-get", json!({ "action": "passkeys-get", "publicKey": get, "origin": "http://shop.test", "keys": keys }))["errorCode"], "25");
+        assert_eq!(
+            c.call(
+                &host,
+                &mut s2,
+                "passkeys-get",
+                json!({ "action": "passkeys-get", "publicKey": get, "origin": "http://shop.test", "keys": keys })
+            )["errorCode"],
+            "25"
+        );
 
         // lock: further requests report "database not opened"
         c.call(&host, &mut s2, "lock-database", json!({ "action": "lock-database" }));

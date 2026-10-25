@@ -4,16 +4,14 @@
 #[cfg(windows)]
 mod imp {
     use windows::{
-        core::{factory, HSTRING},
         Security::Credentials::UI::{UserConsentVerificationResult, UserConsentVerifier, UserConsentVerifierAvailability},
         Win32::{Foundation::HWND, System::WinRT::IUserConsentVerifierInterop},
+        core::{HSTRING, factory},
     };
     use windows_future::IAsyncOperation;
 
     pub fn available() -> bool {
-        UserConsentVerifier::CheckAvailabilityAsync()
-            .and_then(|op| op.get())
-            .is_ok_and(|a| a == UserConsentVerifierAvailability::Available)
+        UserConsentVerifier::CheckAvailabilityAsync().and_then(|op| op.get()).is_ok_and(|a| a == UserConsentVerifierAvailability::Available)
     }
 
     /// Shows the Hello prompt on top of our window; true = verified.

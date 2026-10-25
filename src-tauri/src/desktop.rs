@@ -2,13 +2,20 @@
 //! session events. Options mirror the settings page; the UI pushes them via `desktop_apply`
 //! and they are kept in `<config>/desktop.json` so they apply before the UI has loaded.
 
-use std::{fs, path::PathBuf, sync::{Mutex, atomic::{AtomicBool, Ordering}}};
+use std::{
+    fs,
+    path::PathBuf,
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use serde::{Deserialize, Serialize};
 use tauri::{
+    AppHandle, Emitter, Manager, Runtime, WebviewWindow, WindowEvent,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, Runtime, WebviewWindow, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt as _;
 
@@ -160,10 +167,7 @@ fn config_file() -> Option<PathBuf> {
 }
 
 pub fn load_prefs() -> DesktopPrefs {
-    config_file()
-        .and_then(|p| fs::read(p).ok())
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default()
+    config_file().and_then(|p| fs::read(p).ok()).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
 
 fn save_prefs(p: &DesktopPrefs) -> Result<(), String> {
@@ -249,12 +253,15 @@ pub fn lock_all<R: Runtime>(app: &AppHandle<R>) {
 // ---------------------------------------------------------------- tray
 
 fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, labels: &[String; 3]) -> tauri::Result<Menu<R>> {
-    Menu::with_items(app, &[
-        &MenuItem::with_id(app, "show", &labels[0], true, None::<&str>)?,
-        &MenuItem::with_id(app, "lock", &labels[1], true, None::<&str>)?,
-        &PredefinedMenuItem::separator(app)?,
-        &MenuItem::with_id(app, "quit", &labels[2], true, None::<&str>)?,
-    ])
+    Menu::with_items(
+        app,
+        &[
+            &MenuItem::with_id(app, "show", &labels[0], true, None::<&str>)?,
+            &MenuItem::with_id(app, "lock", &labels[1], true, None::<&str>)?,
+            &PredefinedMenuItem::separator(app)?,
+            &MenuItem::with_id(app, "quit", &labels[2], true, None::<&str>)?,
+        ],
+    )
 }
 
 /// Tray icon for the chosen style. Monochrome = just the shield (the dark part of the app
@@ -313,7 +320,9 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>, p: &DesktopPrefs) -> tauri::R
             if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
                 let app = tray.app_handle();
                 match main_window(app) {
-                    Some(w) if w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false) => { let _ = w.hide(); }
+                    Some(w) if w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false) => {
+                        let _ = w.hide();
+                    }
                     _ => show_main(app),
                 }
             }
@@ -330,8 +339,13 @@ pub fn on_window_event<R: Runtime>(window: &tauri::Window<R>, event: &WindowEven
     if window.label() == crate::quick::LABEL {
         // quick access: gone as soon as it loses focus, never really closed
         match event {
-            WindowEvent::Focused(false) => { let _ = window.hide(); }
-            WindowEvent::CloseRequested { api, .. } => { api.prevent_close(); let _ = window.hide(); }
+            WindowEvent::Focused(false) => {
+                let _ = window.hide();
+            }
+            WindowEvent::CloseRequested { api, .. } => {
+                api.prevent_close();
+                let _ = window.hide();
+            }
             _ => {}
         }
         return;
@@ -380,7 +394,10 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
     };
     log::info!(
         "desktop_apply tray={} hide_to_tray={} start_minimized={} browser={}",
-        prefs.tray_icon, prefs.hide_to_tray, prefs.start_minimized, prefs.browser_enabled
+        prefs.tray_icon,
+        prefs.hide_to_tray,
+        prefs.start_minimized,
+        prefs.browser_enabled
     );
     save_prefs(&prefs).inspect_err(|e| log::error!("desktop.json: {e}"))?;
     apply_backup(&prefs);
@@ -476,8 +493,7 @@ pub fn watch_session(app: AppHandle) {
         Foundation::{HWND, LPARAM, LRESULT, WPARAM},
         System::{LibraryLoader::GetModuleHandleW, RemoteDesktop::WTSRegisterSessionNotification},
         UI::WindowsAndMessaging::{
-            CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW, TranslateMessage, HWND_MESSAGE,
-            MSG, WNDCLASSW,
+            CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, HWND_MESSAGE, MSG, RegisterClassW, TranslateMessage, WNDCLASSW,
         },
     };
     const WM_WTSSESSION_CHANGE: u32 = 0x02B1;
@@ -500,7 +516,8 @@ pub fn watch_session(app: AppHandle) {
         let hinst = GetModuleHandleW(std::ptr::null());
         let wc = WNDCLASSW { lpfnWndProc: Some(proc), hInstance: hinst, lpszClassName: class.as_ptr(), ..std::mem::zeroed() };
         RegisterClassW(&wc);
-        let hwnd = CreateWindowExW(0, class.as_ptr(), class.as_ptr(), 0, 0, 0, 0, 0, HWND_MESSAGE, std::ptr::null_mut(), hinst, std::ptr::null());
+        let hwnd =
+            CreateWindowExW(0, class.as_ptr(), class.as_ptr(), 0, 0, 0, 0, 0, HWND_MESSAGE, std::ptr::null_mut(), hinst, std::ptr::null());
         if hwnd.is_null() || WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION) == 0 {
             log::warn!("session lock notifications unavailable");
             return;
@@ -521,13 +538,15 @@ pub fn watch_session(app: AppHandle) {
 #[cfg(windows)]
 pub fn session_locked() -> Option<bool> {
     use windows_sys::Win32::System::RemoteDesktop::{
-        WTSFreeMemory, WTSQuerySessionInformationW, WTSSessionInfoEx, WTSINFOEXW, WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION,
-        WTS_SESSIONSTATE_LOCK, WTS_SESSIONSTATE_UNLOCK,
+        WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION, WTS_SESSIONSTATE_LOCK, WTS_SESSIONSTATE_UNLOCK, WTSFreeMemory, WTSINFOEXW,
+        WTSQuerySessionInformationW, WTSSessionInfoEx,
     };
     unsafe {
         let mut buf: windows_sys::core::PWSTR = std::ptr::null_mut();
         let mut len = 0u32;
-        if WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION, WTSSessionInfoEx, &mut buf, &mut len) == 0 || buf.is_null() {
+        if WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION, WTSSessionInfoEx, &mut buf, &mut len) == 0
+            || buf.is_null()
+        {
             return None;
         }
         let info = &*(buf as *const WTSINFOEXW);

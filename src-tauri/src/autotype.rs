@@ -4,13 +4,16 @@
 //! "always ask") hand a picker to the UI; the target window is remembered meanwhile.
 
 use std::{
-    sync::{atomic::{AtomicBool, Ordering}, Mutex},
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     thread,
     time::{Duration, Instant},
 };
 
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-use keepass::db::{fields, Entry, EntryId};
+use keepass::db::{Entry, EntryId, fields};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -148,9 +151,7 @@ pub fn compile(seq: &str, e: &Entry) -> Result<Vec<Action>, String> {
                 "TITLE" => Action::Text(field(fields::TITLE)),
                 "URL" => Action::Text(field(fields::URL)),
                 "NOTES" => Action::Text(field(fields::NOTES)),
-                "TOTP" => Action::Text(Zeroizing::new(
-                    crate::vault::totp_code(e, fields::OTP).map_err(|_| "totp")?,
-                )),
+                "TOTP" => Action::Text(Zeroizing::new(crate::vault::totp_code(e, fields::OTP).map_err(|_| "totp")?)),
                 "TAB" => Action::Key(Key::Tab),
                 "ENTER" => Action::Key(Key::Return),
                 "SPACE" => Action::Key(Key::Space),
@@ -213,7 +214,9 @@ fn focus(h: isize) {
 
 // ponytail: active-window title on Linux/macOS not wired (X11 _NET_ACTIVE_WINDOW / NSWorkspace)
 #[cfg(not(windows))]
-fn foreground() -> (Option<isize>, String) { (None, String::new()) }
+fn foreground() -> (Option<isize>, String) {
+    (None, String::new())
+}
 #[cfg(not(windows))]
 fn focus(_h: isize) {}
 
@@ -288,7 +291,8 @@ fn trigger<R: Runtime>(app: &AppHandle<R>, hwnd: Option<isize>, title: &str) {
     let recent = LAST.lock().ok().and_then(|l| l.clone()).filter(|(_, _, at)| at.elapsed().as_secs() < p.at_remember);
     let remembered = recent.and_then(|(v, id, _)| found.iter().find(|c| c.vault == v && c.id == id).cloned());
     let from_browser = ASK_ALWAYS.swap(false, Ordering::Relaxed);
-    let automatic = if from_browser { None } else { remembered.or_else(|| (found.len() == 1 && !p.at_always_ask).then(|| found[0].clone())) };
+    let automatic =
+        if from_browser { None } else { remembered.or_else(|| (found.len() == 1 && !p.at_always_ask).then(|| found[0].clone())) };
     if let Some(c) = automatic {
         let app = app.clone();
         thread::spawn(move || {
@@ -311,7 +315,11 @@ pub fn perform<R: Runtime>(app: &AppHandle<R>, vault: &str, id: &str, sequence: 
         let v = map.get(vault).ok_or("vault_closed")?;
         let e = v.db().entry(EntryId::from(Uuid::parse_str(id).map_err(|_| "not_found")?)).ok_or("not_found")?;
         let seq = sequence.unwrap_or_else(|| {
-            e.autotype.as_ref().and_then(|a| a.default_sequence.clone()).filter(|s| !s.is_empty()).unwrap_or_else(|| DEFAULT_SEQUENCE.into())
+            e.autotype
+                .as_ref()
+                .and_then(|a| a.default_sequence.clone())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| DEFAULT_SEQUENCE.into())
         });
         compile(&seq, &e)?
     };
@@ -344,21 +352,29 @@ pub fn after_unlock<R: Runtime>(app: &AppHandle<R>) {
 #[tauri::command]
 pub fn autotype_perform(app: AppHandle, vault: String, id: String, sequence: Option<String>) -> Result<(), String> {
     // picker answer: type into the window that was active when the hotkey fired
-    thread::spawn(move || perform(&app, &vault, &id, sequence, true).map_err(|e| { let _ = app.emit("akp-autotype-error", e); }));
+    thread::spawn(move || {
+        perform(&app, &vault, &id, sequence, true).map_err(|e| {
+            let _ = app.emit("akp-autotype-error", e);
+        })
+    });
     Ok(())
 }
 
 #[tauri::command]
 pub fn autotype_entry(app: AppHandle, vault: String, id: String) -> Result<(), String> {
     // from our own window: we minimize, Windows activates the previous window
-    thread::spawn(move || perform(&app, &vault, &id, None, false).map_err(|e| { let _ = app.emit("akp-autotype-error", e); }));
+    thread::spawn(move || {
+        perform(&app, &vault, &id, None, false).map_err(|e| {
+            let _ = app.emit("akp-autotype-error", e);
+        })
+    });
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use keepass::{db::AutoTypeAssociation, Database};
+    use keepass::{Database, db::AutoTypeAssociation};
 
     fn entry(title: &str, url: &str) -> (Database, EntryId) {
         let mut db = Database::new();

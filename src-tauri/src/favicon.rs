@@ -5,7 +5,7 @@
 
 use std::{io::Read, time::Duration};
 
-use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD as B64};
 
 const MAX_BYTES: u64 = 512 * 1024;
 
@@ -65,10 +65,8 @@ fn icon_links(html: &str) -> Vec<String> {
 fn fetch(url: &str, ddg: bool, timeout: u64) -> Option<Vec<u8>> {
     let base = host_url(url)?;
     let host = base.host_str()?.to_string();
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(timeout.clamp(1, 60)))
-        .user_agent("Mozilla/5.0 AnotherKeepass")
-        .build();
+    let agent =
+        ureq::AgentBuilder::new().timeout(Duration::from_secs(timeout.clamp(1, 60))).user_agent("Mozilla/5.0 AnotherKeepass").build();
     if ddg {
         return get(&agent, &format!("https://icons.duckduckgo.com/ip3/{host}.ico")).filter(|(m, b)| is_image(m, b)).map(|(_, b)| b);
     }

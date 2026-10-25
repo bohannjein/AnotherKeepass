@@ -6,10 +6,10 @@ use std::collections::HashMap;
 
 use keepass::db::{CustomDataItem, CustomDataValue, Entry, EntryMut, Times};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use super::api::field;
-use super::crypto::{decrypt, decrypt_str, encrypt, SymKey};
+use super::crypto::{SymKey, decrypt, decrypt_str, encrypt};
 
 pub const CD_BW: &str = "Bitwarden.Meta";
 const CD_TYPE: &str = "AnotherKeepass.Type";
@@ -44,19 +44,39 @@ pub struct Meta {
 }
 
 // Bitwarden property → KeePass string name (and protected?)
-const LOGIN: &[(&str, &str, bool)] = &[("login.username", "UserName", false), ("login.password", "Password", true), ("login.totp", "otp", true)];
+const LOGIN: &[(&str, &str, bool)] =
+    &[("login.username", "UserName", false), ("login.password", "Password", true), ("login.totp", "otp", true)];
 const CARD: &[(&str, &str, bool)] = &[
-    ("card.cardholderName", "Cardholder", false), ("card.number", "Card number", true), ("card.code", "CVC", true), ("card.brand", "Brand", false),
+    ("card.cardholderName", "Cardholder", false),
+    ("card.number", "Card number", true),
+    ("card.code", "CVC", true),
+    ("card.brand", "Brand", false),
 ];
 const IDENTITY: &[(&str, &str, bool)] = &[
-    ("identity.title", "Title (name)", false), ("identity.firstName", "First name", false), ("identity.middleName", "Middle name", false),
-    ("identity.lastName", "Last name", false), ("identity.email", "Email", false), ("identity.phone", "Phone", false),
-    ("identity.company", "Company", false), ("identity.username", "Username", false), ("identity.address1", "Address", false),
-    ("identity.address2", "Address 2", false), ("identity.address3", "Address 3", false), ("identity.city", "City", false),
-    ("identity.state", "State", false), ("identity.postalCode", "Postal code", false), ("identity.country", "Country", false),
-    ("identity.ssn", "SSN", true), ("identity.passportNumber", "Passport number", true), ("identity.licenseNumber", "License number", true),
+    ("identity.title", "Title (name)", false),
+    ("identity.firstName", "First name", false),
+    ("identity.middleName", "Middle name", false),
+    ("identity.lastName", "Last name", false),
+    ("identity.email", "Email", false),
+    ("identity.phone", "Phone", false),
+    ("identity.company", "Company", false),
+    ("identity.username", "Username", false),
+    ("identity.address1", "Address", false),
+    ("identity.address2", "Address 2", false),
+    ("identity.address3", "Address 3", false),
+    ("identity.city", "City", false),
+    ("identity.state", "State", false),
+    ("identity.postalCode", "Postal code", false),
+    ("identity.country", "Country", false),
+    ("identity.ssn", "SSN", true),
+    ("identity.passportNumber", "Passport number", true),
+    ("identity.licenseNumber", "License number", true),
 ];
-const SSH: &[(&str, &str, bool)] = &[("sshKey.privateKey", "Private key", true), ("sshKey.publicKey", "Public key", false), ("sshKey.keyFingerprint", "Fingerprint", false)];
+const SSH: &[(&str, &str, bool)] = &[
+    ("sshKey.privateKey", "Private key", true),
+    ("sshKey.publicKey", "Public key", false),
+    ("sshKey.keyFingerprint", "Fingerprint", false),
+];
 
 fn props_for(kind: u8) -> &'static [(&'static str, &'static str, bool)] {
     match kind {
@@ -90,7 +110,13 @@ pub fn cipher_key(c: &Value, user: &SymKey, orgs: &HashMap<String, SymKey>) -> R
 
 pub fn decrypt_cipher(c: &Value, key: &SymKey) -> Result<(Plain, Meta), String> {
     let kind = field(c, "type").as_u64().unwrap_or(2) as u8;
-    let mut p = Plain { kind, name: dec(field(c, "name"), key)?, notes: dec(field(c, "notes"), key)?, favorite: field(c, "favorite").as_bool().unwrap_or(false), ..Default::default() };
+    let mut p = Plain {
+        kind,
+        name: dec(field(c, "name"), key)?,
+        notes: dec(field(c, "notes"), key)?,
+        favorite: field(c, "favorite").as_bool().unwrap_or(false),
+        ..Default::default()
+    };
     if let Some(section) = SECTION.get(kind as usize).map(|s| field(c, s)).filter(|s| s.is_object()) {
         for (prop, _, _) in props_for(kind) {
             let name = prop.split_once('.').map(|x| x.1).unwrap_or(prop);
@@ -180,7 +206,11 @@ pub fn write_entry(e: &mut EntryMut<'_>, p: &Plain, mut meta: Meta) {
             n = format!("{base} ({i})");
             i += 1;
         }
-        if *t == 1 { e.set_protected(n.clone(), value.clone()) } else { e.set_unprotected(n.clone(), value.clone()) }
+        if *t == 1 {
+            e.set_protected(n.clone(), value.clone())
+        } else {
+            e.set_unprotected(n.clone(), value.clone())
+        }
         if *t == 1 {
             kinds.insert(n.clone(), json!("hidden"));
         }
@@ -211,7 +241,9 @@ pub fn read_entry(e: &Entry) -> (Plain, Meta) {
         Some(CustomDataValue::String(s)) => s.clone(),
         _ => String::new(),
     };
-    let kind = if meta.kind != 0 { meta.kind } else {
+    let kind = if meta.kind != 0 {
+        meta.kind
+    } else {
         match ui_type.as_str() {
             "login" => 1,
             "card" => 3,
@@ -220,7 +252,8 @@ pub fn read_entry(e: &Entry) -> (Plain, Meta) {
             _ => 2,
         }
     };
-    let mut p = Plain { kind, name: get("Title"), notes: get("Notes"), favorite: e.tags.iter().any(|t| t == "pinned"), ..Default::default() };
+    let mut p =
+        Plain { kind, name: get("Title"), notes: get("Notes"), favorite: e.tags.iter().any(|t| t == "pinned"), ..Default::default() };
     let mut used: Vec<String> = vec!["Title".into(), "Notes".into()];
     for (prop, name, _) in props_for(kind) {
         let v = get(name);
@@ -270,13 +303,20 @@ pub fn read_entry(e: &Entry) -> (Plain, Meta) {
                 used.push(n.clone());
                 let v = get(n);
                 // booleans stay booleans; otherwise the protection flag decides text vs hidden
-                let t = if *orig_type == 2 { 2 } else if hidden(n) { 1 } else { 0 };
+                let t = if *orig_type == 2 {
+                    2
+                } else if hidden(n) {
+                    1
+                } else {
+                    0
+                };
                 p.fields.push((original.clone(), v, t, None));
             }
             _ => {}
         }
     }
-    let mut rest: Vec<&String> = e.fields.keys().filter(|k| !used.contains(k) && !k.starts_with("KPEX_") && !k.starts_with("KP2A_URL")).collect();
+    let mut rest: Vec<&String> =
+        e.fields.keys().filter(|k| !used.contains(k) && !k.starts_with("KPEX_") && !k.starts_with("KP2A_URL")).collect();
     rest.sort();
     for n in rest {
         p.fields.push((n.clone(), get(n), if hidden(n) { 1 } else { 0 }, None));
@@ -315,7 +355,16 @@ pub fn cipher_body(p: &Plain, meta: &Meta, folder: Option<&str>, key: &SymKey, u
     }
     match p.kind {
         1 => {
-            obj.insert("uris".into(), json!(p.uris.iter().filter(|u| !u.is_empty()).map(|u| json!({ "uri": encrypt(u.as_bytes(), key), "match": Value::Null })).collect::<Vec<_>>()));
+            obj.insert(
+                "uris".into(),
+                json!(
+                    p.uris
+                        .iter()
+                        .filter(|u| !u.is_empty())
+                        .map(|u| json!({ "uri": encrypt(u.as_bytes(), key), "match": Value::Null }))
+                        .collect::<Vec<_>>()
+                ),
+            );
         }
         2 => {
             obj.insert("type".into(), json!(0));
@@ -378,8 +427,12 @@ mod tests {
         assert_eq!(meta2.id, meta.id);
         // body decrypts back to the same values
         let body = cipher_body(&back, &meta2, None, &k, "user");
-        let (again, _) = decrypt_cipher(&json!({ "type": 1, "favorite": true, "id": meta.id, "name": body["name"], "notes": body["notes"],
-            "login": body["login"], "fields": body["fields"] }), &k).unwrap();
+        let (again, _) = decrypt_cipher(
+            &json!({ "type": 1, "favorite": true, "id": meta.id, "name": body["name"], "notes": body["notes"],
+            "login": body["login"], "fields": body["fields"] }),
+            &k,
+        )
+        .unwrap();
         assert_eq!(again, p);
         assert_eq!(body["encryptedFor"], "user");
     }

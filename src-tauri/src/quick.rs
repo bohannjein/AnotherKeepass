@@ -4,7 +4,11 @@
 
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
 
-use crate::{autotype::Target, desktop, vault::{VaultDto, Vaults}};
+use crate::{
+    autotype::Target,
+    desktop,
+    vault::{VaultDto, Vaults},
+};
 
 pub const LABEL: &str = "quick";
 

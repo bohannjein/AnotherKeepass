@@ -13,10 +13,10 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use keepass::{
-    db::{CustomDataItem, CustomDataValue, EntryId, GroupId, Times},
     Database, DatabaseKey,
+    db::{CustomDataItem, CustomDataValue, EntryId, GroupId, Times},
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -60,7 +60,11 @@ fn b64_text(v: Option<&str>) -> String {
 
 pub fn parse(value: &str) -> Option<Share> {
     // KeePassXC stores the XML base64-encoded; accept plain XML too
-    let xml = B64.decode(value.trim()).ok().map(|b| String::from_utf8_lossy(&b).into_owned()).filter(|x| x.contains("<KeeShare"))
+    let xml = B64
+        .decode(value.trim())
+        .ok()
+        .map(|b| String::from_utf8_lossy(&b).into_owned())
+        .filter(|x| x.contains("<KeeShare"))
         .unwrap_or_else(|| value.to_string());
     let types = tag(&xml, "Type").unwrap_or_default();
     let (import, export) = (types.contains("<Import"), types.contains("<Export"));
@@ -75,8 +79,12 @@ pub fn parse(value: &str) -> Option<Share> {
 
 pub fn serialize(s: &Share, group: GroupId) -> String {
     let mut types = String::new();
-    if s.imports() { types.push_str("<Import/>"); }
-    if s.exports() { types.push_str("<Export/>"); }
+    if s.imports() {
+        types.push_str("<Import/>");
+    }
+    if s.exports() {
+        types.push_str("<Export/>");
+    }
     let xml = format!(
         "<?xml version=\"1.0\"?>\n<KeeShare><Type>{types}</Type><Group>{}</Group><Path>{}</Path><Password>{}</Password><KeepGroups>True</KeepGroups></KeeShare>\n",
         B64.encode(group.uuid().as_bytes()),
@@ -97,7 +105,10 @@ pub fn set_group_share(db: &mut Database, g: GroupId, s: Option<&Share>) -> Resu
     let mut grp = db.group_mut(g).ok_or("not_found")?;
     match s {
         Some(s) => {
-            grp.custom_data.insert(KEY.into(), CustomDataItem { value: Some(CustomDataValue::String(serialize(s, g))), last_modification_time: Some(Times::now()) });
+            grp.custom_data.insert(
+                KEY.into(),
+                CustomDataItem { value: Some(CustomDataValue::String(serialize(s, g))), last_modification_time: Some(Times::now()) },
+            );
         }
         None => {
             grp.custom_data.remove(KEY);
@@ -143,7 +154,8 @@ fn copy_tree(src: &Database, from: GroupId, dst: &mut Database, to: GroupId, new
     let mut changed = false;
     // ids may only match inside the target folder: a container must not reach other entries
     let (scope_groups, scope_entries) = subtree(dst, to);
-    let (scope_groups, scope_entries): (HashSet<GroupId>, HashSet<EntryId>) = (scope_groups.into_iter().collect(), scope_entries.into_iter().collect());
+    let (scope_groups, scope_entries): (HashSet<GroupId>, HashSet<EntryId>) =
+        (scope_groups.into_iter().collect(), scope_entries.into_iter().collect());
     let mut map = HashMap::from([(from, to)]);
     let mut queue = vec![from];
     while let Some(cur) = queue.pop() {
@@ -302,10 +314,28 @@ mod tests {
         let vault = dir.join("v.kdbx");
         // source vault with a shared folder (2 entries, 1 subfolder)
         let mut a = Database::new();
-        let shared = { let mut r = a.root_mut(); let mut g = r.add_group(); g.name = "Team".into(); g.id() };
-        let e1 = { let mut g = a.group_mut(shared).unwrap(); let mut e = g.add_entry(); e.set_unprotected("Title", "one"); e.id() };
-        let sub = { let mut g = a.group_mut(shared).unwrap(); let mut s = g.add_group(); s.name = "Sub".into(); s.id() };
-        { let mut g = a.group_mut(sub).unwrap(); g.add_entry().set_unprotected("Title", "two"); }
+        let shared = {
+            let mut r = a.root_mut();
+            let mut g = r.add_group();
+            g.name = "Team".into();
+            g.id()
+        };
+        let e1 = {
+            let mut g = a.group_mut(shared).unwrap();
+            let mut e = g.add_entry();
+            e.set_unprotected("Title", "one");
+            e.id()
+        };
+        let sub = {
+            let mut g = a.group_mut(shared).unwrap();
+            let mut s = g.add_group();
+            s.name = "Sub".into();
+            s.id()
+        };
+        {
+            let mut g = a.group_mut(sub).unwrap();
+            g.add_entry().set_unprotected("Title", "two");
+        }
         let share = Share { kind: "export".into(), path: "team.kdbx".into(), password: "pw".into() };
         // fast KDF for the test
         let mut out = Database::new();
@@ -313,13 +343,21 @@ mod tests {
         export_one(&a, shared, &vault, &share).unwrap();
         // other vault imports it
         let mut b = Database::new();
-        let target = { let mut r = b.root_mut(); let mut g = r.add_group(); g.name = "From team".into(); g.id() };
+        let target = {
+            let mut r = b.root_mut();
+            let mut g = r.add_group();
+            g.name = "From team".into();
+            g.id()
+        };
         let imp = Share { kind: "import".into(), ..share.clone() };
         assert!(import_one(&mut b, target, &vault, &imp).unwrap());
         assert_eq!(b.entry(e1).unwrap().parent().id(), target);
         assert!(b.group(sub).is_some());
         // second import: nothing new; local extra entry gets removed (mirror)
-        { let mut g = b.group_mut(target).unwrap(); g.add_entry().set_unprotected("Title", "local"); }
+        {
+            let mut g = b.group_mut(target).unwrap();
+            g.add_entry().set_unprotected("Title", "local");
+        }
         assert!(import_one(&mut b, target, &vault, &imp).unwrap());
         assert_eq!(subtree(&b, target).1.len(), 2);
         let _ = fs::remove_dir_all(dir);

@@ -17,19 +17,34 @@ pub fn run() {
         let to_app = async {
             let mut stdin = tokio::io::stdin();
             loop {
-                let len = match stdin.read_u32_le().await { Ok(l) => l as usize, Err(_) => break };
-                if len > 4 * 1024 * 1024 { break; }
+                let len = match stdin.read_u32_le().await {
+                    Ok(l) => l as usize,
+                    Err(_) => break,
+                };
+                if len > 4 * 1024 * 1024 {
+                    break;
+                }
                 let mut msg = vec![0u8; len];
-                if stdin.read_exact(&mut msg).await.is_err() || sock_wr.write_all(&msg).await.is_err() { break; }
+                if stdin.read_exact(&mut msg).await.is_err() || sock_wr.write_all(&msg).await.is_err() {
+                    break;
+                }
             }
         };
         let to_browser = async {
             let mut stdout = tokio::io::stdout();
             let mut buf = vec![0u8; 1024 * 1024];
             loop {
-                let n = match sock_rd.read(&mut buf).await { Ok(0) | Err(_) => break, Ok(n) => n };
+                let n = match sock_rd.read(&mut buf).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => n,
+                };
                 // one socket read = one JSON message (the app writes each reply in one go)
-                if stdout.write_u32_le(n as u32).await.is_err() || stdout.write_all(&buf[..n]).await.is_err() || stdout.flush().await.is_err() { break; }
+                if stdout.write_u32_le(n as u32).await.is_err()
+                    || stdout.write_all(&buf[..n]).await.is_err()
+                    || stdout.flush().await.is_err()
+                {
+                    break;
+                }
             }
         };
         tokio::select! { _ = to_app => {}, _ = to_browser => {} }

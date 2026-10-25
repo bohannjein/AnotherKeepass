@@ -85,7 +85,13 @@ pub fn write_settings(s: &KeeAgent) -> Vec<u8> {
     let esc = |v: &str| v.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
     let xml = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n<EntrySettings xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\n  <AllowUseOfSshKey>{}</AllowUseOfSshKey>\n  <AddAtDatabaseOpen>{}</AddAtDatabaseOpen>\n  <RemoveAtDatabaseClose>{}</RemoveAtDatabaseClose>\n  <UseConfirmConstraintWhenAdding>{}</UseConfirmConstraintWhenAdding>\n  <UseLifetimeConstraintWhenAdding>{}</UseLifetimeConstraintWhenAdding>\n  <LifetimeConstraintDuration>{}</LifetimeConstraintDuration>\n  <Location>\n    <SelectedType>attachment</SelectedType>\n    <AttachmentName>{}</AttachmentName>\n    <SaveAttachmentToTempFile>false</SaveAttachmentToTempFile>\n    <FileName />\n  </Location>\n</EntrySettings>\n",
-        b(s.allow), b(s.add_at_open), b(s.remove_at_close), b(s.confirm), b(s.lifetime > 0), if s.lifetime > 0 { s.lifetime } else { 600 }, esc(&s.attachment)
+        b(s.allow),
+        b(s.add_at_open),
+        b(s.remove_at_close),
+        b(s.confirm),
+        b(s.lifetime > 0),
+        if s.lifetime > 0 { s.lifetime } else { 600 },
+        esc(&s.attachment)
     );
     let mut out = vec![0xFF, 0xFE];
     out.extend(xml.encode_utf16().flat_map(|u| u.to_le_bytes()));
@@ -100,11 +106,7 @@ pub fn entry_settings(e: &EntryRef<'_>) -> Option<KeeAgent> {
 fn private_key(e: &EntryRef<'_>, s: &KeeAgent) -> Result<PrivateKey, String> {
     let (_, a) = e.attachments_named().find(|(n, _)| *n == s.attachment).ok_or("ssh_no_key")?;
     let key = PrivateKey::from_openssh(a.data.get()).map_err(|e| format!("ssh_key:{e}"))?;
-    if key.is_encrypted() {
-        key.decrypt(e.get("Password").unwrap_or_default()).map_err(|_| "ssh_passphrase".to_string())
-    } else {
-        Ok(key)
-    }
+    if key.is_encrypted() { key.decrypt(e.get("Password").unwrap_or_default()).map_err(|_| "ssh_passphrase".to_string()) } else { Ok(key) }
 }
 
 // ---------------------------------------------------------------- agent protocol
@@ -167,7 +169,10 @@ fn request(msg: &[u8]) -> Result<(), String> {
         use std::os::windows::fs::OpenOptionsExt;
         use std::os::windows::io::AsRawHandle;
         // GENERIC_READ | GENERIC_WRITE | READ_CONTROL (to check who owns the pipe)
-        let f = std::fs::OpenOptions::new().access_mode(0x8000_0000 | 0x4000_0000 | 0x0002_0000).open(&path).map_err(|e| format!("ssh_agent:{e}"))?;
+        let f = std::fs::OpenOptions::new()
+            .access_mode(0x8000_0000 | 0x4000_0000 | 0x0002_0000)
+            .open(&path)
+            .map_err(|e| format!("ssh_agent:{e}"))?;
         if !crate::hardening::pipe_owner_trusted(f.as_raw_handle() as _) {
             return Err("ssh_agent:untrusted agent pipe (owned by another user)".into());
         }
@@ -264,7 +269,12 @@ pub fn ssh_settings(state: tauri::State<'_, Vaults>, vault: String, id: String) 
 
 /// Store (or with None remove) the KeeAgent settings attachment.
 #[tauri::command]
-pub fn ssh_settings_set(state: tauri::State<'_, Vaults>, vault: String, id: String, settings: Option<KeeAgent>) -> Result<crate::vault::VaultDto, String> {
+pub fn ssh_settings_set(
+    state: tauri::State<'_, Vaults>,
+    vault: String,
+    id: String,
+    settings: Option<KeeAgent>,
+) -> Result<crate::vault::VaultDto, String> {
     crate::vault::mutate_entry(&state, &vault, &id, |e| {
         e.remove_attachment_by_name(SETTINGS_ATTACHMENT);
         if let Some(s) = settings {
