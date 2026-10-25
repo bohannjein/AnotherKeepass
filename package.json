@@ -1,14 +1,16 @@
 {
   "name": "anotherkeepass",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "node scripts/subset-icons.mjs && tsc -b && vite build",
     "icons": "node scripts/subset-icons.mjs",
-    "lint": "oxlint",
-    "preview": "vite preview"
+    "lint": "oxlint --max-warnings 28",
+    "preview": "vite preview",
+    "check": "tsc -b && npm run lint && node src/totp.check.ts && node src/generator.check.ts && node src/model.check.ts && node src/importers.check.ts && node src/listGroups.check.ts"
   },
   "dependencies": {
     "@fontsource-variable/roboto-flex": "^5.3.0",

@@ -3,6 +3,19 @@
 KeePass-compatible desktop password manager (KDBX 4) with a Material 3 Expressive UI.
 Tauri 2 + Rust (`keepass` crate) + React/TypeScript.
 
+Your vaults stay ordinary `.kdbx` files that KeePassXC, KeePass2 and KeePassDX open too.
+
+- Several vaults at once, folders, tags, pinned items, templates, attachments, history
+- TOTP, password generator, password health (weak / reused / old / breached)
+- Auto-Type, quick-access window (Ctrl+Alt+K), command palette (Ctrl+K), tray
+- Browser extension: works with the KeePassXC-Browser extension, including passkeys
+- SSH agent (KeeAgent compatible), KeeShare, Windows Hello quick unlock
+- Vaultwarden accounts as vaults, two-way sync between a `.kdbx` and an account
+- Import from Bitwarden, 1Password, Proton Pass and KeePassXC CSV
+
+How the code is organised: [ARCHITECTURE.md](ARCHITECTURE.md). How to contribute:
+[CONTRIBUTING.md](CONTRIBUTING.md). License: [GPL-3.0-or-later](LICENSE).
+
 ## Develop
 
 ```bash
@@ -71,6 +84,6 @@ cleared after the configured time only if unchanged).
 
 ## Roadmap
 
-See the plan: KDBX core (done), entry lifecycle, desktop integration (tray, auto-type),
-browser integration (KeePassXC-Browser protocol), server vaults (Bitwarden/Vaultwarden,
-shown as "in progress"), import and release.
+Done: KDBX core, entry lifecycle, desktop integration, browser integration, Vaultwarden,
+import, hardening. Next: signed releases with auto-update, Linux polish, and an own
+browser extension (Manifest V3).
