@@ -6,6 +6,8 @@ import { type VaultInfo, type Folder, type Item } from './model';
 import { type Strings } from './i18n';
 import { Icon } from './Icon';
 import { PasswordStrength } from './PasswordStrength';
+import { isRemote } from './VaultDialog';
+import { type Confirm } from './useItemActions';
 
 export function FolderDialog({ t, mode, name: initialName, vault: initialVault, vaults, folders, parent: initialParent, onClose, onSubmit }: {
   t: Strings; mode: 'create' | 'rename'; name: string; vault: string; vaults: VaultInfo[]; folders: Folder[]; parent: string;
@@ -269,4 +271,48 @@ export function VaultLookDialog({ t, vault, onClose, onSave }: { t: Strings; vau
         </div>
       </div>
     </div>, document.body);
+}
+
+/** Link a .kdbx vault with an unlocked Vaultwarden account for two-way sync (or unlink it). */
+export function SyncDialog({ t, vaultList, syncWith, onLink, onClose }: {
+  t: Strings; vaultList: VaultInfo[]; syncWith?: string | null; onLink: (remote: string | null) => void; onClose: () => void;
+}) {
+  const accounts = vaultList.filter(x => isRemote(x.id) && !x.locked);
+  return createPortal(
+    <div className="scrim" onClick={onClose}>
+      <div className="dialog share-dialog" role="dialog" aria-label={t.syncTitle} onClick={e => e.stopPropagation()}>
+        <h3><Icon n="sync_alt" />{t.syncTitle}</h3>
+        <p className="dialog-body">{t.syncBody}</p>
+        {accounts.length ? (
+          <div className="share-modes">
+            {accounts.map(x => (
+              <button key={x.id} className={'choice' + (syncWith === x.id ? ' on' : '')} onClick={() => onLink(x.id)}>
+                <Icon n="cloud" /><span><b>{x.name}</b><small>{syncWith === x.id ? t.syncChip + ' ' + x.name : t.syncStart}</small></span>
+              </button>
+            ))}
+          </div>
+        ) : <p className="form-note"><Icon n="info" />{t.syncNone}</p>}
+        <div className="row">
+          {syncWith && <button className="btn text danger" onClick={() => onLink(null)}>{t.syncStop}</button>}
+          <span style={{ flex: 1 }} />
+          <button className="btn text" onClick={onClose}>{t.close}</button>
+        </div>
+      </div>
+    </div>, document.body);
+}
+
+/** Yes/no question before a destructive action. */
+export function ConfirmDialog({ t, confirm, onClose }: { t: Strings; confirm: Confirm; onClose: () => void }) {
+  return (
+    <div className="scrim" onClick={onClose}>
+      <div className="dialog" role="alertdialog" aria-label={confirm.title} onClick={e => e.stopPropagation()}>
+        <h3><Icon n={confirm.icon} />{confirm.title}</h3>
+        <p className="dialog-body">{confirm.body}</p>
+        <div className="row">
+          <button className="btn text" onClick={onClose}>{t.cancel}</button>
+          <button className="btn filled" onClick={() => { confirm.action(); onClose(); }}><Icon n={confirm.icon} />{confirm.label}</button>
+        </div>
+      </div>
+    </div>
+  );
 }

@@ -1,8 +1,7 @@
 import { lazy, useState, useCallback, useEffect, useRef, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
-import { save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { backend, type VaultData, demoAttachment } from './backend';
-import { type ItemType, type Field, type Item, type Folder, type VaultInfo, type Draft, draftToInput, type Attachment, rawToItem, iconUrl } from './model';
+import { backend, type VaultData } from './backend';
+import { type ItemType, type Field, type Item, type Folder, type VaultInfo, type Draft, draftToInput, rawToItem } from './model';
 import { DEMO_VAULTS } from './mock';
 import { openOptions, openExternal } from './open';
 import { clearHistory, generate } from './generator';
@@ -23,9 +22,10 @@ import { today, TYPE_ICON } from './ui';
 import { Row, NavItem } from './ItemList';
 import { Detail, Generator } from './Detail';
 import { useSnack } from './useSnack';
+import { useItemActions, type Confirm } from './useItemActions';
 import { useHealth } from './useHealth';
 import { useDesktopEvents } from './useDesktopEvents';
-import { ShortcutsDialog, BrowserAskDialog, AutoTypePicker, VaultLookDialog, FolderDialog, KeyDialog } from './Dialogs';
+import { ConfirmDialog, SyncDialog, ShortcutsDialog, BrowserAskDialog, AutoTypePicker, VaultLookDialog, FolderDialog, KeyDialog } from './Dialogs';
 
 // rarely needed views load on first use (keeps startup lean)
 const SettingsPage = lazy(() => import('./SettingsPage'));
@@ -180,8 +180,6 @@ export default function App() {
   );
 }
 
-type Confirm = { title: string; body: string; label: string; icon: string; action: () => void };
-
 function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpdate, onClosed, onLock, desktopProblems }: {
   t: Strings; settings: Settings; onSettings: (s: Settings) => void;
   onKnown: (path: string, patch: Partial<Known>) => void;
@@ -255,37 +253,9 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     });
   }, [known, open]);
 
-  const run = async <T,>(p: Promise<T>): Promise<T | undefined> => {
-    try { return await p; } catch (e) {
-      const m = String(e);
-      notify(m.includes('remote_move_loses_data') ? t.errRemoteMove : `${t.saveError}: ${m}`, true);
-      return undefined;
-    }
-  };
-  const apply = (d: VaultData | undefined) => { if (d) onUpdate(d); return !!d; };
-
-  const clearAfter = settings.clipboardClear ? settings.clipboardSeconds : null;
-  const copied = (what: string) => {
-    notify(`${what} ${t.copied}`);
-    if (settings.onCopy !== 'none') backend.windowMinimize();
-    setCopies(n => n + 1);
-  };
-  // "clipboard cleared" notice; a newer copy restarts the countdown
-  const [copies, setCopies] = useState(0);
-  useEffect(() => {
-    if (!copies || !clearAfter) return;
-    const id = setTimeout(() => notify(ts.ui.clipboardCleared), clearAfter * 1000);
-    return () => clearTimeout(id);
-  }, [copies]); // eslint-disable-line react-hooks/exhaustive-deps -- only a new copy starts the countdown
-  const copyText = async (text: string, what: string) => {
-    if ((await run(backend.copyText(text, clearAfter))) !== undefined || !backend.desktop) copied(what);
-  };
-  // stored fields are copied by the backend, so secrets never pass through the UI
-  const copyField = async (item: Item, f: Field, what: string) => {
-    if (item.id.startsWith('new:') || !f.raw) return copyText(f.value, what);
-    try { await backend.copy(item.vault, item.id, f.raw, f.kind === 'totp', clearAfter); copied(what); }
-    catch (e) { notify(`${t.saveError}: ${String(e)}`, true); }
-  };
+  const chosen = multi.length > 1 ? allItems.filter(i => multi.includes(i.id)) : [];
+  const { run, apply, copyText, copyField, requestTrash, restoreItem, deleteForever, emptyTrash, togglePin, moveItem, duplicate, loadIcons, removeIcon, historyRestore, download, bulkTrash, bulkMove, bulkPin } =
+    useItemActions({ t, settings, notify, open, items, folders, vaultList, chosen, onUpdate, setSelected, setConfirm, setMulti });
 
   const { health, breaches, checking, issue, setIssue, issuesOf, issueName, issueLabel, checkBreaches, healthCounts } =
     useHealth({ t, active: vault === HEALTH, open, notify });
@@ -336,47 +306,6 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   };
   const discardNew = () => { setPending(null); setSelected(null); };
 
-  const doTrash = async (item: Item) => {
-    if (apply(await run(backend.trash(item.vault, item.id)))) {
-      setSelected(null);
-      notify(ts.ui.movedToTrash, false, { label: t.undo, run: async () => { if (apply(await run(backend.restore(item.vault, item.id)))) setSelected(item.id); } });
-    }
-  };
-  const requestTrash = (item: Item) => settings.confirmTrash
-    ? setConfirm({ title: ts.ui.trashTitle, body: ts.ui.trashBody, label: ts.ui.moveToTrash, icon: 'delete', action: () => doTrash(item) })
-    : doTrash(item);
-  const restoreItem = async (item: Item) => { if (apply(await run(backend.restore(item.vault, item.id)))) notify(t.restore); };
-  const deleteForever = (item: Item) => setConfirm({
-    title: t.deleteForever, body: t.deleteForeverBody, label: t.deleteForever, icon: 'delete_forever',
-    action: async () => { if (apply(await run(backend.remove(item.vault, item.id)))) setSelected(null); },
-  });
-  const emptyTrash = () => setConfirm({
-    title: t.emptyTrash, body: t.emptyTrashBody, label: t.emptyTrash, icon: 'delete_forever',
-    action: async () => {
-      for (const id of new Set(items.filter(i => i.trashed).map(i => i.vault))) apply(await run(backend.emptyTrash(id)));
-      setSelected(null);
-    },
-  });
-  const togglePin = async (item: Item) => {
-    const draft: Draft = { title: item.title, folder: item.folder ?? '', note: item.note ?? '', fields: item.fields, attachments: item.attachments ?? [], expires: item.expires ?? null, tags: item.tags ?? [] };
-    const input = await draftToInput({ ...item, pinned: !item.pinned }, draft, open[item.vault].root);
-    const res = await run(backend.save(item.vault, input));
-    if (res) onUpdate(res[1]);
-  };
-  const moveItem = async (it: Item, vaultId: string, folderId: string | null) => {
-    if (it.id.startsWith('new:')) return;
-    const target = folderId ? folders.find(f => f.id === folderId)?.name : vaultList.find(v => v.id === vaultId)?.name;
-    if (it.vault === vaultId) {
-      if ((it.folder ?? null) === folderId && !it.trashed) return;
-      if (!apply(await run(backend.move(vaultId, it.id, folderId)))) return;
-    } else {
-      const res = await run(backend.moveToVault(it.vault, it.id, vaultId, folderId));
-      if (!res) return;
-      onUpdate(res[0]);
-      onUpdate(res[1]);
-    }
-    notify(`${t.movedTo} ${target}`);
-  };
   // drop target props for vault and folder rows
   const dropProps = (key: string, vaultId: string, folderId: string | null) => ({
     onDragOver: (e: React.DragEvent) => { if (dragItem.current && open[vaultId]) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOver(key); } },
@@ -389,12 +318,6 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       if (it) moveItem(it, vaultId, folderId);
     },
   });
-  const duplicate = async (item: Item) => {
-    const res = await run(backend.duplicate(item.vault, item.id, ` (${t.copySuffix})`));
-    if (res) { onUpdate(res[1]); setSelected(res[0]); }
-  };
-
-
   const itemMenu = (it: Item): MenuItem[] => {
     const f = (raw: string) => it.fields.find(x => x.raw === raw && (x.value || x.protected));
     const totpF = it.fields.find(x => x.kind === 'totp');
@@ -419,26 +342,6 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       { icon: 'delete', label: ts.ui.moveToTrash, kbd: 'Entf', danger: true, action: () => requestTrash(it) },
     ];
   };
-  // website icons: download (backend), scale to a 64 px PNG here, store as KeePass custom icons
-  const loadIcons = async (list: Item[]) => {
-    const withUrl = list.filter(i => i.fields.some(f => f.raw === 'URL' && f.value));
-    if (!withUrl.length) return;
-    if (withUrl.length > 1) notify(t.iconsLoading);
-    const found: Record<string, [string, string | null][]> = {};
-    for (let i = 0; i < withUrl.length; i += 4) {
-      await Promise.all(withUrl.slice(i, i + 4).map(async it => {
-        try {
-          const raw = await backend.faviconFetch(it.fields.find(f => f.raw === 'URL')!.value, settings.ddgFavicons, settings.faviconTimeout);
-          const png = await toPng(raw);
-          if (png) (found[it.vault] ??= []).push([it.id, png]);
-        } catch { /* no icon for this site */ }
-      }));
-    }
-    let n = 0;
-    for (const [vid, icons] of Object.entries(found)) if (apply(await run(backend.iconsSet(vid, icons)))) n += icons.length;
-    notify(n ? `${n} ${t.iconsLoaded}` : t.iconNone, !n);
-  };
-  const removeIcon = async (it: Item) => { apply(await run(backend.iconsSet(it.vault, [[it.id, null]]))); };
   const folderMenu = (f: Folder): MenuItem[] => [
     { icon: 'create_new_folder', label: t.newSubfolder, action: () => setFolderDialog({ mode: 'create', vault: f.vault, parent: f.id }) },
     { icon: 'drive_file_rename_outline', label: t.renameFolder, action: () => setFolderDialog({ mode: 'rename', vault: f.vault, id: f.id, name: f.name }) },
@@ -467,20 +370,6 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       'sep',
       { icon: 'lock', label: t.closeVault, action: () => closeVault(v.id) },
     ];
-
-  const historyRestore = async (item: Item, index: number) => apply(await run(backend.historyRestore(item.vault, item.id, index)));
-  const download = async (item: Item, a: Attachment) => {
-    if (backend.desktop && !a.file) {
-      const dest = await saveDialog({ defaultPath: a.name });
-      if (dest) await run(backend.attachmentSave(item.vault, item.id, a.name, dest));
-      return;
-    }
-    const bytes = a.file ? new Uint8Array(await a.file.arrayBuffer()) : demoAttachment(item.vault, item.id, a.name);
-    if (!bytes) return;
-    const url = URL.createObjectURL(new Blob([bytes.slice()])); // slice: plain ArrayBuffer copy
-    Object.assign(document.createElement('a'), { href: url, download: a.name }).click();
-    URL.revokeObjectURL(url);
-  };
 
   const closeVault = async (id: string) => {
     await run(backend.close(id));
@@ -522,27 +411,6 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       dragRef={dragItem} onDragEnd={() => setDragOver(null)}
       onContextMenu={e => { if (!i.id.startsWith('new:')) { setSelected(i.id); openMenu(e, itemMenu(i)); } }} />
   );
-  const chosen = multi.length > 1 ? allItems.filter(i => multi.includes(i.id)) : [];
-  const bulkTrash = async () => {
-    const done: Item[] = [];
-    for (const it of chosen) if (apply(await run(backend.trash(it.vault, it.id)))) done.push(it);
-    setMulti([]); setSelected(null);
-    notify(`${done.length} ${t.trashedN}`, false, { label: t.undo, run: async () => { for (const it of done) apply(await run(backend.restore(it.vault, it.id))); } });
-  };
-  const bulkMove = async (target: string) => {
-    const [vid, fid] = target.split('|');
-    let n = 0;
-    for (const it of chosen) {
-      const ok = it.vault === vid ? apply(await run(backend.move(it.vault, it.id, fid || null)))
-        : !!(await run(backend.moveToVault(it.vault, it.id, vid, fid || null)).then(r => r && (onUpdate(r[0]), onUpdate(r[1]), true)));
-      if (ok) n++;
-    }
-    setMulti([]);
-    notify(`${n} ${t.movedN}`);
-  };
-  const bulkPin = async (pin: boolean) => {
-    for (const it of chosen) if (!!it.pinned !== pin) await togglePin(it);
-  };
   // Ctrl+K: actions first, then every entry of the open vaults
   const paletteItems: PaletteItem[] = useMemo(() => {
     const close = (fn: () => void) => () => { setPalette(false); fn(); };
@@ -880,30 +748,9 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
           </div>
         </div>, document.body)}
       {exportFor && <ExportDialog t={t} vault={exportFor} onClose={() => setExportFor(null)} onDone={notify} />}
-      {syncFor && createPortal(
-        <div className="scrim" onClick={() => setSyncFor(null)}>
-          <div className="dialog share-dialog" role="dialog" aria-label={t.syncTitle} onClick={e => e.stopPropagation()}>
-            <h3><Icon n="sync_alt" />{t.syncTitle}</h3>
-            <p className="dialog-body">{t.syncBody}</p>
-            {vaultList.some(x => isRemote(x.id) && !x.locked) ? (
-              <div className="share-modes">
-                {vaultList.filter(x => isRemote(x.id) && !x.locked).map(x => (
-                  <button key={x.id} className={'choice' + (open[syncFor.id]?.syncWith === x.id ? ' on' : '')}
-                    onClick={async () => { const d = await run(backend.syncLink(syncFor.id, x.id)); if (d) { onUpdate(d); notify(t.syncLinked); setSyncFor(null); } }}>
-                    <Icon n="cloud" /><span><b>{x.name}</b><small>{open[syncFor.id]?.syncWith === x.id ? t.syncChip + ' ' + x.name : t.syncStart}</small></span>
-                  </button>
-                ))}
-              </div>
-            ) : <p className="form-note"><Icon n="info" />{t.syncNone}</p>}
-            <div className="row">
-              {open[syncFor.id]?.syncWith && (
-                <button className="btn text danger" onClick={async () => { const d = await run(backend.syncLink(syncFor.id, null)); if (d) { onUpdate(d); notify(t.syncUnlinked); setSyncFor(null); } }}>{t.syncStop}</button>
-              )}
-              <span style={{ flex: 1 }} />
-              <button className="btn text" onClick={() => setSyncFor(null)}>{t.close}</button>
-            </div>
-          </div>
-        </div>, document.body)}
+      {syncFor && <SyncDialog t={t} vaultList={vaultList} syncWith={open[syncFor.id]?.syncWith}
+        onLink={async remote => { const d = await run(backend.syncLink(syncFor.id, remote)); if (d) { onUpdate(d); notify(remote ? t.syncLinked : t.syncUnlinked); setSyncFor(null); } }}
+        onClose={() => setSyncFor(null)} />}
       {mergeFor && <MergeDialog t={t} vault={mergeFor} onClose={() => setMergeFor(null)} onMerged={(d, msg) => { onUpdate(d); notify(msg); }} />}
       {preview && <AttachmentPreview t={t} name={preview.name} load={preview.load} onClose={() => setPreview(null)} />}
       {lookFor && (
@@ -947,18 +794,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       )}
       {keyDialog && <KeyDialog t={t} onClose={() => setKeyDialog(null)}
         onSubmit={async pw => { if ((await run(backend.changeKey(keyDialog, pw))) !== undefined) { setKeyDialog(null); notify(t.masterKeyChanged); } }} />}
-      {confirm && (
-        <div className="scrim" onClick={() => setConfirm(null)}>
-          <div className="dialog" role="alertdialog" aria-label={confirm.title} onClick={e => e.stopPropagation()}>
-            <h3><Icon n={confirm.icon} />{confirm.title}</h3>
-            <p className="dialog-body">{confirm.body}</p>
-            <div className="row">
-              <button className="btn text" onClick={() => setConfirm(null)}>{t.cancel}</button>
-              <button className="btn filled" onClick={() => { confirm.action(); setConfirm(null); }}><Icon n={confirm.icon} />{confirm.label}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {confirm && <ConfirmDialog t={t} confirm={confirm} onClose={() => setConfirm(null)} />}
       {snackbar}
     </div>
   );
@@ -970,24 +806,6 @@ function rawToItemCached(r: VaultData['items'][number], v: VaultData): Item {
   let i = itemCache.get(r);
   if (!i) { i = rawToItem(r, v); itemCache.set(r, i); }
   return i;
-}
-
-/** Any image the webview can decode → 64×64 PNG (base64), what KeePass clients expect. */
-function toPng(b64: string): Promise<string | null> {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload = () => {
-      const c = document.createElement('canvas');
-      c.width = c.height = 64;
-      const ctx = c.getContext('2d');
-      if (!ctx || !img.width) return resolve(null);
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, 0, 0, 64, 64);
-      resolve(c.toDataURL('image/png').split(',')[1] ?? null);
-    };
-    img.onerror = () => resolve(null);
-    img.src = iconUrl(b64);
-  });
 }
 
 const SORTS: [SortMode, string, 'sortTitle' | 'sortTitleDesc' | 'sortModified' | 'sortCreated'][] = [
