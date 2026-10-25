@@ -144,19 +144,21 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
       {!modal && <p>{known.length ? t.kdbxCompat : t.welcomeVaults}</p>}
       {missing.length > 0 && <p className="form-note" role="status"><Icon n="info" />{t.missingFiles} {missing.join(', ')}</p>}
 
-      <div className="seg vault-modes" role="tablist">
-        <button type="button" role="tab" aria-selected={mode === 'open'} className={'chip' + (mode === 'open' ? ' on' : '')} onClick={() => { setMode('open'); setError(''); }}>
-          <Icon n="lock_open" />{t.openVault}
-        </button>
-        <button type="button" role="tab" aria-selected={mode === 'create'} className={'chip' + (mode === 'create' ? ' on' : '')} onClick={() => { setMode('create'); setError(''); setPath(''); }}>
-          <Icon n="note_add" />{t.createVault}
-        </button>
-        {backend.desktop && (
-          <button type="button" role="tab" aria-selected={mode === 'server'} className={'chip' + (mode === 'server' ? ' on' : '')} onClick={() => { setMode('server'); setError(''); setTwoFactor(null); }}>
-            <Icon n="dns" />Vaultwarden
-          </button>
-        )}
-      </div>
+      {/* what to do: a plain dropdown instead of a row of buttons that does not fit */}
+      <label className="textfield mode-field">
+        <Icon n={{ open: 'lock_open', create: 'note_add', server: 'dns' }[mode]} />
+        <select value={mode} aria-label={t.addVault} onChange={e => {
+          const m = e.target.value as Mode;
+          setMode(m); setError('');
+          if (m === 'create') setPath('');
+          if (m === 'server') setTwoFactor(null);
+        }}>
+          <option value="open">{t.openVault}</option>
+          <option value="create">{t.createVault}</option>
+          {backend.desktop && <option value="server">{t.vwAccount}</option>}
+        </select>
+        <Icon n="expand_more" />
+      </label>
 
       {mode === 'server' && (
         <>
@@ -211,7 +213,7 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
             </div>
           )}
           {backend.desktop && (
-            <button type="button" className="btn tonal" onClick={pickFile}><Icon n="folder_open" />{t.chooseFile}</button>
+            <button type="button" className="btn tonal wide" onClick={pickFile}><Icon n="folder_open" />{t.chooseFile}</button>
           )}
           {path && pwField(password, setPassword, t.masterPassword, true)}
         </>
@@ -222,7 +224,7 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
             <input placeholder={t.vaultName} aria-label={t.vaultName} value={name} onChange={e => setName(e.target.value)} autoFocus />
           </label>
           {backend.desktop && (
-            <button type="button" className="btn tonal path-btn" onClick={pickLocation} title={path}>
+            <button type="button" className="btn tonal wide path-btn" onClick={pickLocation} title={path}>
               <Icon n="save" /><span>{path ? fileName(path) : t.chooseLocation}</span>
             </button>
           )}
@@ -243,7 +245,7 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
       {!backend.desktop && <span className="label">{t.demoMode} · {t.masterHint}</span>}
 
       {quick && (
-        <button type="button" className="btn tonal hello-btn" disabled={busy} onClick={hello} autoFocus>
+        <button type="button" className="btn tonal wide hello-btn" disabled={busy} onClick={hello} autoFocus>
           <Icon n="fingerprint" />{t.helloUnlock}
         </button>
       )}

@@ -406,7 +406,7 @@ button { cursor: pointer; border: 0; background: none; }
   border: 1px solid var(--outline);
   transition: border-color .2s;
 }
-.textfield:focus-within { border: 2px solid var(--primary); }
+.textfield:focus-within { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); } /* thicker ring without moving the content */
 .textfield input { flex: 1; border: 0; background: none; font-size: 16px; min-width: 0; }
 .textfield input:focus { outline: none; }
 .files { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -611,7 +611,7 @@ textarea.val.edit { resize: vertical; display: block; }
 }
 .set-select { min-width: 220px; max-width: 320px; cursor: pointer; }
 .set-select option { background: var(--surface-high); }
-.set-select:focus, .set-input:focus, .set-number input:focus { outline: none; border: 2px solid var(--primary); border-radius: var(--r-m); }
+.set-select:focus, .set-input:focus, .set-number input:focus { outline: none; border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); border-radius: var(--r-m); }
 .set-select:disabled, .set-input:disabled, .set-number input:disabled, .switch:disabled { cursor: not-allowed; }
 .set-number { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--on-surface-var); }
 .set-number input { width: 110px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -756,7 +756,6 @@ textarea.val.edit { resize: vertical; display: block; }
 /* ================= vaults: open / create / unlock ================= */
 .vault-dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; }
 .vault-dialog.sheet { gap: 16px; }
-.vault-modes { margin: 0; flex-wrap: wrap; }
 .vault-choices { display: grid; gap: 8px; max-height: 260px; overflow-y: auto; }
 .vault-choices .choice { gap: 12px; padding: 10px 14px; }
 .vault-choices .vi { width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--r-s); flex-shrink: 0; }
@@ -1142,3 +1141,40 @@ html:has(.quick), body:has(.quick), #root:has(.quick) { background: transparent 
 * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--on-surface-var) 45%, transparent) transparent; }
 ::selection { background: color-mix(in srgb, var(--primary) 35%, transparent); color: inherit; }
 input, textarea { caret-color: var(--primary); }
+
+/* vault form: every row shares one grid. 16px inset, a 36px icon column (tiles fill it, line
+   icons sit centred in it), text from 64px. Borders are subtracted so the columns line up exactly. */
+.vault-dialog { --inset: 16px; --slot: 36px; }
+.vault-dialog .textfield { padding: 0 8px 0 calc(var(--inset) - 1px); gap: 12px; }
+.vault-dialog .textfield > .ms:first-child { width: var(--slot); text-align: center; flex-shrink: 0; color: var(--on-surface-var); }
+.vault-dialog .vault-choices .choice { padding: 10px calc(var(--inset) - 2px); gap: 12px; }
+.vault-dialog .vault-choices .vi { width: var(--slot); height: var(--slot); border-radius: 10px; }
+.vault-dialog .vault-choices .vi .ms { font-size: 20px; }
+/* selected vault: outline + check instead of a full colour fill, so the vault tile keeps its own colour */
+.vault-dialog .vault-choices .choice.on { background: var(--surface-highest); color: var(--on-surface); border-color: var(--primary); }
+.vault-dialog .vault-choices .choice.on > .ms:last-child { color: var(--primary); }
+.vault-dialog .btn.wide { width: 100%; height: 52px; justify-content: flex-start; padding: 0 var(--inset); gap: 12px; border-radius: var(--r-m); }
+.vault-dialog .btn.wide > .ms, .vault-dialog .keyfile-row .btn > .ms { width: var(--slot); text-align: center; flex-shrink: 0; }
+.vault-dialog .keyfile-row .btn { padding: 0 var(--inset); gap: 12px; }
+/* dropdown in a text field */
+.mode-field { cursor: pointer; }
+.mode-field select { flex: 1; min-width: 0; height: 100%; border: 0; background: none; color: inherit; font: inherit; font-size: 16px; font-weight: 600; appearance: none; cursor: pointer; }
+.mode-field select:focus { outline: none; }
+.mode-field select option { background: var(--surface-high); font-weight: 400; }
+.mode-field > .ms:last-child { pointer-events: none; color: var(--on-surface-var); margin-right: 6px; }
+
+/* ---------- alignment grid (measured) ----------
+   Drawer: every leading visual (logo, FAB icon, vault tiles, footer icons) is centred on x = 40.
+   List: search field, filter chips and rows share one 12px inset; the search icon sits on the
+   avatar centre line (12px row padding + half the 44px avatar = 34px). */
+.app:not(.rail) .brand { padding-left: 6px; }
+.app:not(.rail) .new-wrap { margin-left: 1px; }
+.app:not(.rail) .drawer-foot { padding-left: 8px; padding-right: 8px; }
+.nav .label { padding: 8px 10px; }
+.pane > .seg { margin: 4px 12px 8px; }
+.items { padding: 0 12px 12px; }
+.pane > .searchbar { padding-left: 23px; }
+/* settings sidebar: back arrow, title icon, search icon and tiles centred on x = 35 */
+.settings-title { padding-left: 9px; }
+.settings-search { margin: 0 0 12px; padding-left: 12px; }
+.planned-toggle { margin: 8px 0 0; }
