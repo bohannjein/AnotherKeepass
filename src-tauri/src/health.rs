@@ -31,9 +31,11 @@ pub struct Health {
     expired: bool,
 }
 
-/// ponytail: class-pool × length estimate with a few pattern penalties; swap for zxcvbn
-/// if users report misjudged passwords.
-pub fn entropy_bits(pw: &str) -> f64 {
+/// Strength in bits. zxcvbn finds what attackers try first: words, names, dates, keyboard walks,
+/// repeats, leetspeak and the entry's own data (`user_inputs`). Those parts count with zxcvbn's
+/// guess estimate. Parts it only brute-forces count with the character pool instead, because its
+/// brute-force model (10 guesses per character) undersells real randomness.
+pub fn entropy_bits(pw: &str, user_inputs: &[&str]) -> f64 {
     let chars: Vec<char> = pw.chars().collect();
     if chars.is_empty() {
         return 0.0;
@@ -54,42 +56,27 @@ pub fn entropy_bits(pw: &str) -> f64 {
     if chars.iter().any(|c| !c.is_ascii()) {
         pool += 100;
     }
-    // repeated or sequential characters add almost nothing ("aaaa", "1234", "abcd")
-    let mut effective = 1.0;
-    for w in chars.windows(2) {
-        let d = w[1] as i64 - w[0] as i64;
-        effective += if d == 0 || d.abs() == 1 { 0.25 } else { 1.0 };
-    }
-    let mut bits = effective * (pool as f64).log2();
-    let lower = pw.to_lowercase();
-    if COMMON.iter().any(|c| lower.contains(c)) {
-        bits = bits.min(20.0);
-    }
-    bits
+    let per_char = (pool as f64).log2();
+    let z = zxcvbn::zxcvbn(pw, user_inputs);
+    z.sequence()
+        .iter()
+        .map(|m| match (&m.pattern, m.guesses) {
+            (zxcvbn::matching::patterns::MatchPattern::BruteForce, _) | (_, None) => m.token.chars().count() as f64 * per_char,
+            (_, Some(g)) => (g.max(1) as f64).log2(),
+        })
+        .sum()
 }
 
-const COMMON: &[&str] = &[
-    "password",
-    "passwort",
-    "123456",
-    "qwerty",
-    "qwertz",
-    "letmein",
-    "welcome",
-    "willkommen",
-    "admin",
-    "iloveyou",
-    "monkey",
-    "dragon",
-    "sunshine",
-    "princess",
-    "football",
-    "fussball",
-    "hallo",
-    "geheim",
-    "secret",
-    "abc123",
-];
+/// What an attacker would try along with the password: title, user name, website.
+fn user_inputs(e: &keepass::db::Entry) -> Vec<String> {
+    ["Title", "UserName", "URL"]
+        .iter()
+        .filter_map(|k| e.get(k))
+        .flat_map(|v| v.split(|c: char| !c.is_alphanumeric()))
+        .filter(|w| w.len() > 2)
+        .map(str::to_lowercase)
+        .collect()
+}
 
 /// When the current password was set: walk back through history while it stays the same.
 fn password_since(e: &Entry) -> Option<NaiveDateTime> {
@@ -129,7 +116,8 @@ fn report(vaults: &HashMap<String, crate::vault::OpenVault>) -> Vec<Health> {
                 continue;
             }
             *by_password.entry(pw.to_string()).or_default() += 1;
-            let bits = entropy_bits(pw);
+            let inputs = user_inputs(&e);
+            let bits = entropy_bits(pw, &inputs.iter().map(String::as_str).collect::<Vec<_>>());
             let age_days = password_since(&e).map(|t| (now - t).num_days()).unwrap_or(0);
             rows.push((
                 pw.to_string(),
@@ -215,11 +203,15 @@ mod tests {
 
     #[test]
     fn entropy() {
-        assert!(entropy_bits("password1") < WEAK_BITS);
-        assert!(entropy_bits("aaaaaaaaaaaaaaaa") < WEAK_BITS);
-        assert!(entropy_bits("12345678901234") < WEAK_BITS);
-        assert!(entropy_bits("Tr7#kq9!Lm2$vX") > WEAK_BITS);
-        assert!(entropy_bits("correct-horse-battery-staple") > WEAK_BITS);
+        let weak = |pw: &str| entropy_bits(pw, &[]) < WEAK_BITS;
+        for pw in ["password1", "aaaaaaaaaaaaaaaa", "12345678901234", "Summer2024!", "P@ssw0rd2023", "qwertzuiop123", "Sommer2024!"] {
+            assert!(weak(pw), "{pw} should be weak: {}", entropy_bits(pw, &[]));
+        }
+        for pw in ["Tr7#kq9!Lm2$vX", "correct-horse-battery-staple", "Plug8-Violate3-Dental9-Spina"] {
+            assert!(!weak(pw), "{pw} should be strong: {}", entropy_bits(pw, &[]));
+        }
+        // the entry's own data is guessed first
+        assert!(entropy_bits("johanna1987xyz", &["johanna"]) < entropy_bits("johanna1987xyz", &[]));
     }
 
     #[test]
@@ -238,13 +230,14 @@ pub fn entry_password_bits(state: tauri::State<'_, Vaults>, vault: String, id: S
     let map = state.0.lock().map_err(|_| "lock")?;
     let v = map.get(&vault).ok_or("vault_closed")?;
     let e = v.db().entry(keepass::db::EntryId::from(uuid::Uuid::parse_str(&id).map_err(|_| "not_found")?)).ok_or("not_found")?;
-    Ok(entropy_bits(e.get("Password").unwrap_or_default()) as u32)
+    let inputs = user_inputs(&e);
+    Ok(entropy_bits(e.get("Password").unwrap_or_default(), &inputs.iter().map(String::as_str).collect::<Vec<_>>()) as u32)
 }
 
 /// Strength of a password typed in the UI (master password): estimated bits.
 #[tauri::command]
 pub fn password_bits(password: String) -> u32 {
-    entropy_bits(&password) as u32
+    entropy_bits(&password, &[]) as u32
 }
 
 /// How often a password was seen in breaches (HIBP range API, k-anonymity: only 5 hash chars leave).
