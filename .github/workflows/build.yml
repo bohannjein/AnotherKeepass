@@ -56,6 +56,10 @@ jobs:
             echo "::error::Secret TAURI_SIGNING_PRIVATE_KEY is empty or not visible here. It must be a Repository secret (Settings > Secrets and variables > Actions > Repository secrets)."
             exit 1
           fi
+          if ! printf '%s' "$KEY" | base64 -d 2>/dev/null | base64 -d >/dev/null 2>&1; then
+            echo "::error::Secret TAURI_SIGNING_PRIVATE_KEY is not a complete key (${#KEY} characters). Paste the whole content of the .key file, including the '==' at the end."
+            exit 1
+          fi
           echo "::notice::update key present (${#KEY} characters)"
 
       - uses: tauri-apps/tauri-action@v0
