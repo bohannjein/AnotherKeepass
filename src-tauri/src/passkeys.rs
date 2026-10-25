@@ -79,13 +79,14 @@ fn effective_domain(origin: &str) -> Result<String, u32> {
     }
 }
 
-/// RP ID must be the page's domain or a parent domain of it.
-/// ponytail: no public-suffix list; only bare TLDs are rejected ("co.uk" style suffixes pass).
+/// RP ID must be the page's domain or a parent domain of it, and never a public suffix
+/// ("com", "co.uk", "github.io"): a passkey for those would be valid for every site below them.
 fn rp_id(requested: Option<&str>, domain: &str) -> Result<String, u32> {
     let Some(rp) = requested.map(|r| r.trim().to_ascii_lowercase()).filter(|r| !r.is_empty()) else {
         return Ok(domain.to_string());
     };
-    if rp == domain || (domain.ends_with(&format!(".{rp}")) && rp.contains('.')) { Ok(rp) } else { Err(E_RPID_MISMATCH) }
+    let public_suffix = rp != "localhost" && psl::suffix(rp.as_bytes()).is_some_and(|s| s.trim().as_bytes() == rp.as_bytes());
+    if !public_suffix && (rp == domain || domain.ends_with(&format!(".{rp}"))) { Ok(rp) } else { Err(E_RPID_MISMATCH) }
 }
 
 fn client_data(kind: &str, challenge: &str, origin: &str) -> String {
@@ -370,6 +371,11 @@ mod tests {
         assert_eq!(rp_id(None, "login.example.com"), Ok("login.example.com".into()));
         assert_eq!(rp_id(Some("com"), "example.com"), Err(E_RPID_MISMATCH));
         assert_eq!(rp_id(Some("evil.com"), "example.com"), Err(E_RPID_MISMATCH));
+        assert_eq!(rp_id(Some("co.uk"), "shop.example.co.uk"), Err(E_RPID_MISMATCH));
+        assert_eq!(rp_id(Some("github.io"), "me.github.io"), Err(E_RPID_MISMATCH));
+        assert_eq!(rp_id(Some("example.co.uk"), "shop.example.co.uk"), Ok("example.co.uk".into()));
+        assert_eq!(rp_id(Some("me.github.io"), "me.github.io"), Ok("me.github.io".into()));
+        assert_eq!(rp_id(Some("localhost"), "localhost"), Ok("localhost".into()));
         assert_eq!(effective_domain("https://10.0.0.1"), Err(E_DOMAIN_NOT_VALID));
         assert!(origin_allowed("https://a.com", false) && !origin_allowed("http://localhost:3000", false));
         assert!(origin_allowed("http://localhost:3000", true));
