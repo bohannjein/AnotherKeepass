@@ -249,7 +249,16 @@ fn backup_target(vault: &Path, pattern: &str) -> Option<PathBuf> {
 fn write_db(v: &mut OpenVault) -> R<()> {
     // Vaultwarden: upload the changes, then show what the server has now
     if let Some(r) = v.remote.as_mut() {
-        v.db = crate::bitwarden::push(r, &v.db)?;
+        match crate::bitwarden::push(r, &v.db) {
+            Ok(db) => v.db = db,
+            Err(e) => {
+                let title = v.db.meta.database_name.clone().unwrap_or_default();
+                if let Ok(db) = crate::bitwarden::pull(r, &title) {
+                    v.db = db;
+                }
+                return Err(e);
+            }
+        }
         return Ok(());
     }
     upgrade_to_kdbx4(v)?;

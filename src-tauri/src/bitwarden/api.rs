@@ -184,6 +184,10 @@ impl Session {
     pub fn create_cipher(&mut self, body: &Value) -> Result<Value, String> {
         self.call("POST", "/ciphers", Some(body))
     }
+    /// organisation item: created inside the given collections
+    pub fn create_org_cipher(&mut self, body: &Value, collections: &[String]) -> Result<Value, String> {
+        self.call("POST", "/ciphers/create", Some(&json!({ "cipher": body, "collectionIds": collections })))
+    }
     pub fn update_cipher(&mut self, id: &str, body: &Value) -> Result<Value, String> {
         self.call("PUT", &format!("/ciphers/{id}"), Some(body))
     }

@@ -22,7 +22,8 @@ export function useItemActions({ t, settings, notify, open, items, folders, vaul
   const run = async <T,>(p: Promise<T>): Promise<T | undefined> => {
     try { return await p; } catch (e) {
       const m = String(e);
-      notify(m.includes('remote_move_loses_data') ? t.errRemoteMove : `${t.saveError}: ${m}`, true);
+      const known: [string, string][] = [['remote_move_loses_data', t.errRemoteMove], ['bw_readonly', t.errReadOnly], ['bw_org_collection', t.errOrgCollection], ['bw_org_move', t.errOrgMove]];
+      notify(known.find(([code]) => m.includes(code))?.[1] ?? `${t.saveError}: ${m}`, true);
       return undefined;
     }
   };

@@ -107,6 +107,10 @@ struct Snapshot {
     folders: HashMap<String, String>,
     /// groups that stand for organizations (no folder)
     org_groups: HashMap<GroupId, String>,
+    /// collection groups (below their organization): organization id, collection id, read-only
+    collections: HashMap<GroupId, (String, String, bool)>,
+    /// ciphers the account may see but not change
+    read_only: std::collections::HashSet<String>,
 }
 
 pub struct Remote {
@@ -164,7 +168,13 @@ fn build(sync: &Value, title: &str, user: &SymKey, orgs: &HashMap<String, SymKey
     db.root_mut().name = title.to_string();
     let root = db.root().id();
     let bin = crate::vault::ensure_recycle_bin(&mut db);
-    let mut snap = Snapshot { ciphers: HashMap::new(), folders: HashMap::new(), org_groups: HashMap::new() };
+    let mut snap = Snapshot {
+        ciphers: HashMap::new(),
+        folders: HashMap::new(),
+        org_groups: HashMap::new(),
+        collections: HashMap::new(),
+        read_only: Default::default(),
+    };
 
     for f in field(sync, "folders").as_array().into_iter().flatten() {
         let Some(id) = field(f, "id").as_str() else { continue };
@@ -180,14 +190,29 @@ fn build(sync: &Value, title: &str, user: &SymKey, orgs: &HashMap<String, SymKey
     let mut org_group: HashMap<String, GroupId> = HashMap::new();
     for o in field(field(sync, "profile"), "organizations").as_array().into_iter().flatten() {
         let (Some(id), name) = (field(o, "id").as_str(), field(o, "name").as_str().unwrap_or("Organization")) else { continue };
-        let gid = {
-            let mut r = db.root_mut();
-            let mut g = r.add_group();
+        // the organization id as group id: stays the same across syncs
+        let Ok(uuid) = Uuid::parse_str(id) else { continue };
+        let gid = GroupId::from_uuid(uuid);
+        if let Some(mut r) = db.group_mut(root)
+            && let Ok(mut g) = r.add_group_with_id(gid)
+        {
             g.name = name.to_string();
-            g.id()
-        };
+        }
         org_group.insert(id.to_string(), gid);
         snap.org_groups.insert(gid, id.to_string());
+    }
+    // collections become groups below their organization
+    for c in field(sync, "collections").as_array().into_iter().flatten() {
+        let (Some(id), Some(org)) = (field(c, "id").as_str(), field(c, "organizationId").as_str()) else { continue };
+        let (Some(parent), Some(key), Ok(uuid)) = (org_group.get(org).copied(), orgs.get(org), Uuid::parse_str(id)) else { continue };
+        let name = field(c, "name").as_str().and_then(|n| crypto::decrypt_str(n, key).ok()).unwrap_or_default();
+        let gid = GroupId::from_uuid(uuid);
+        if let Some(mut p) = db.group_mut(parent)
+            && let Ok(mut g) = p.add_group_with_id(gid)
+        {
+            g.name = name;
+        }
+        snap.collections.insert(gid, (org.to_string(), id.to_string(), field(c, "readOnly").as_bool() == Some(true)));
     }
 
     for c in field(sync, "ciphers").as_array().into_iter().flatten() {
@@ -208,6 +233,15 @@ fn build(sync: &Value, title: &str, user: &SymKey, orgs: &HashMap<String, SymKey
             folder.as_deref().and_then(|f| Uuid::parse_str(f).ok()).map(GroupId::from_uuid).filter(|g| db.group(*g).is_some())
         {
             g
+        } else if let Some(g) = field(c, "collectionIds")
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|x| x.as_str().and_then(|x| Uuid::parse_str(x).ok()))
+            .map(GroupId::from_uuid)
+            .find(|g| snap.collections.contains_key(g))
+        {
+            g
         } else if let Some(g) = meta.org.as_deref().and_then(|o| org_group.get(o)) {
             *g
         } else {
@@ -219,6 +253,9 @@ fn build(sync: &Value, title: &str, user: &SymKey, orgs: &HashMap<String, SymKey
         e.times.last_modification = parse_time(field(c, "revisionDate").as_str()).or(Some(Times::now()));
         e.times.creation = parse_time(field(c, "creationDate").as_str()).or(e.times.last_modification);
         let eid = e.id();
+        if field(c, "edit").as_bool() == Some(false) {
+            snap.read_only.insert(id.to_string());
+        }
         // canonical form = what reading the entry gives (so "unchanged" compares equal)
         let entry = db.entry(eid).ok_or("bw_build")?;
         let (canon, meta) = mapping::read_entry(&entry);
@@ -371,6 +408,43 @@ pub fn push(r: &mut Remote, db: &Database) -> Result<Database, String> {
         }
         false
     };
+    // organization (and collection) a group belongs to
+    let place = |mut g: Option<GroupId>| -> Option<(String, Option<(String, bool)>)> {
+        while let Some(id) = g {
+            if let Some((org, coll, ro)) = r.snapshot.collections.get(&id) {
+                return Some((org.clone(), Some((coll.clone(), *ro))));
+            }
+            if let Some(org) = r.snapshot.org_groups.get(&id) {
+                return Some((org.clone(), None));
+            }
+            g = db.group(id).and_then(|x| x.parent().map(|p| p.id()));
+        }
+        None
+    };
+    // refuse before anything is uploaded, so a rejected change never leaves half a push behind
+    let changed = |id: &str, plain: &Plain, trashed: bool| match r.snapshot.ciphers.get(id) {
+        None => true,
+        Some((old, _, was_trashed, _)) => old != plain || *was_trashed != trashed,
+    };
+    let present: std::collections::HashSet<String> = db.iter_all_entries().map(|e| e.id().to_string()).collect();
+    for e in db.iter_all_entries() {
+        let id = e.id().to_string();
+        let trashed = in_bin(Some(e.parent().id()));
+        let here = if trashed { None } else { place(Some(e.parent().id())) };
+        let known = r.snapshot.ciphers.get(&id);
+        if known.is_some() && r.snapshot.read_only.contains(&id) && changed(&id, &mapping::read_entry(&e).0, trashed) {
+            return Err("bw_readonly".into());
+        }
+        match (known, &here) {
+            (None, Some((_, None))) if !trashed => return Err("bw_org_collection".into()),
+            (None, Some((_, Some((_, true))))) => return Err("bw_readonly".into()),
+            (Some((_, meta, _, _)), _) if !trashed && meta.org != here.as_ref().map(|h| h.0.clone()) => return Err("bw_org_move".into()),
+            _ => {}
+        }
+    }
+    if r.snapshot.read_only.iter().any(|id| !present.contains(id)) {
+        return Err("bw_readonly".into());
+    }
     let session = r.session.as_mut().expect("checked above");
 
     // folders: every group except root, bin and organizations; nested groups become "A/B"
@@ -378,7 +452,7 @@ pub fn push(r: &mut Remote, db: &Database) -> Result<Database, String> {
     let mut seen_folders = Vec::new();
     for g in db.iter_all_groups() {
         let gid = g.id();
-        if gid == root || in_bin(Some(gid)) || r.snapshot.org_groups.contains_key(&gid) {
+        if gid == root || in_bin(Some(gid)) || place(Some(gid)).is_some() {
             folder_of.insert(gid, None);
             continue;
         }
@@ -418,7 +492,15 @@ pub fn push(r: &mut Remote, db: &Database) -> Result<Database, String> {
                 seen.push(id.clone());
                 if !trashed {
                     meta.revision = None;
-                    let res = session.create_cipher(&mapping::cipher_body(&plain, &meta, folder.as_deref(), &key, &r.user_id))?;
+                    let res = match place(Some(e.parent().id())) {
+                        Some((org, Some((coll, _)))) => {
+                            meta.org = Some(org);
+                            meta.key = None;
+                            let key = mapping::cipher_key(&json!({ "organizationId": meta.org, "key": null }), &r.user, &r.orgs)?;
+                            session.create_org_cipher(&mapping::cipher_body(&plain, &meta, None, &key, &r.user_id), &[coll])?
+                        }
+                        _ => session.create_cipher(&mapping::cipher_body(&plain, &meta, folder.as_deref(), &key, &r.user_id))?,
+                    };
                     if let Some(sid) = field(&res, "id").as_str() {
                         r.created.push((id, sid.to_string()));
                     }
@@ -512,7 +594,8 @@ mod tests {
         log: std::sync::Arc<std::sync::Mutex<Vec<(String, String, String)>>>,
     }
 
-    fn mock(user: SymKey, protected_user_key: String, ciphers: Vec<Value>) -> Mock {
+    /// `org`: organizations, collections and the protected private key for the sync profile
+    fn mock(user: SymKey, protected_user_key: String, ciphers: Vec<Value>, org: Value) -> Mock {
         use std::io::{BufRead, BufReader, Read, Write};
         use std::sync::{Arc, Mutex};
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -551,7 +634,7 @@ mod tests {
                     {
                         (
                             200,
-                            json!({ "access_token": "acc", "refresh_token": "ref", "Key": protected_user_key, "PrivateKey": null, "TwoFactorToken": "remember-me" }),
+                            json!({ "access_token": "acc", "refresh_token": "ref", "Key": protected_user_key, "PrivateKey": org["privateKey"], "TwoFactorToken": "remember-me" }),
                         )
                     }
                     ("POST", "/identity/connect/token") => {
@@ -559,7 +642,11 @@ mod tests {
                     }
                     ("GET", "/api/sync") => (
                         200,
-                        json!({ "profile": { "id": "user-1", "organizations": [] }, "folders": [], "ciphers": *state.lock().unwrap() }),
+                        json!({
+                            "profile": { "id": "user-1", "organizations": org.get("organizations").cloned().unwrap_or(json!([])), "privateKey": org["privateKey"] },
+                            "collections": org.get("collections").cloned().unwrap_or(json!([])),
+                            "folders": [], "ciphers": *state.lock().unwrap(),
+                        }),
                     ),
                     ("PUT", p) if p.starts_with("/api/ciphers/") => {
                         let id = p.trim_start_matches("/api/ciphers/").to_string();
@@ -568,6 +655,14 @@ mod tests {
                         let mut list = state.lock().unwrap();
                         list.retain(|x| x["id"] != json!(id));
                         list.push(c.clone());
+                        (200, c)
+                    }
+                    ("POST", "/api/ciphers/create") => {
+                        let b: Value = serde_json::from_str(&body).unwrap();
+                        let mut c = b["cipher"].clone();
+                        c["id"] = json!(Uuid::new_v4().to_string());
+                        c["collectionIds"] = b["collectionIds"].clone();
+                        state.lock().unwrap().push(c.clone());
                         (200, c)
                     }
                     ("POST", "/api/ciphers") => {
@@ -610,6 +705,7 @@ mod tests {
                 json!({ "id": id1, "type": 1, "name": e("Mail"), "revisionDate": "2026-10-21T10:00:00Z", "login": { "username": e("me"), "password": e("old"), "uris": [] } }),
                 json!({ "id": "cccccccc-0000-0000-0000-000000000002", "type": 2, "name": e("Note"), "secureNote": { "type": 0 } }),
             ],
+            json!({}),
         );
         let path = format!("bw:{}#{}", m.url, email);
 
@@ -660,7 +756,7 @@ mod tests {
         let mut ub = [0u8; 64];
         OsRng.fill_bytes(&mut ub);
         let user = SymKey::from_bytes(&ub).unwrap();
-        let m = mock(user.clone(), encrypt(&ub, &crypto::stretch(&master)), vec![]);
+        let m = mock(user.clone(), encrypt(&ub, &crypto::stretch(&master)), vec![], json!({}));
         let path = format!("bw:{}#{}", m.url, email);
         let (mut b, mut remote) = open(&path, password, Some((0, "123456".into()))).unwrap();
 
@@ -678,6 +774,95 @@ mod tests {
         assert_eq!(crate::sync::sync(&mut a, &mut b), (false, false));
         assert_eq!(b.iter_all_entries().filter(|e| e.get_title() == Some("Only in file")).count(), 1);
         assert_eq!(a.iter_all_entries().filter(|e| e.get_title() == Some("Only in file")).count(), 1);
+        forget(&path);
+    }
+
+    #[test]
+    fn organization_items_are_writable_unless_read_only() {
+        use rsa::pkcs8::EncodePrivateKey;
+        let password = "org pw";
+        let email = format!("o{}@example.com", Uuid::new_v4().simple());
+        let kdf = Kdf { kind: 0, iterations: 5000, memory: 0, parallelism: 0 };
+        let master = crypto::master_key(password, &email, &kdf).unwrap();
+        let mut ub = [0u8; 64];
+        OsRng.fill_bytes(&mut ub);
+        let user = SymKey::from_bytes(&ub).unwrap();
+        // account key pair; the organization key reaches the account RSA-encrypted (type 4)
+        let private = rsa::RsaPrivateKey::new(&mut OsRng, 1024).unwrap();
+        let mut ob = [0u8; 64];
+        OsRng.fill_bytes(&mut ob);
+        let org_key = SymKey::from_bytes(&ob).unwrap();
+        let wrapped = private.to_public_key().encrypt(&mut OsRng, rsa::Oaep::new::<sha1::Sha1>(), &ob).unwrap();
+        let (org, shared, locked) =
+            ("aaaaaaaa-0000-0000-0000-00000000000a", "bbbbbbbb-0000-0000-0000-00000000000b", "bbbbbbbb-0000-0000-0000-00000000000c");
+        let o = |s: &str| json!(encrypt(s.as_bytes(), &org_key));
+        let (team, ro) = ("dddddddd-0000-0000-0000-000000000001", "dddddddd-0000-0000-0000-000000000002");
+        let m = mock(
+            user.clone(),
+            encrypt(&ub, &crypto::stretch(&master)),
+            vec![
+                json!({ "id": team, "type": 1, "organizationId": org, "collectionIds": [shared], "edit": true, "name": o("Team mail"),
+                    "revisionDate": "2026-10-21T10:00:00Z", "login": { "username": o("team"), "password": o("old"), "uris": [] } }),
+                json!({ "id": ro, "type": 1, "organizationId": org, "collectionIds": [locked], "edit": false, "name": o("Server root"),
+                    "login": { "username": o("root"), "password": o("pw"), "uris": [] } }),
+            ],
+            json!({
+                "privateKey": encrypt(private.to_pkcs8_der().unwrap().as_bytes(), &user),
+                "organizations": [{ "id": org, "name": "Team", "key": format!("4.{}", B64.encode(wrapped)) }],
+                "collections": [
+                    { "id": shared, "organizationId": org, "name": o("Shared"), "readOnly": false },
+                    { "id": locked, "organizationId": org, "name": o("Locked"), "readOnly": true },
+                ],
+            }),
+        );
+        let path = format!("bw:{}#{}", m.url, email);
+        let (mut db, mut remote) = open(&path, password, Some((0, "123456".into()))).unwrap();
+        let title = db.meta.database_name.clone().unwrap_or_default();
+        let shared_g = GroupId::from_uuid(Uuid::parse_str(shared).unwrap());
+        let org_g = GroupId::from_uuid(Uuid::parse_str(org).unwrap());
+        let team_id = EntryId::from(Uuid::parse_str(team).unwrap());
+        assert_eq!(db.group(shared_g).unwrap().name, "Shared", "collections are groups below the organization");
+        assert_eq!(db.entry(team_id).unwrap().parent().id(), shared_g);
+        let writes = |m: &Mock, from: usize| m.log.lock().unwrap()[from..].iter().filter(|(meth, _, _)| meth != "GET").count();
+
+        // editable item: uploaded encrypted with the organization key
+        db.entry_mut(team_id).unwrap().set_protected("Password", "rotated");
+        let before = m.log.lock().unwrap().len();
+        db = push(&mut remote, &db).unwrap();
+        let put = m.log.lock().unwrap()[before..].iter().find(|(meth, p, _)| meth == "PUT" && p.ends_with(team)).cloned().expect("PUT");
+        let body: Value = serde_json::from_str(&put.2).unwrap();
+        assert_eq!(body["organizationId"], org);
+        assert_eq!(crypto::decrypt_str(body["login"]["password"].as_str().unwrap(), &org_key).unwrap(), "rotated");
+
+        // new entry inside a collection: created as organization item in that collection
+        db.group_mut(shared_g).unwrap().add_entry().set_unprotected("Title", "Team wiki");
+        let before = m.log.lock().unwrap().len();
+        db = push(&mut remote, &db).unwrap();
+        let post = m.log.lock().unwrap()[before..]
+            .iter()
+            .find(|(meth, p, _)| meth == "POST" && p == "/api/ciphers/create")
+            .cloned()
+            .expect("POST");
+        let body: Value = serde_json::from_str(&post.2).unwrap();
+        assert_eq!(body["collectionIds"], json!([shared]));
+        assert_eq!(body["cipher"]["organizationId"], org);
+        assert_eq!(db.iter_all_entries().filter(|e| e.get_title() == Some("Team wiki") && e.parent().id() == shared_g).count(), 1);
+
+        // read-only item: refused before anything is uploaded
+        let ro_id = EntryId::from(Uuid::parse_str(ro).unwrap());
+        db.entry_mut(ro_id).unwrap().set_protected("Password", "nope");
+        let before = m.log.lock().unwrap().len();
+        assert_eq!(push(&mut remote, &db).err().as_deref(), Some("bw_readonly"));
+        assert_eq!(writes(&m, before), 0);
+
+        // directly in the organization (no collection) or moved out of it: refused as well
+        let mut db = pull(&mut remote, &title).unwrap();
+        db.group_mut(org_g).unwrap().add_entry().set_unprotected("Title", "Loose");
+        assert_eq!(push(&mut remote, &db).err().as_deref(), Some("bw_org_collection"));
+        let mut db = pull(&mut remote, &title).unwrap();
+        let root = db.root().id();
+        db.entry_mut(team_id).unwrap().move_to(root).unwrap();
+        assert_eq!(push(&mut remote, &db).err().as_deref(), Some("bw_org_move"));
         forget(&path);
     }
 }
