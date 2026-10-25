@@ -133,6 +133,10 @@ export interface Group { id: string; items: Setting[] }
 export interface Section { id: string; icon: string; tint: string; block?: boolean; groups: Group[] }
 
 
+/** Options marked with a platform only show up there (Windows Hello, Windows session events, …). */
+export const IS_WINDOWS = typeof navigator !== 'undefined' && /Windows/.test(navigator.userAgent);
+export const onThisPlatform = (s: Setting) => !('platform' in s && s.platform) || (s.platform === 'windows') === IS_WINDOWS;
+
 export const SECTIONS: Section[] = [
   {
     id: 'general', icon: 'tune', tint: '--v-sand', groups: [
@@ -222,15 +226,15 @@ export const SECTIONS: Section[] = [
         id: 'lock', items: [
           { key: 'autoLock', type: 'toggle' },
           { key: 'autoLockSeconds', type: 'number', min: 10, max: 43200, unit: 's', dependsOn: 'autoLock' },
-          { key: 'lockOnSession', type: 'toggle' },
-          { key: 'lockOnUserSwitch', type: 'toggle' },
+          { key: 'lockOnSession', type: 'toggle', platform: 'windows' },
+          { key: 'lockOnUserSwitch', type: 'toggle', platform: 'windows' },
           { key: 'lockOnMinimize', type: 'toggle' },
         ],
       },
       {
         id: 'unlock', items: [
-          { key: 'helloUnlock', type: 'toggle' },
-          { key: 'helloRequirePassword', type: 'toggle', dependsOn: 'helloUnlock' },
+          { key: 'helloUnlock', type: 'toggle', platform: 'windows' },
+          { key: 'helloRequirePassword', type: 'toggle', dependsOn: 'helloUnlock', platform: 'windows' },
         ],
       },
       {
@@ -243,7 +247,7 @@ export const SECTIONS: Section[] = [
       },
       {
         id: 'screen', items: [
-          { key: 'screenProtect', type: 'toggle' },
+          { key: 'screenProtect', type: 'toggle', platform: 'windows' },
         ],
       },
     ],

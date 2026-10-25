@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { DEFAULTS, SECTIONS, clamp, mergePrefs, type PrefKey, type Prefs, type Setting } from './settings';
+import { DEFAULTS, SECTIONS, clamp, mergePrefs, onThisPlatform, type PrefKey, type Prefs, type Setting } from './settings';
 import { settingsStrings, type SettingsStrings } from './i18n-settings';
 import { LANGS, type Strings } from './i18n';
 
@@ -27,7 +27,7 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
   const fileInput = useRef<HTMLInputElement>(null);
 
   // planned (not built) options stay hidden unless asked for; sections without visible options disappear
-  const visible = (it: Setting) => !('planned' in it && it.planned) || prefs.showPlanned;
+  const visible = (it: Setting) => onThisPlatform(it) && (!('planned' in it && it.planned) || prefs.showPlanned);
   const sections = useMemo(() => SECTIONS
     .map(sec => ({ ...sec, groups: sec.groups.map(g => ({ ...g, items: g.items.filter(visible) })).filter(g => g.items.length) }))
     .filter(sec => sec.groups.length), [prefs.showPlanned]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -188,7 +188,6 @@ function Row({ s, ts, prefs, disabled, set, onAction, t, ssh }: {
   const indent = 'dependsOn' in s && s.dependsOn;
   const badges = (
     <>
-      {'platform' in s && s.platform && <span className="pill">{s.platform === 'windows' ? ts.ui.windows : ts.ui.linuxMac}</span>}
       {'planned' in s && s.planned && <span className="pill desk" title={ts.ui.plannedHint}><Icon n="schedule" />{ts.ui.planned}</span>}
     </>
   );
