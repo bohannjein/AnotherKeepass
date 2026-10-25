@@ -94,8 +94,9 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
         </label>
         <nav className="nav">
           {sections.map(s => (
-            <button key={s.id} className={'nav-item' + (s.id === current.id && !q ? ' active' : '')} onClick={() => { setSection(s.id); setQuery(''); }}>
-              <span className="vi" style={{ background: 'var(--surface-highest)' }}><Icon n={s.icon} fill={s.id === current.id && !q} /></span>
+            <button key={s.id} className={'nav-item' + (s.block ? ' block' : '') + (s.id === current.id && !q ? ' active' : '')}
+              onClick={() => { setSection(s.id); setQuery(''); }}>
+              <span className="vi" style={{ background: `var(${s.tint})` }}><Icon n={s.icon} fill /></span>
               <span>{ts.sections[s.id as keyof SettingsStrings['sections']]}</span>
             </button>
           ))}
@@ -106,7 +107,7 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
         </label>
       </aside>
 
-      <main className="pane settings-body">
+      <main className="pane settings-body" key={q ? 'search' : current.id}>
         {q ? (
           <>
             <h2>{ts.ui.searchSettings}</h2>
@@ -122,12 +123,15 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
           </>
         ) : (
           <>
-            <h2>{ts.sections[current.id as keyof SettingsStrings['sections']]}</h2>
+            <h2>
+              <span className="vi" style={{ background: `var(${current.tint})` }}><Icon n={current.icon} fill /></span>
+              {ts.sections[current.id as keyof SettingsStrings['sections']]}
+            </h2>
             {current.groups.map(g => (
               <section className="set-group" key={g.id}>
                 <span className="label">{ts.groups[g.id as keyof SettingsStrings['groups']]}</span>
                 <div className="set-card">
-                  {g.items.map(s => (
+                  {g.items.filter(enabled).map(s => (
                     <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} onAction={runAction} t={t} ssh={ssh} />
                   ))}
                 </div>
