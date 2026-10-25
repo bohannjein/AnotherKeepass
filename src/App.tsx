@@ -1,7 +1,7 @@
 import { lazy, useState, useCallback, useEffect, useRef, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { backend, type VaultData, type Update, type Health, type AutoTypePick, type BrowserAsk, demoAttachment } from './backend';
+import { backend, type VaultData, demoAttachment } from './backend';
 import { type ItemType, type Field, type Item, type Folder, type VaultInfo, type Draft, draftToInput, type Attachment, rawToItem, iconUrl } from './model';
 import { DEMO_VAULTS } from './mock';
 import { openOptions, openExternal } from './open';
@@ -16,12 +16,15 @@ import { ExportDialog, MergeDialog, AttachmentPreview } from './TransferDialogs'
 import { type PaletteItem, CommandPalette } from './CommandPalette';
 import { sortItems, type SortMode, groupItems, type GroupMode } from './listGroups';
 import { ShareDialog } from './ShareDialog';
-import { type Issue, ISSUES, issueName as issueNameOf, ISSUE_ICON, HealthRow, HealthOverview } from './HealthOverview';
+import { ISSUES, ISSUE_ICON, HealthRow, HealthOverview } from './HealthOverview';
 import { ContextMenuProvider, useContextMenu, type MenuItem } from './ContextMenu';
 import { Setup } from './Setup';
 import { today, TYPE_ICON } from './ui';
 import { Row, NavItem } from './ItemList';
 import { Detail, Generator } from './Detail';
+import { useSnack } from './useSnack';
+import { useHealth } from './useHealth';
+import { useDesktopEvents } from './useDesktopEvents';
 import { ShortcutsDialog, BrowserAskDialog, AutoTypePicker, VaultLookDialog, FolderDialog, KeyDialog } from './Dialogs';
 
 // rarely needed views load on first use (keeps startup lean)
@@ -124,7 +127,7 @@ export default function App() {
     document.documentElement.style.setProperty('--zoom', String(zoom));
   }, [theme, lang, zoom, settings?.accent]);
 
-  openOptions.minimize = !!settings?.minimizeOnUrl;
+  useEffect(() => { openOptions.minimize = !!settings?.minimizeOnUrl; }, [settings?.minimizeOnUrl]);
   const update = (s: Settings) => { setSettings(s); saveSettings(s); };
 
   const opened = (data: VaultData, meta: Known) => {
@@ -190,7 +193,11 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const [folder, setFolder] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   // multi-select (Ctrl/Shift+click) for bulk move / pin / trash
-  const [multi, setMulti] = useState<string[]>([]);
+  // belongs to the vault/folder it was made in: switching scope clears it
+  const [multiSel, setMultiSel] = useState<{ scope: string; ids: string[] }>({ scope: '', ids: [] });
+  const scope = vault + '|' + folder;
+  const multi = multiSel.scope === scope ? multiSel.ids : [];
+  const setMulti = (ids: string[]) => setMultiSel({ scope, ids });
   const [selected, setSelected] = useState<string | null>(null);
   const [pending, setPending] = useState<Item | null>(null); // new entry, not saved yet
   const [newMenu, setNewMenu] = useState(false);
@@ -202,50 +209,19 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const [exportFor, setExportFor] = useState<VaultInfo | null>(null);
   const [mergeFor, setMergeFor] = useState<VaultInfo | null>(null);
   const [syncFor, setSyncFor] = useState<VaultInfo | null>(null);
-  useEffect(() => backend.on<string>('akp-sync-problem', e => notify(`${t.syncProblem}: ${e}`, true)), [t.syncProblem]); // eslint-disable-line react-hooks/exhaustive-deps
   const [preview, setPreview] = useState<{ name: string; load: () => Promise<Uint8Array> } | null>(null);
   const [palette, setPalette] = useState(false);
-  // update check: at most once a week, only when enabled
-  const [update, setUpdate] = useState<Update | null>(null);
-  useEffect(() => {
-    if (!settings.updateCheck || !backend.desktop) return;
-    const KEY = 'anotherkeepass.updateChecked';
-    let last = 0;
-    try { last = Number(localStorage.getItem(KEY) ?? 0); } catch { /* no storage */ }
-    if (Date.now() - last < 7 * 86_400_000) return;
-    backend.updateCheck(settings.updateBeta).then(u => {
-      try { localStorage.setItem(KEY, String(Date.now())); } catch { /* no storage */ }
-      if (u) { setUpdate(u); notify(t.updateAvailable.replace('{v}', u.version)); }
-    }).catch(e => backend.log('warn', 'update check: ' + String(e)));
-  }, [settings.updateCheck, settings.updateBeta]); // eslint-disable-line react-hooks/exhaustive-deps // target vault of the import dialog
   const [folderDialog, setFolderDialog] = useState<{ mode: 'create' | 'rename'; vault?: string; id?: string; name?: string; parent?: string } | null>(null);
   const openMenu = useContextMenu();
   const [vaultDialog, setVaultDialog] = useState<{ path?: string } | null>(null);
   const [keyDialog, setKeyDialog] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [tag, setTag] = useState<string | null>(null);
-  // password health view: report from the backend, optional breach counts (HIBP), issue filter
-  const [health, setHealth] = useState<Record<string, Health>>({});
-  const [breaches, setBreaches] = useState<Record<string, number> | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [issue, setIssue] = useState<Issue | null>(null);
-  useEffect(() => {
-    if (vault !== HEALTH) return;
-    backend.healthReport().then(r => setHealth(Object.fromEntries(r.map(h => [h.id, h])))).catch(() => {});
-  }, [vault, open]);
-  useEffect(() => { setBreaches(null); }, [open]);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const dragItem = useRef<Item | null>(null);
   const [showKeys, setShowKeys] = useState(false);
-  const [pick, setPick] = useState<AutoTypePick | null>(null);
-  const [ask, setAsk] = useState<BrowserAsk | null>(null);
-  useEffect(() => backend.on<BrowserAsk>('akp-browser-ask', a => setAsk(a)), []);
   const searchRef = useRef<HTMLInputElement>(null);
-  const [snack, setSnack] = useState('');
-  const [snackError, setSnackError] = useState(false);
-  const [snackAction, setSnackAction] = useState<{ label: string; run: () => void } | null>(null);
-  const notify = (msg: string, error = false, action: { label: string; run: () => void } | null = null) => { setSnack(msg); setSnackError(error); setSnackAction(action); };
-  useEffect(() => backend.on('akp-vault-reloaded', () => { setSnack(t.vaultReloaded); setSnackError(false); }), [t.vaultReloaded]);
+  const { notify, snackbar } = useSnack();
   const [page, setPage] = useState<'vault' | 'settings'>('vault');
   // drawer collapses to an icon rail: automatically on narrow windows, or via the toggle
   const narrow = '(max-width: 1199px)';
@@ -257,24 +233,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, []);
-  const clipTimer = useRef<number>(undefined);
   const ts = settingsStrings[settings.lang];
-
-  useEffect(() => {
-    if (!snack) return;
-    const id = setTimeout(() => { setSnack(''); setSnackAction(null); }, snackError || snackAction ? 6000 : Math.max(2000, snack.length * 60)); // longer text stays longer
-    return () => clearTimeout(id);
-  }, [snack, snackError, snackAction]);
-
-  // auto-lock after inactivity
-  useEffect(() => {
-    if (!settings.autoLock) return;
-    let id = setTimeout(onLock, settings.autoLockSeconds * 1000);
-    const reset = () => { clearTimeout(id); id = setTimeout(onLock, settings.autoLockSeconds * 1000); };
-    const events = ['pointermove', 'pointerdown', 'keydown', 'wheel'] as const;
-    events.forEach(e => window.addEventListener(e, reset));
-    return () => { clearTimeout(id); events.forEach(e => window.removeEventListener(e, reset)); };
-  }, [settings.autoLock, settings.autoLockSeconds, onLock]);
 
   // clear search query after it sat untouched
   useEffect(() => {
@@ -282,12 +241,12 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     const id = setTimeout(() => setQuery(''), settings.clearSearchMinutes * 60_000);
     return () => clearTimeout(id);
   }, [query, settings.clearSearch, settings.clearSearchMinutes]);
-  useEffect(() => () => clearTimeout(clipTimer.current), []);
 
   const items = useMemo(() => Object.values(open).flatMap(v => v.items.map(r => rawToItemCached(r, v))), [open]);
-  const allItems = pending ? [...items, pending] : items;
+  const allItems = useMemo(() => pending ? [...items, pending] : items, [items, pending]);
   const folders: Folder[] = useMemo(() => Object.values(open).flatMap(v =>
     v.folders.map(f => ({ id: f.id, vault: v.id, name: f.name, parent: f.parent, share: f.share }))), [open]);
+  const { update, pick, setPick, ask, setAsk } = useDesktopEvents({ t, settings, notify, open, vault, items, desktopProblems, onLock });
   const vaultList: VaultInfo[] = useMemo(() => {
     const ids = [...known.map(k => k.path), ...Object.keys(open).filter(id => !known.some(k => k.path === id))];
     return ids.map(id => {
@@ -295,43 +254,6 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       return { id, name: open[id]?.name ?? k?.name ?? fileName(id), file: fileName(id), color: k?.color ?? '--v-clay', icon: k?.icon ?? 'shield_lock', locked: !open[id] };
     });
   }, [known, open]);
-
-  // KDBX 3.1 files: say once that saving upgrades them (a backup is written next to the file)
-  const formatNoticed = useRef(new Set<string>());
-  useEffect(() => {
-    for (const v of Object.values(open)) {
-      if (v.format.startsWith('KDBX 3') && !formatNoticed.current.has(v.id)) {
-        formatNoticed.current.add(v.id);
-        notify(`${v.name}: ${t.kdbx3Notice}`);
-      }
-    }
-  }, [open, t.kdbx3Notice]);
-
-  // auto-type: picker request and errors come from Rust
-  useEffect(() => {
-    const a = backend.on<AutoTypePick>('akp-autotype-pick', p => setPick(p));
-    const b = backend.on<string>('akp-autotype-error', e => notify(`${t.autoTypeError}: ${e}`, true));
-    return () => { a(); b(); };
-  }, [t.autoTypeError]);
-  useEffect(() => {
-    // a taken shortcut gets a clear sentence instead of the raw error
-    const text = desktopProblems.map(p => /^(quickShortcut|shortcut):.*already registered/.test(p)
-      ? t.shortcutTaken.replace('{k}', p.startsWith('quick') ? settings.quickShortcut : settings.atShortcut) : p);
-    if (text.length) notify(`${t.desktopProblem}: ${text.join(', ')}`, true);
-  }, [desktopProblems, t.desktopProblem]);
-
-  // the extension's "database" is the selected vault (or the first open one)
-  useEffect(() => { backend.browserSetActive(open[vault] ? vault : Object.keys(open)[0] ?? null); }, [vault, open]);
-
-  // once per unlock: tell about entries that expire soon
-  const expiringShown = useRef(false);
-  useEffect(() => {
-    if (expiringShown.current || !settings.showExpiring) return;
-    expiringShown.current = true;
-    const limit = new Date(Date.now() + settings.expiryDays * 86_400_000).toISOString().slice(0, 10);
-    const n = items.filter(i => !i.trashed && i.expires && i.expires <= limit).length;
-    if (n) notify(`${n} ${t.expiringSoon}`);
-  }, [items, settings.showExpiring, settings.expiryDays, t.expiringSoon]);
 
   const run = async <T,>(p: Promise<T>): Promise<T | undefined> => {
     try { return await p; } catch (e) {
@@ -346,9 +268,15 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const copied = (what: string) => {
     notify(`${what} ${t.copied}`);
     if (settings.onCopy !== 'none') backend.windowMinimize();
-    clearTimeout(clipTimer.current);
-    if (clearAfter) clipTimer.current = setTimeout(() => notify(ts.ui.clipboardCleared), clearAfter * 1000);
+    setCopies(n => n + 1);
   };
+  // "clipboard cleared" notice; a newer copy restarts the countdown
+  const [copies, setCopies] = useState(0);
+  useEffect(() => {
+    if (!copies || !clearAfter) return;
+    const id = setTimeout(() => notify(ts.ui.clipboardCleared), clearAfter * 1000);
+    return () => clearTimeout(id);
+  }, [copies]); // eslint-disable-line react-hooks/exhaustive-deps -- only a new copy starts the countdown
   const copyText = async (text: string, what: string) => {
     if ((await run(backend.copyText(text, clearAfter))) !== undefined || !backend.desktop) copied(what);
   };
@@ -359,11 +287,8 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     catch (e) { notify(`${t.saveError}: ${String(e)}`, true); }
   };
 
-  const issuesOf = useCallback((id: string): Issue[] => {
-    const h = health[id];
-    if (!h) return [];
-    return ISSUES.filter(k => k === 'breached' ? (breaches?.[id] ?? 0) > 0 : k === 'reused' ? h.reused > 0 : h[k]);
-  }, [health, breaches]);
+  const { health, breaches, checking, issue, setIssue, issuesOf, issueName, issueLabel, checkBreaches, healthCounts } =
+    useHealth({ t, active: vault === HEALTH, open, notify });
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (vault === HEALTH) {
@@ -379,7 +304,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     if (q) list = list.filter(i => (i.title + ' ' + i.subtitle + ' ' + (i.tags ?? []).join(' ')).toLowerCase().includes(q));
     if (tag) list = list.filter(i => i.tags?.includes(tag));
     return sortItems(list, settings.listSort as SortMode);
-  }, [allItems, vault, folder, query, settings.listSort, tag, issue, issuesOf]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [allItems, vault, folder, query, settings.listSort, tag, issue, issuesOf]);
   // tags present in the current vault/folder scope, for the filter chips
   const scopeTags = useMemo(() => [...new Set(allItems
     .filter(i => vault === TRASH ? i.trashed : !i.trashed && (vault === ALL || i.vault === vault) && (!folder || i.folder === folder))
@@ -469,42 +394,6 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     if (res) { onUpdate(res[1]); setSelected(res[0]); }
   };
 
-  // keyboard shortcuts (KeePassXC-like); entry-level ones act on the selected entry
-  const shortcutRef = useRef<(e: KeyboardEvent) => void>(() => {});
-  shortcutRef.current = (e: KeyboardEvent) => {
-    const typing = e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable=true]') !== null;
-    const mod = e.ctrlKey || e.metaKey;
-    const field = (raw: string) => current?.fields.find(f => f.raw === raw);
-    const totpField = current?.fields.find(f => f.kind === 'totp');
-    const run1 = (fn: () => void) => { e.preventDefault(); fn(); };
-    if (e.key === 'F5' || (mod && ['r', 'p', 'j', 'h', 'g', 's', 'o'].includes(e.key.toLowerCase()))) { e.preventDefault(); return; }
-    if (e.key === 'F1' || (mod && e.key === '/')) return run1(() => setShowKeys(s => !s));
-    if (e.key === 'Escape') { window.dispatchEvent(new Event('akp:cancel')); setShowKeys(false); setMulti([]); return; }
-    if (mod && e.key.toLowerCase() === 'k') return run1(() => setPalette(p => !p));
-    if (mod && e.key.toLowerCase() === 'f') return run1(() => searchRef.current?.focus());
-    if (mod && e.key.toLowerCase() === 'l') return run1(onLock);
-    if (mod && e.key.toLowerCase() === 'n' && targetVault) return run1(() => createItem('login'));
-    if (!current || current.id.startsWith('new:')) return;
-    if (mod && e.key.toLowerCase() === 'e') return run1(() => window.dispatchEvent(new Event('akp:edit')));
-    if (typing) return; // below: keys that would clash with text editing
-    if (mod && e.key.toLowerCase() === 'b' && field('UserName')) return run1(() => copyField(current, field('UserName')!, t.username));
-    if (mod && e.key.toLowerCase() === 'c' && !window.getSelection()?.toString() && field('Password')) return run1(() => copyField(current, field('Password')!, t.password));
-    if (mod && e.key.toLowerCase() === 't' && totpField) return run1(() => copyField(current, totpField, t.totp));
-    if (mod && e.key.toLowerCase() === 'u' && field('URL')?.value) return run1(() => openExternal(field('URL')!.value));
-    if (mod && e.key.toLowerCase() === 'd') return run1(() => duplicate(current));
-    if (mod && e.shiftKey && e.key.toLowerCase() === 'v' && backend.desktop) return run1(() => run(backend.autotypeEntry(current.vault, current.id)));
-    if (e.key === 'Delete' && !current.trashed) return run1(() => requestTrash(current));
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      const list = [...pinned, ...rest];
-      const i = list.findIndex(x => x.id === current.id) + (e.key === 'ArrowDown' ? 1 : -1);
-      if (list[i]) run1(() => setSelected(list[i].id));
-    }
-  };
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => shortcutRef.current(e);
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, []);
 
   const itemMenu = (it: Item): MenuItem[] => {
     const f = (raw: string) => it.fields.find(x => x.raw === raw && (x.value || x.protected));
@@ -606,38 +495,6 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     if (isNarrow) setRail(true);
   };
 
-  // declarations (hoisted): visible above already uses them
-  function issueName(k: Issue) { return issueNameOf(t, k); }
-  function issueLabel(k: Issue, id: string) {
-    if (k === 'breached') return `${(breaches?.[id] ?? 0).toLocaleString()} ${t.hBreachedN}`;
-    if (k === 'reused') return `${t.hReused} (${(health[id]?.reused ?? 0) + 1}×)`;
-    return issueName(k);
-  }
-  // HIBP range API with k-anonymity: only 5 hex chars of each SHA-1 leave the machine
-  const checkBreaches = async () => {
-    setChecking(true);
-    try {
-      const prefixes = await backend.breachPrefixes();
-      const ranges: Record<string, string> = {};
-      for (let i = 0; i < prefixes.length; i += 6) {
-        await Promise.all(prefixes.slice(i, i + 6).map(async p => {
-          const r = await fetch(`https://api.pwnedpasswords.com/range/${p}`, { headers: { 'Add-Padding': 'true' } });
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          ranges[p] = await r.text();
-        }));
-      }
-      const found = await backend.breachMatch(ranges);
-      setBreaches(found);
-      if (!Object.keys(found).length) notify(t.hNoBreaches);
-      else setIssue('breached');
-    } catch (e) { notify(`${t.hCheck}: ${String(e)}`, true); }
-    setChecking(false);
-  };
-
-  const healthCounts = {
-    ok: Object.keys(health).filter(id => !issuesOf(id).length).length,
-    ...Object.fromEntries(ISSUES.map(k => [k, Object.keys(health).filter(id => issuesOf(id).includes(k)).length])),
-  } as Record<Issue | 'ok', number>;
   const current = allItems.find(i => i.id === selected) ?? null;
   const grouped = useMemo(() => vault === HEALTH || settings.listGroup === 'none' ? null : groupItems(visible, settings.listGroup as GroupMode, {
     other: t.others, noFolder: t.noFolder, noWebsite: t.noWebsite, noTag: t.noTag,
@@ -660,7 +517,6 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     setMulti([]);
     setSelected(id);
   };
-  useEffect(() => { setMulti([]); }, [vault, folder]);
   const row = (i: Item, group = '') => (
     <Row key={group + i.id} t={t} item={i} letters={settings.letterAvatars} active={multi.length > 1 ? multi.includes(i.id) : i.id === selected} onClick={e => choose(e, i.id)}
       dragRef={dragItem} onDragEnd={() => setDragOver(null)}
@@ -710,12 +566,45 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   }, [allItems, vaultList, t, settings, targetVault]); // eslint-disable-line react-hooks/exhaustive-deps
   const pinned = visible.filter(i => i.pinned);
   const rest = visible.filter(i => !i.pinned);
-  const snackbar = snack && (
-    <div className={'snackbar' + (snackError ? ' error' : '')} role="status">
-      <Icon n={snackError ? 'error' : 'check_circle'} />{snack}
-      {snackAction && <button className="snack-action" onClick={() => { snackAction.run(); setSnack(''); setSnackAction(null); }}>{snackAction.label}</button>}
-    </div>
-  );
+
+  // keyboard shortcuts (KeePassXC-like); entry-level ones act on the selected entry
+  const shortcutRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  const onShortcut = (e: KeyboardEvent) => {
+    const typing = e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable=true]') !== null;
+    const mod = e.ctrlKey || e.metaKey;
+    const field = (raw: string) => current?.fields.find(f => f.raw === raw);
+    const totpField = current?.fields.find(f => f.kind === 'totp');
+    const run1 = (fn: () => void) => { e.preventDefault(); fn(); };
+    if (e.key === 'F5' || (mod && ['r', 'p', 'j', 'h', 'g', 's', 'o'].includes(e.key.toLowerCase()))) { e.preventDefault(); return; }
+    if (e.key === 'F1' || (mod && e.key === '/')) return run1(() => setShowKeys(s => !s));
+    if (e.key === 'Escape') { window.dispatchEvent(new Event('akp:cancel')); setShowKeys(false); setMulti([]); return; }
+    if (mod && e.key.toLowerCase() === 'k') return run1(() => setPalette(p => !p));
+    if (mod && e.key.toLowerCase() === 'f') return run1(() => searchRef.current?.focus());
+    if (mod && e.key.toLowerCase() === 'l') return run1(onLock);
+    if (mod && e.key.toLowerCase() === 'n' && targetVault) return run1(() => createItem('login'));
+    if (!current || current.id.startsWith('new:')) return;
+    if (mod && e.key.toLowerCase() === 'e') return run1(() => window.dispatchEvent(new Event('akp:edit')));
+    if (typing) return; // below: keys that would clash with text editing
+    if (mod && e.key.toLowerCase() === 'b' && field('UserName')) return run1(() => copyField(current, field('UserName')!, t.username));
+    if (mod && e.key.toLowerCase() === 'c' && !window.getSelection()?.toString() && field('Password')) return run1(() => copyField(current, field('Password')!, t.password));
+    if (mod && e.key.toLowerCase() === 't' && totpField) return run1(() => copyField(current, totpField, t.totp));
+    if (mod && e.key.toLowerCase() === 'u' && field('URL')?.value) return run1(() => openExternal(field('URL')!.value));
+    if (mod && e.key.toLowerCase() === 'd') return run1(() => duplicate(current));
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'v' && backend.desktop) return run1(() => run(backend.autotypeEntry(current.vault, current.id)));
+    if (e.key === 'Delete' && !current.trashed) return run1(() => requestTrash(current));
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const list = [...pinned, ...rest];
+      const i = list.findIndex(x => x.id === current.id) + (e.key === 'ArrowDown' ? 1 : -1);
+      if (list[i]) run1(() => setSelected(list[i].id));
+    }
+  };
+  // the listener stays registered once; it always calls the handler of the latest render
+  useEffect(() => { shortcutRef.current = onShortcut; });
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => shortcutRef.current(e);
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
   const activeVault = vaultList.find(v => v.id === vault && !v.locked);
   const depth = (f: Folder): number => f.parent ? 1 + depth(folders.find(x => x.id === f.parent) ?? { ...f, parent: null }) : 0;
 
