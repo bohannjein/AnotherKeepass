@@ -137,6 +137,8 @@ pub struct ItemDto {
     attachments: Vec<AttachmentDto>,
     modified: Option<String>,
     created: Option<String>,
+    /// KeePass "last access": last copy / Auto-Type (sorts the list by last use)
+    used: Option<String>,
     expires: Option<String>,
     history: Vec<String>,
     /// custom icon id (KeePass custom icon, e.g. a website favicon)
@@ -274,6 +276,7 @@ fn write_db(v: &mut OpenVault) -> R<()> {
     fs::write(&tmp, &buf).map_err(|e| format!("io:{e}"))?;
     fs::rename(&tmp, &v.path).map_err(|e| format!("io:{e}"))?;
     stamp(&v.path);
+    forget_used(&v.path); // any save carries the "last access" times along
     crate::keeshare::export_all(&v.db, &v.path);
     Ok(())
 }
@@ -339,6 +342,7 @@ fn dto(id: &str, v: &OpenVault) -> VaultDto {
                     .collect(),
                 modified: e.times.last_modification.as_ref().map(fmt_time),
                 created: e.times.creation.as_ref().map(fmt_time),
+                used: e.times.last_access.as_ref().map(fmt_time),
                 expires: (e.times.expires == Some(true)).then(|| fmt_time(&e.times.expiry)),
                 history: e
                     .history
@@ -381,6 +385,48 @@ fn weak_kdf(k: &KdfConfig) -> bool {
         KdfConfig::Aes { rounds } => *rounds < 1_000_000,
         KdfConfig::Argon2 { memory, .. } | KdfConfig::Argon2id { memory, .. } => *memory < 16 * 1024 * 1024,
         _ => false,
+    }
+}
+
+#[derive(Serialize, Clone)]
+struct UsedDto {
+    vault: String,
+    id: String,
+    used: String,
+}
+
+/// Vault files with "last access" times not written yet (see `save_used`).
+static USED_UNSAVED: Mutex<Option<std::collections::HashSet<PathBuf>>> = Mutex::new(None);
+
+/// An entry was used (copied, typed): set its KeePass "last access" time. A copy never rewrites
+/// the file; the time is saved with the next change, or on lock / close / quit (`save_used`).
+pub fn mark_used<R: tauri::Runtime>(app: &tauri::AppHandle<R>, v: &mut OpenVault, vault: &str, id: EntryId) {
+    let now = Times::now();
+    if let Some(mut e) = v.db.entry_mut(id) {
+        e.times.last_access = Some(now);
+        let _ = tauri::Emitter::emit(app, "akp-entry-used", UsedDto { vault: vault.into(), id: id.to_string(), used: fmt_time(&now) });
+        if v.remote.is_none()
+            && let Ok(mut u) = USED_UNSAVED.lock()
+        {
+            u.get_or_insert_with(Default::default).insert(v.path.clone());
+        }
+    }
+}
+
+fn forget_used(path: &Path) -> bool {
+    USED_UNSAVED.lock().ok().and_then(|mut u| u.as_mut().map(|s| s.remove(path))).unwrap_or(false)
+}
+
+/// Write pending "last access" times of a local vault file. Skipped when the file changed on
+/// disk since we read it (cloud sync, KeePassXC): never overwrite someone else's change for this.
+pub fn save_used(v: &mut OpenVault) {
+    let pending = forget_used(&v.path);
+    let unchanged = watch::STAMPS.lock().ok().and_then(|s| s.as_ref().and_then(|s| s.get(&v.path).copied())) == watch::mtime(&v.path);
+    if pending && unchanged && v.remote.is_none() {
+        match write_db(v) {
+            Ok(()) => log::info!("saved last-use times"),
+            Err(e) => log::warn!("saving last-use times failed: {e}"),
+        }
     }
 }
 

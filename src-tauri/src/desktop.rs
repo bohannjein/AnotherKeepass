@@ -352,7 +352,7 @@ pub fn on_window_event<R: Runtime>(window: &tauri::Window<R>, event: &WindowEven
     if window.label() == crate::quick::LABEL {
         // quick access: gone as soon as it loses focus (see quick.rs)
         if let WindowEvent::Focused(false) = event {
-            let _ = window.destroy();
+            crate::quick::on_blur(window);
         }
         return;
     }

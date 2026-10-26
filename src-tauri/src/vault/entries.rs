@@ -205,6 +205,7 @@ pub fn entry_totp(state: tauri::State<'_, Vaults>, vault: String, id: String, fi
 /// Clears after `clear_after` seconds, but only if the clipboard still holds our value.
 #[tauri::command]
 pub fn entry_copy(
+    app: tauri::AppHandle,
     state: tauri::State<'_, Vaults>,
     vault: String,
     id: String,
@@ -213,11 +214,15 @@ pub fn entry_copy(
     clear_after: Option<u64>,
 ) -> R<()> {
     let value = with_vault(&state, &vault, |v| {
-        let e = v.db.entry(EntryId::from(parse_uuid(&id)?)).ok_or("not_found")?;
-        if as_totp {
-            return Ok(totp_of(&e, &field)?.value_now().map_err(|_| "totp")?.code);
-        }
-        Ok(e.get(&field).unwrap_or_default().to_string())
+        let eid = EntryId::from(parse_uuid(&id)?);
+        let e = v.db.entry(eid).ok_or("not_found")?;
+        let value = if as_totp {
+            totp_of(&e, &field)?.value_now().map_err(|_| "totp")?.code
+        } else {
+            e.get(&field).unwrap_or_default().to_string()
+        };
+        mark_used(&app, v, &vault, eid);
+        Ok(value)
     })?;
     crate::clipboard::copy_secret(value, clear_after)
 }

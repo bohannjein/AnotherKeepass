@@ -72,7 +72,7 @@ export const DEFAULTS = {
   hideInEdit: true,
   hidePwPreview: true,
   revealSeconds: 20,
-  listSort: 'title',
+  entrySort: 'used', // was listSort ('title'); the new name gives everyone the new default once
   listGroup: 'none',
   hideTotpPreview: false,
   hideNotesPreview: false,

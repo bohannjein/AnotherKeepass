@@ -205,7 +205,12 @@ pub fn paths_exist(paths: Vec<String>) -> Vec<bool> {
 
 #[tauri::command]
 pub fn vault_close(state: tauri::State<'_, Vaults>, id: String) -> R<()> {
-    state.0.lock().map_err(|_| "lock")?.remove(&id); // drop zeroizes key + protected values
+    let mut map = state.0.lock().map_err(|_| "lock")?;
+    if let Some(v) = map.get_mut(&id) {
+        save_used(v);
+    }
+    map.remove(&id); // drop zeroizes key + protected values
+    drop(map);
     crate::ssh::on_lock(&id);
     if let Some(keys) = QUICK_KEYS.lock().map_err(|_| "lock")?.as_mut() {
         keys.remove(&id); // closing on purpose = no quick unlock for it
@@ -239,7 +244,8 @@ pub fn lock_vaults(map: &mut HashMap<String, OpenVault>) {
             *q = None;
         }
     }
-    for id in map.keys() {
+    for (id, v) in map.iter_mut() {
+        save_used(v);
         crate::ssh::on_lock(id);
     }
     map.clear();

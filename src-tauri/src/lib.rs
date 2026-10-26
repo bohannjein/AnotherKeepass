@@ -60,6 +60,7 @@ pub fn run() {
             vault::bw_sign_out,
             quick::vaults_listing,
             quick::quick_hide,
+            quick::quick_pick,
             transfer::vault_export_csv,
             transfer::vault_save_copy,
             transfer::vault_merge,
@@ -153,6 +154,14 @@ pub fn run() {
             desktop::initial_show(handle, &prefs);
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while building tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // quitting (tray, update): write pending "last access" times of open vaults
+            if let tauri::RunEvent::Exit = event
+                && let Ok(mut map) = app.state::<vault::Vaults>().0.lock()
+            {
+                map.values_mut().for_each(vault::save_used);
+            }
+        });
 }

@@ -18,6 +18,8 @@ eq(letterOf('Ärzte'), 'A', 'umlaut');
 eq(letterOf('1password'), '#', 'digit');
 eq(sortItems([item('b'), item('A'), item('c')], 'title').map(i => i.title), ['A', 'b', 'c'], 'sort title');
 eq(sortItems([item('item2'), item('item10')], 'title').map(i => i.title), ['item2', 'item10'], 'numeric sort');
+eq(sortItems([item('old'), item('new', { used: '2026-10-26T09:00:00' }), item('edited', { modifiedAt: '2026-05-01T00:00:00' })], 'used').map(i => i.title),
+  ['new', 'edited', 'old'], 'sort used, never used falls back to last change');
 
 const g = groupItems(sortItems([item('Zoom'), item('#hash'), item('apple'), item('Amazon')], 'title'), 'letter', labels);
 eq(g.map(x => x.label), ['A', 'Z', '#'], 'letters, # last');

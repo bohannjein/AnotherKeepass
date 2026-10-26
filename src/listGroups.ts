@@ -1,7 +1,7 @@
 // Sorting and grouping of the entry list (pure functions, see listGroups.check.ts).
 import type { Item } from './model.ts';
 
-export type SortMode = 'title' | 'titleDesc' | 'modified' | 'created';
+export type SortMode = 'used' | 'title' | 'titleDesc' | 'modified' | 'created';
 export type GroupMode = 'none' | 'letter' | 'type' | 'folder' | 'vault' | 'domain' | 'tag' | 'date';
 export interface Group { key: string; label: string; items: Item[] }
 
@@ -17,8 +17,11 @@ const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: tr
 
 export function sortItems(items: Item[], mode: SortMode): Item[] {
   const byTitle = (a: Item, b: Item) => collator.compare(a.title, b.title);
+  // never used: the last change counts (KeePass sets "last access" on save, too)
+  const used = (i: Item) => i.used ?? i.modifiedAt ?? i.modified;
   const list = [...items];
   switch (mode) {
+    case 'used': return list.sort((a, b) => used(b).localeCompare(used(a)) || byTitle(a, b));
     case 'titleDesc': return list.sort((a, b) => byTitle(b, a));
     case 'modified': return list.sort((a, b) => (b.modifiedAt ?? b.modified).localeCompare(a.modifiedAt ?? a.modified) || byTitle(a, b));
     case 'created': return list.sort((a, b) => (b.created ?? '').localeCompare(a.created ?? '') || byTitle(a, b));

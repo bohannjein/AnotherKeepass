@@ -1,6 +1,6 @@
 import { lazy, useState, useCallback, useEffect, useRef, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
-import { backend, type VaultData } from './backend';
+import { backend, type EntryUsed, type VaultData } from './backend';
 import { type ItemType, type Field, type Item, type Folder, type VaultInfo, type Draft, draftToInput, rawToItem } from './model';
 import { DEMO_VAULTS } from './mock';
 import { openOptions, openExternal } from './open';
@@ -25,7 +25,7 @@ import { useSnack } from './useSnack';
 import { useItemActions, type Confirm } from './useItemActions';
 import { useHealth } from './useHealth';
 import { useDesktopEvents } from './useDesktopEvents';
-import { ConfirmDialog, SyncDialog, ShortcutsDialog, BrowserAskDialog, AutoTypePicker, VaultLookDialog, FolderDialog, KeyDialog } from './Dialogs';
+import { ConfirmDialog, SyncDialog, ShortcutsDialog, BrowserAskDialog, VaultLookDialog, FolderDialog, KeyDialog } from './Dialogs';
 
 // rarely needed views load on first use (keeps startup lean)
 const SettingsPage = lazy(() => import('./SettingsPage'));
@@ -163,6 +163,9 @@ export default function App() {
   // Rust locked everything (tray menu, screen lock, minimize): drop the UI state too
   useEffect(() => backend.on('akp-locked', () => { clearHistory(); setOpen({}); }), []);
   useEffect(() => backend.on<VaultData>('akp-vault-updated', d => setOpen(o => o[d.id] ? { ...o, [d.id]: d } : o)), []);
+  // copied or typed (here, in the quick window or by Auto-Type): new "last used" time for the sort
+  useEffect(() => backend.on<EntryUsed>('akp-entry-used', u => setOpen(o => o[u.vault]
+    ? { ...o, [u.vault]: { ...o[u.vault], items: o[u.vault].items.map(i => i.id === u.id ? { ...i, used: u.used } : i) } } : o)), []);
 
   if (!settings) return <Setup onDone={s => update({ ...DEFAULTS, ...s })} />;
   return (
@@ -244,7 +247,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const allItems = useMemo(() => pending ? [...items, pending] : items, [items, pending]);
   const folders: Folder[] = useMemo(() => Object.values(open).flatMap(v =>
     v.folders.map(f => ({ id: f.id, vault: v.id, name: f.name, parent: f.parent, share: f.share }))), [open]);
-  const { update, pick, setPick, ask, setAsk } = useDesktopEvents({ t, settings, notify, open, vault, items, desktopProblems, onLock });
+  const { update, ask, setAsk } = useDesktopEvents({ t, settings, notify, open, vault, items, desktopProblems, onLock });
   const vaultList: VaultInfo[] = useMemo(() => {
     const ids = [...known.map(k => k.path), ...Object.keys(open).filter(id => !known.some(k => k.path === id))];
     return ids.map(id => {
@@ -273,8 +276,8 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       : !i.trashed && (vault === ALL || i.vault === vault) && (!folder || i.folder === folder));
     if (q) list = list.filter(i => (i.title + ' ' + i.subtitle + ' ' + (i.tags ?? []).join(' ')).toLowerCase().includes(q));
     if (tag) list = list.filter(i => i.tags?.includes(tag));
-    return sortItems(list, settings.listSort as SortMode);
-  }, [allItems, vault, folder, query, settings.listSort, tag, issue, issuesOf]);
+    return sortItems(list, settings.entrySort as SortMode);
+  }, [allItems, vault, folder, query, settings.entrySort, tag, issue, issuesOf]);
   // tags present in the current vault/folder scope, for the filter chips
   const scopeTags = useMemo(() => [...new Set(allItems
     .filter(i => vault === TRASH ? i.trashed : !i.trashed && (vault === ALL || i.vault === vault) && (!folder || i.folder === folder))
@@ -639,8 +642,8 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
         <div className="seg">
           <span className="chip on count-chip">{t.all} · {visible.length}</span>
           <button className="chip" title={t.sortBy} onClick={e => openMenu(e, SORTS.map(([k, icon, label]) => ({
-            icon: settings.listSort === k ? 'check' : icon, label: t[label], action: () => onSettings({ ...settings, listSort: k }) })))}>
-            <Icon n="swap_vert" />{t[SORTS.find(s => s[0] === settings.listSort)?.[2] ?? 'sortTitle']}
+            icon: settings.entrySort === k ? 'check' : icon, label: t[label], action: () => onSettings({ ...settings, entrySort: k }) })))}>
+            <Icon n="swap_vert" />{t[SORTS.find(s => s[0] === settings.entrySort)?.[2] ?? 'sortUsed']}
           </button>
           <button className={'chip' + (settings.listGroup !== 'none' ? ' on' : '')} title={t.groupBy} onClick={e => openMenu(e, GROUPS.map(([k, icon, label]) => ({
             icon: settings.listGroup === k ? 'check' : icon, label: t[label], action: () => onSettings({ ...settings, listGroup: k }) })))}>
@@ -737,12 +740,6 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       {showKeys && <ShortcutsDialog t={t} onClose={() => setShowKeys(false)} />}
       {ask && <BrowserAskDialog t={t} ask={ask} vaultName={id => vaultList.find(v => v.id === id)?.name ?? ''}
         onAnswer={answer => { backend.browserAnswer(ask.id, answer); setAsk(null); }} />}
-      {pick && (
-        <AutoTypePicker t={t} pick={pick} items={items.filter(i => !i.trashed)}
-          vaultName={id => vaultList.find(v => v.id === id)?.name ?? ''}
-          onClose={() => setPick(null)}
-          onPick={(vault, id, sequence) => { setPick(null); run(backend.autotypePerform(vault, id, sequence)); }} />
-      )}
       {palette && createPortal(
         <div className="scrim palette-scrim" onClick={() => setPalette(false)}>
           <div className="palette-dialog" role="dialog" aria-label={t.palette} onClick={e => e.stopPropagation()}>
@@ -811,8 +808,8 @@ function rawToItemCached(r: VaultData['items'][number], v: VaultData): Item {
   return i;
 }
 
-const SORTS: [SortMode, string, 'sortTitle' | 'sortTitleDesc' | 'sortModified' | 'sortCreated'][] = [
-  ['title', 'sort_by_alpha', 'sortTitle'], ['titleDesc', 'sort_by_alpha', 'sortTitleDesc'], ['modified', 'history', 'sortModified'], ['created', 'new_releases', 'sortCreated'],
+const SORTS: [SortMode, string, 'sortUsed' | 'sortTitle' | 'sortTitleDesc' | 'sortModified' | 'sortCreated'][] = [
+  ['used', 'schedule', 'sortUsed'], ['title', 'sort_by_alpha', 'sortTitle'], ['titleDesc', 'sort_by_alpha', 'sortTitleDesc'], ['modified', 'history', 'sortModified'], ['created', 'new_releases', 'sortCreated'],
 ];
 const GROUPS: [GroupMode, string, 'grNone' | 'grLetter' | 'grType' | 'grFolder' | 'grVault' | 'grDomain' | 'grTag' | 'grDate'][] = [
   ['none', 'view_list', 'grNone'], ['letter', 'abc', 'grLetter'], ['type', 'category', 'grType'], ['folder', 'folder', 'grFolder'],

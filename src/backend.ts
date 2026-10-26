@@ -15,6 +15,8 @@ export interface RawItem {
   attachments: { name: string; size: number }[];
   modified: string | null;
   created?: string | null;
+  /** KeePass "last access": last copy or Auto-Type */
+  used?: string | null;
   expires: string | null;
   history: string[];
   /** custom icon id (see VaultData.icons) */
@@ -62,6 +64,8 @@ export interface VaultSettings {
 export interface Totp { code: string; remaining: number; period: number }
 export interface AutoTypeCandidate { vault: string; id: string; title: string; username: string; sequence: string }
 export interface AutoTypePick { windowTitle: string; candidates: AutoTypeCandidate[] }
+/** event "akp-entry-used": an entry was copied or typed */
+export interface EntryUsed { vault: string; id: string; used: string }
 export type BrowserAsk =
   | { id: number; kind: 'associate' }
   | { id: number; kind: 'access'; host: string; entries: { vault: string; uuid: string; title: string; username: string }[] }
@@ -100,6 +104,8 @@ export interface Backend {
   secrets(vault: string, id: string): Promise<Record<string, string>>;
   /** all open vaults (quick access window) */
   vaultsListing(): Promise<VaultData[]>;
+  /** quick access window opened as Auto-Type picker (null = plain search) */
+  quickPick(): Promise<AutoTypePick | null>;
   vaultExportCsv(vault: string, dest: string): Promise<number>;
   vaultSaveCopy(vault: string, dest: string): Promise<void>;
   vaultMerge(vault: string, path: string, password: string, keyfile?: string): Promise<[{ created: number; updated: number; moved: number; deleted: number }, VaultData]>;
@@ -182,6 +188,7 @@ const desktop: Backend = {
   importItems: (vault, parent, items) => invoke('entry_import', { vault, parent, items }),
   secrets: (vault, id) => invoke('entry_secrets', { vault, id }),
   vaultsListing: () => invoke('vaults_listing'),
+  quickPick: () => invoke('quick_pick'),
   vaultExportCsv: (vault, dest) => invoke('vault_export_csv', { vault, dest }),
   vaultSaveCopy: (vault, dest) => invoke('vault_save_copy', { vault, dest }),
   vaultMerge: (vault, path, password, keyfile) => invoke('vault_merge', { vault, path, password, keyfile }),
@@ -253,6 +260,9 @@ const item = (v: DemoVault, id: string) => {
 };
 const out = (v: DemoVault) => clone(v.data);
 let clipTimer: number | undefined;
+// demo events, only the ones the demo itself raises ("akp-entry-used")
+const demoListeners = new Map<string, Set<(payload: unknown) => void>>();
+const demoEmit = (event: string, payload: unknown) => demoListeners.get(event)?.forEach(cb => cb(payload));
 
 const demo: Backend = {
   desktop: false,
@@ -375,6 +385,7 @@ const demo: Backend = {
     return btoa(s);
   },
   async vaultsListing() { return [...demoVaults.values()].map(out); },
+  quickPick: async () => null,
   async secrets(vault, id) { return { ...(get(vault).secrets.get(id) ?? {}) }; },
   async totp(vault, id, field) {
     const s = get(vault).secrets.get(id)?.[field] ?? '';
@@ -387,6 +398,8 @@ const demo: Backend = {
     const value = asTotp ? (await demo.totp(vault, id, field)).code
       : raw?.protected ? v.secrets.get(id)?.[field] ?? '' : raw?.value ?? '';
     await demo.copyText(value, clearAfter);
+    const used = item(v, id).used = now();
+    demoEmit('akp-entry-used', { vault, id, used });
   },
   async copyText(text, clearAfter) {
     await navigator.clipboard.writeText(text);
@@ -401,7 +414,11 @@ const demo: Backend = {
   windowAfterUnlock: async () => {},
   autotypePerform: async () => {},
   autotypeEntry: async () => {},
-  on: () => () => {},
+  on: (event, cb) => {
+    const set = demoListeners.get(event) ?? new Set();
+    demoListeners.set(event, set.add(cb as (payload: unknown) => void));
+    return () => { set.delete(cb as (payload: unknown) => void); };
+  },
   browserAnswer: async () => {},
   browserSetActive: async () => {},
   log: (level, message) => console[level](message),

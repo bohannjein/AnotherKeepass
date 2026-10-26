@@ -34,6 +34,8 @@ export interface Item {
   /** full timestamps for sorting/grouping */
   modifiedAt?: string;
   created?: string;
+  /** last copy / Auto-Type (KeePass "last access") */
+  used?: string;
   folder?: string;
   expires?: string | null; // YYYY-MM-DD
   history?: string[];
@@ -119,6 +121,7 @@ export function rawToItem(raw: RawItem, v: VaultData): Item {
     modified: raw.modified?.slice(0, 10) ?? '',
     modifiedAt: raw.modified ?? undefined,
     created: raw.created ?? undefined,
+    used: raw.used ?? undefined,
     folder: raw.folder === v.root ? undefined : raw.folder,
     expires: raw.expires?.slice(0, 10) ?? null,
     history: raw.history,

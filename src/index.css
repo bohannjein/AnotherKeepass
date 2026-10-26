@@ -859,11 +859,6 @@ kbd {
 .context-menu button { padding: 10px 16px; font-size: 14px; }
 .context-menu hr { margin: 4px 0; }
 
-/* ---------- auto-type picker ---------- */
-.autotype-dialog { width: min(480px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
-.autotype-window { font-weight: 600; color: var(--primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.autotype-list { display: grid; gap: 2px; max-height: 320px; overflow-y: auto; margin: 0 -8px; }
-
 /* ---------- browser extension questions ---------- */
 .browser-ask { width: min(460px, calc(100vw - 32px)); }
 .browser-ask-form { display: grid; gap: 16px; }

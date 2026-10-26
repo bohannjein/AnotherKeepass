@@ -1,8 +1,8 @@
-// Small dialogs of the main window: folders, shortcuts, browser requests, Auto-Type picker, key file, vault look.
+// Small dialogs of the main window: folders, shortcuts, browser requests, key file, vault look.
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { type BrowserAsk, type AutoTypePick } from './backend';
-import { type VaultInfo, type Folder, type Item } from './model';
+import { type BrowserAsk } from './backend';
+import { type VaultInfo, type Folder } from './model';
 import { type Strings } from './i18n';
 import { Icon } from './Icon';
 import { PasswordStrength } from './PasswordStrength';
@@ -182,42 +182,6 @@ export function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
             </div>
           </>
         )}
-      </div>
-    </div>, document.body);
-}
-
-/** Entry choice for a global Auto-Type: matches first, otherwise search all entries. */
-export function AutoTypePicker({ t, pick, items, vaultName, onPick, onClose }: {
-  t: Strings; pick: AutoTypePick; items: Item[]; vaultName: (id: string) => string;
-  onPick: (vault: string, id: string, sequence: string | null) => void; onClose: () => void;
-}) {
-  const [q, setQ] = useState('');
-  const query = q.trim().toLowerCase();
-  const rows = pick.candidates.length && !query
-    ? pick.candidates.map(c => ({ vault: c.vault, id: c.id, title: c.title, sub: c.username, sequence: c.sequence as string | null }))
-    : items.filter(i => !query || (i.title + ' ' + i.subtitle).toLowerCase().includes(query)).slice(0, 50)
-      .map(i => ({ vault: i.vault, id: i.id, title: i.title, sub: i.subtitle, sequence: null }));
-  return createPortal(
-    <div className="scrim" onClick={onClose}>
-      <div className="dialog autotype-dialog" role="dialog" aria-label={t.autoType} onClick={e => e.stopPropagation()}>
-        <h3><Icon n="keyboard" />{t.autoTypePick}</h3>
-        <p className="dialog-body autotype-window" title={pick.windowTitle}>{pick.windowTitle || '—'}</p>
-        {!pick.candidates.length && <small className="label">{t.autoTypeNone}</small>}
-        <label className="textfield">
-          <Icon n="search" />
-          <input autoFocus placeholder={t.search} aria-label={t.search} value={q} onChange={e => setQ(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && rows[0]) onPick(rows[0].vault, rows[0].id, rows[0].sequence); }} />
-        </label>
-        <div className="autotype-list">
-          {rows.map(r => (
-            <button key={r.vault + r.id} className="item" onClick={() => onPick(r.vault, r.id, r.sequence)}>
-              <span className="avatar login"><Icon n="person" /></span>
-              <span><b>{r.title || t.untitled}</b><span>{[r.sub, vaultName(r.vault)].filter(Boolean).join(' · ')}</span></span>
-            </button>
-          ))}
-          {!rows.length && <div className="empty"><Icon n="eco" />{t.noItems}</div>}
-        </div>
-        <div className="row"><button className="btn text" onClick={onClose}>{t.cancel}</button></div>
       </div>
     </div>, document.body);
 }

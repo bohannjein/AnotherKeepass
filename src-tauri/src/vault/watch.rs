@@ -78,6 +78,7 @@ pub fn watch_files(app: tauri::AppHandle) {
                 let Ok(mut map) = state.0.lock() else { continue };
                 let Some(v) = map.get_mut(&id) else { continue };
                 v.db = db;
+                forget_used(&path); // the times were in the replaced database
                 log::info!("vault reloaded after external change");
                 let _ = app.emit("akp-vault-updated", dto(&id, v));
                 let _ = app.emit("akp-vault-reloaded", ());

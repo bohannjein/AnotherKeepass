@@ -1,7 +1,7 @@
 //! Auto-Type: type username/password into another application.
 //! Global shortcut → match the active window against open entries (title, URL host,
 //! KeePass window associations) → type the entry's sequence. Several matches (or
-//! "always ask") hand a picker to the UI; the target window is remembered meanwhile.
+//! "always ask") open the quick access window as picker; the target window is remembered meanwhile.
 
 use std::{
     sync::{
@@ -45,9 +45,10 @@ pub struct Candidate {
     sequence: String,
 }
 
+/// Entry choice shown in the quick access window (see quick.rs).
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct Pick {
+pub struct Pick {
     window_title: String,
     candidates: Vec<Candidate>,
 }
@@ -302,8 +303,7 @@ fn trigger<R: Runtime>(app: &AppHandle<R>, hwnd: Option<isize>, title: &str) {
         });
         return;
     }
-    let _ = app.emit("akp-autotype-pick", Pick { window_title: title.to_string(), candidates: found });
-    desktop::show_main(app);
+    crate::quick::show(app, Some(Pick { window_title: title.to_string(), candidates: found }));
 }
 
 /// Type an entry. `to_target`: refocus the window captured by the hotkey; otherwise
@@ -331,6 +331,11 @@ pub fn perform<R: Runtime>(app: &AppHandle<R>, vault: &str, id: &str, sequence: 
         focus(h);
     }
     type_actions(actions, p.at_start_delay.max(100), p.at_char_delay)?;
+    if let (Ok(mut map), Ok(uuid)) = (app.state::<Vaults>().0.lock(), Uuid::parse_str(id))
+        && let Some(v) = map.get_mut(vault)
+    {
+        crate::vault::mark_used(app, v, vault, EntryId::from(uuid));
+    }
     if let Ok(mut l) = LAST.lock() {
         *l = Some((vault.to_string(), id.to_string(), Instant::now()));
     }

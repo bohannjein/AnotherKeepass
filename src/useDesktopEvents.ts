@@ -2,7 +2,7 @@
 // requests, Auto-Type, sync problems, reloads), the weekly update check, auto-lock after
 // inactivity and one-time notices after unlocking.
 import { useEffect, useRef, useState } from 'react';
-import { backend, type AutoTypePick, type BrowserAsk, type Update, type VaultData } from './backend';
+import { backend, type BrowserAsk, type Update, type VaultData } from './backend';
 import { type Item } from './model';
 import { type Strings } from './i18n';
 import { type Prefs } from './settings';
@@ -13,19 +13,14 @@ export function useDesktopEvents({ t, settings, notify, open, vault, items, desk
   desktopProblems: string[]; onLock: () => void;
 }) {
   const [update, setUpdate] = useState<Update | null>(null);
-  const [pick, setPick] = useState<AutoTypePick | null>(null);
   const [ask, setAsk] = useState<BrowserAsk | null>(null);
 
   useEffect(() => backend.on<BrowserAsk>('akp-browser-ask', a => setAsk(a)), []);
   useEffect(() => backend.on<string>('akp-sync-problem', e => notify(`${t.syncProblem}: ${e}`, true)), [t.syncProblem, notify]);
   useEffect(() => backend.on('akp-vault-reloaded', () => notify(t.vaultReloaded)), [t.vaultReloaded, notify]);
 
-  // auto-type: picker request and errors come from Rust
-  useEffect(() => {
-    const a = backend.on<AutoTypePick>('akp-autotype-pick', p => setPick(p));
-    const b = backend.on<string>('akp-autotype-error', e => notify(`${t.autoTypeError}: ${e}`, true));
-    return () => { a(); b(); };
-  }, [t.autoTypeError, notify]);
+  // auto-type errors come from Rust (the picker is the quick access window)
+  useEffect(() => backend.on<string>('akp-autotype-error', e => notify(`${t.autoTypeError}: ${e}`, true)), [t.autoTypeError, notify]);
 
   // update check: at most once a week, only when enabled
   useEffect(() => {
@@ -81,5 +76,5 @@ export function useDesktopEvents({ t, settings, notify, open, vault, items, desk
     if (n) notify(`${n} ${t.expiringSoon}`);
   }, [items, settings.showExpiring, settings.expiryDays, t.expiringSoon, notify]);
 
-  return { update, pick, setPick, ask, setAsk };
+  return { update, ask, setAsk };
 }
