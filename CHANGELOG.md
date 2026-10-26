@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1
+
+- **Entry list and quick access:** sorted by last use by default (KeePass "last access", set
+  when copying or typing). The times are saved on lock, close and quit, not on every copy, and
+  never over a file that changed on disk in the meantime.
+- **Quick access:** opens on the screen with the mouse, takes the keyboard focus and closes with
+  Esc or a click outside it.
+- **Auto-Type:** the global shortcut now picks the entry in the quick access window, with the
+  matching entries on top. Enter types, Shift+Enter copies the user name, Ctrl+Enter the password.
+
 ## 0.2.0
 
 First release with automatic updates.

@@ -1,6 +1,6 @@
 [package]
 name = "anotherkeepass"
-version = "0.2.0"
+version = "0.2.1"
 description = "KeePass-compatible password manager"
 authors = ["AnotherKeepass"]
 license = "GPL-3.0-or-later"
