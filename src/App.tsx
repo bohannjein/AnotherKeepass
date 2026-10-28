@@ -162,6 +162,8 @@ export default function App() {
 
   // Rust locked everything (tray menu, screen lock, minimize): drop the UI state too
   useEffect(() => backend.on('akp-locked', () => { clearHistory(); setOpen({}); }), []);
+  const unlocked = Object.keys(open).length > 0;
+  useEffect(() => { backend.trayState(unlocked, unlocked ? 'AnotherKeepass' : `AnotherKeepass – ${t.locked}`).catch(() => {}); }, [unlocked, t]);
   useEffect(() => backend.on<VaultData>('akp-vault-updated', d => setOpen(o => o[d.id] ? { ...o, [d.id]: d } : o)), []);
   // copied or typed (here, in the quick window or by Auto-Type): new "last used" time for the sort
   useEffect(() => backend.on<EntryUsed>('akp-entry-used', u => setOpen(o => o[u.vault]

@@ -258,7 +258,12 @@ pub(super) fn get_logins(host: &dyn Host, s: &mut Session, p: &Value) -> ActionR
         let top = found[0].2;
         found.retain(|f| f.2 == top);
     }
-    let map = host.vaults().0.lock().map_err(|_| E_NO_LOGINS)?;
+    let mut map = host.vaults().0.lock().map_err(|_| E_NO_LOGINS)?;
+    for (vid, id, _, _) in &found {
+        if let Some(v) = map.get_mut(vid) {
+            host.entry_used(v, vid, *id);
+        }
+    }
     let entries: Vec<Value> = found
         .iter()
         .filter_map(|(vid, id, _, _)| {

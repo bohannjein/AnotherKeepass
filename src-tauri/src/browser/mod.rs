@@ -128,6 +128,8 @@ pub trait Host: Send + Sync + 'static {
     fn lock_all(&self);
     fn show_window(&self);
     fn autotype_search(&self, search: &str);
+    /// entries handed to the extension count as used (KeePass "last access", desktop list)
+    fn entry_used(&self, _v: &mut OpenVault, _vault: &str, _id: EntryId) {}
 }
 
 // ---------------------------------------------------------------- session crypto

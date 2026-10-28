@@ -89,6 +89,7 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const form = e.currentTarget as HTMLFormElement;
     setError('');
     if (mode === 'create' && password !== confirm) { setError(t.passwordsDontMatch); return; }
     const target = mode === 'server' ? `bw:${server.trim().replace(/\/+$/, '')}#${email.trim()}`
@@ -118,17 +119,20 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
         return;
       }
       setError(explain(err));
+      // typo: select the password so retyping replaces it
+      if (errorCode(err) === 'wrong_key') requestAnimationFrame(() => form.querySelector<HTMLInputElement>('.textfield.bad input')?.select());
     } finally {
       setBusy(false);
     }
   };
 
+  const wrongKey = error === t.wrongKey;
   const choices = [...known.map(k => k.path), ...(extraPath && !known.some(k => k.path === extraPath) ? [extraPath] : [])];
   const pwField = (value: string, set: (v: string) => void, label: string, autoFocus = false) => (
-    <label className="textfield">
+    <label className={'textfield' + (wrongKey && set === setPassword ? ' bad' : '')}>
       <Icon n="key" />
       <input type={show ? 'text' : 'password'} placeholder={label} aria-label={label} value={value} autoFocus={autoFocus}
-        onChange={e => set(e.target.value)} autoComplete="off" />
+        aria-invalid={wrongKey && set === setPassword} onChange={e => { set(e.target.value); if (wrongKey) setError(''); }} autoComplete="off" />
       <button type="button" className="icon-btn" onClick={() => setShow(s => !s)} aria-label={show ? t.hide : t.show}>
         <Icon n={show ? 'visibility_off' : 'visibility'} />
       </button>

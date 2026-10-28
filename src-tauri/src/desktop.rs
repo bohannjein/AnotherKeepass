@@ -125,7 +125,7 @@ impl Default for DesktopPrefs {
             ssh_auth_sock: String::new(),
             quick_unlock: false,
             hello_both: false,
-            tray_style: "colorful".into(),
+            tray_style: "monoLight".into(),
             at_remember: 10,
             auto_reload: true,
             tray_labels: ["Show".into(), "Lock all".into(), "Quit".into()],
@@ -279,7 +279,30 @@ fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, labels: &[String; 3]) -> taur
 
 /// Tray icon for the chosen style. Monochrome = just the shield (the dark part of the app
 /// icon), cropped to fill the square, in white (dark taskbar) or black (light taskbar).
+/// Locked (no vault open) shows the icon faded, so the taskbar tells the state at a glance.
 fn tray_image<R: Runtime>(app: &AppHandle<R>, style: &str) -> Option<tauri::image::Image<'static>> {
+    let img = tray_shape(app, style)?;
+    if TRAY_UNLOCKED.load(Ordering::Relaxed) {
+        return Some(img);
+    }
+    let mut px = img.rgba().to_vec();
+    px.chunks_exact_mut(4).for_each(|p| p[3] = (p[3] as u16 * 2 / 5) as u8);
+    Some(tauri::image::Image::new_owned(px, img.width(), img.height()))
+}
+
+static TRAY_UNLOCKED: AtomicBool = AtomicBool::new(false);
+
+/// The UI reports whether any vault is open; the tray icon and tooltip follow.
+#[tauri::command]
+pub fn tray_state(app: AppHandle, unlocked: bool, tooltip: String) {
+    TRAY_UNLOCKED.store(unlocked, Ordering::Relaxed);
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let _ = tray.set_icon(tray_image(&app, &prefs(&app).tray_style));
+        let _ = tray.set_tooltip(Some(tooltip));
+    }
+}
+
+fn tray_shape<R: Runtime>(app: &AppHandle<R>, style: &str) -> Option<tauri::image::Image<'static>> {
     let icon = app.default_window_icon()?;
     let (w, h, px) = (icon.width() as usize, icon.height() as usize, icon.rgba());
     let color: u8 = match style {

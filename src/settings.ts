@@ -40,7 +40,7 @@ export const DEFAULTS = {
   colorizePasswords: true,
   monospaceNotes: false,
   trayIcon: true,
-  trayStyle: 'colorful',
+  trayStyle: 'monoLight',
   hideToTray: false,
 
   // Auto-Type

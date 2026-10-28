@@ -151,6 +151,7 @@ export interface Backend {
   browserAnswer(id: number, answer: unknown): Promise<void>;
   /** vault the browser extension talks to */
   browserSetActive(vault: string | null): Promise<void>;
+  trayState(unlocked: boolean, tooltip: string): Promise<void>;
   /** write to the app log file (desktop) / console (browser) */
   log(level: 'info' | 'warn' | 'error', message: string): void;
   trash(vault: string, id: string): Promise<VaultData>;
@@ -222,6 +223,7 @@ const desktop: Backend = {
   autotypeEntry: (vault, id) => invoke('autotype_entry', { vault, id }),
   browserAnswer: (id, answer) => invoke('browser_answer', { id, answer }),
   browserSetActive: vault => invoke('browser_set_active', { vault }),
+  trayState: (unlocked, tooltip) => invoke('tray_state', { unlocked, tooltip }),
   log: (level, message) => { invoke('ui_log', { level, message }).catch(() => {}); },
   on: (event, cb) => { const p = listen(event, e => cb(e.payload as never)); return () => { p.then(f => f()); }; },
   trash: (vault, id) => invoke('entry_trash', { vault, id }),
@@ -421,6 +423,7 @@ const demo: Backend = {
   },
   browserAnswer: async () => {},
   browserSetActive: async () => {},
+  trayState: async () => {},
   log: (level, message) => console[level](message),
   async trash(vault, id) { const v = get(vault); item(v, id).trashed = true; return out(v); },
   async restore(vault, id) { const v = get(vault); item(v, id).trashed = false; return out(v); },

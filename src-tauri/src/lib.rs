@@ -105,6 +105,7 @@ pub fn run() {
             clipboard::clipboard_copy_text,
             clipboard::clipboard_read_text,
             desktop::desktop_apply,
+            desktop::tray_state,
             desktop::window_minimize,
             desktop::window_after_unlock,
             desktop::ui_log,

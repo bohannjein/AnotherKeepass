@@ -410,6 +410,12 @@ button { cursor: pointer; border: 0; background: none; }
 .textfield:focus-within { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); } /* thicker ring without moving the content */
 .textfield input { flex: 1; border: 0; background: none; font-size: 16px; min-width: 0; }
 .textfield input:focus { outline: none; }
+.textfield.bad, .textfield.bad:focus-within { border-color: #ff5449; box-shadow: inset 0 0 0 1px #ff5449; background: rgb(255 84 73 / .12); animation: shake .4s; }
+:root[data-theme='light'] .textfield.bad { border-color: #ba1a1a; box-shadow: inset 0 0 0 1px #ba1a1a; background: rgb(186 26 26 / .06); }
+.textfield.bad > .ms:first-child { color: #ff5449 !important; }
+:root[data-theme='light'] .textfield.bad > .ms:first-child { color: #ba1a1a !important; }
+@keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+@media (prefers-reduced-motion: reduce) { .textfield.bad { animation: none; } }
 .files { display: flex; gap: 6px; flex-wrap: wrap; }
 
 .snackbar {
@@ -536,9 +542,8 @@ textarea.val.edit { resize: vertical; display: block; }
 .title-edit:hover, .title-edit:focus { outline: none; background: var(--surface-c); }
 .hero > div { min-width: 0; flex: 1; }
 .badge.select { padding-right: 4px; cursor: pointer; }
-.badge.select select { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.badge.select select { padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .badge.select select:focus { outline: none; }
-.badge.select option { background: var(--surface-high); color: var(--on-surface); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .new-menu .avatar.note, .new-menu .avatar.other { background: var(--surface-c); }
 .menu hr { height: 0; margin: 6px 16px; }
@@ -611,7 +616,6 @@ textarea.val.edit { resize: vertical; display: block; }
   transition: border-color .2s, border-radius .35s var(--spring);
 }
 .set-select { min-width: 220px; max-width: 320px; cursor: pointer; }
-.set-select option { background: var(--surface-high); }
 .set-select:focus, .set-input:focus, .set-number input:focus { outline: none; border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); border-radius: var(--r-m); }
 .set-select:disabled, .set-input:disabled, .set-number input:disabled, .switch:disabled { cursor: not-allowed; }
 .set-number { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--on-surface-var); }
@@ -1159,9 +1163,9 @@ input, textarea { caret-color: var(--primary); }
 .vault-dialog .keyfile-row .btn { padding: 0 var(--inset); gap: 12px; }
 /* dropdown in a text field */
 .mode-field { cursor: pointer; }
-.mode-field select { flex: 1; min-width: 0; height: 100%; border: 0; background: none; color: inherit; font: inherit; font-size: 16px; font-weight: 600; appearance: none; cursor: pointer; }
+.mode-field select { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
 .mode-field select:focus { outline: none; }
-.mode-field select option { background: var(--surface-high); font-weight: 400; }
+.mode-field select::picker-icon { display: none; }
 .mode-field > .ms:last-child { pointer-events: none; color: var(--on-surface-var); margin-right: 6px; }
 
 /* ---------- alignment grid (measured) ----------
@@ -1179,3 +1183,19 @@ input, textarea { caret-color: var(--primary); }
 .settings-title { padding-left: 9px; }
 .settings-search { margin: 0 0 12px; padding-left: 12px; }
 .planned-toggle { margin: 8px 0 0; }
+
+/* dropdown lists in the app's look instead of the grey Windows list (customizable select, Chromium 135+) */
+select, ::picker(select) { appearance: base-select; }
+select { display: inline-flex; align-items: center; gap: 8px; }
+select::picker-icon { color: var(--on-surface-var); transition: rotate .2s var(--ease); }
+select:open::picker-icon { rotate: 180deg; }
+::picker(select) {
+  margin-top: 4px; padding: 4px;
+  border: 1px solid var(--outline-var); border-radius: var(--r-s);
+  background: var(--surface-high); color: var(--on-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / .35);
+}
+option { padding: 8px 12px; border-radius: var(--r-xs); font-size: 14px; font-weight: 400; background: none; cursor: pointer; }
+option:hover, option:focus-visible { background: var(--surface-highest); outline: none; }
+option:checked { background: var(--primary-container); color: var(--on-primary-container); font-weight: 600; }
+option::checkmark { display: none; }

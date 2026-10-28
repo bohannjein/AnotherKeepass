@@ -22,7 +22,7 @@ use tokio::{
 use crate::{
     browser::{self, Ask, BrowserPrefs, Host, Session},
     desktop,
-    vault::{VaultDto, Vaults},
+    vault::{OpenVault, VaultDto, Vaults},
 };
 
 // ---------------------------------------------------------------- socket name
@@ -123,6 +123,9 @@ impl Host for AppHost {
     }
     fn autotype_search(&self, search: &str) {
         crate::autotype::request(&self.app, search);
+    }
+    fn entry_used(&self, v: &mut OpenVault, vault: &str, id: keepass::db::EntryId) {
+        crate::vault::mark_used(&self.app, v, vault, id);
     }
 }
 
