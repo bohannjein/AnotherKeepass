@@ -14,6 +14,12 @@
         "value": "cubic-bezier(.34, 1.56, .64, 1)",
         "createdAt": "2026-10-20T13:57:47.369Z",
         "reason": "Definition of --spring token: Material 3 Expressive spring motion; user asked for the M3 Expressive style"
+      },
+      {
+        "rule": "overused-font",
+        "value": "roboto",
+        "createdAt": "2026-10-28T09:47:18.057Z",
+        "reason": "Roboto Flex is the app's own brand font (src/index.css); the site reuses it deliberately"
       }
     ]
   }

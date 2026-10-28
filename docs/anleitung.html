@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anleitung – AnotherKeepass</title>
+<meta name="description" content="Installation, Einrichtung und Fehlerbehebung für AnotherKeepass, den KeePass-kompatiblen Passwortmanager.">
+<meta name="theme-color" content="#fff8f3">
+<link rel="icon" href="img/logo.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/roboto-flex.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="cookie" viewBox="0 0 1024 1024"><path fill="currentColor" d="M512 64c96 0 150 52 226 74s152 34 192 106 6 160 18 246-26 168-74 238-128 98-212 130-118 102-150 102-82-58-166-90-170-56-222-128-58-158-54-246-34-170 14-242 140-94 216-118 116-72 212-72z"/></symbol>
+  <symbol id="i-gh" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2z"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Zum Inhalt springen</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./" aria-label="AnotherKeepass, Startseite"><img src="img/logo.svg" alt="" width="42" height="42"><span>Another<b>Keepass</b></span></a>
+    <nav class="nav" aria-label="Hauptnavigation">
+      <a href="./#funktionen">Funktionen</a>
+      <a href="anleitung.html" aria-current="page">Dokumentation</a>
+      <a href="https://github.com/bohannjein/AnotherKeepass"><svg aria-hidden="true"><use href="#i-gh"/></svg> GitHub</a>
+      <a class="nav-dl" href="./#download">Download</a>
+    </nav>
+    <details class="menu">
+      <summary>Menü</summary>
+      <nav class="menu-panel" aria-label="Hauptnavigation">
+        <a href="./#funktionen">Funktionen</a>
+        <a href="./#download">Download</a>
+        <a href="anleitung.html" aria-current="page">Dokumentation</a>
+        <a href="https://github.com/bohannjein/AnotherKeepass">GitHub</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<main id="main">
+  <div class="guide-hero">
+    <svg viewBox="0 0 1024 1024" class="blob" aria-hidden="true"><use href="#cookie"/></svg>
+    <div class="wrap">
+      <h1 class="display h-xl">Anleitung</h1>
+      <p class="lead" style="margin-top:24px">Alles, um AnotherKeepass zu installieren, deine Tresore zu öffnen und die App mit Browser und anderen Werkzeugen zu verbinden.</p>
+    </div>
+  </div>
+
+  <div class="wrap guide">
+    <nav class="toc" aria-label="Inhalt">
+      <ol>
+        <li><a href="#installieren">Installieren</a></li>
+        <li><a href="#updates">Updates</a></li>
+        <li><a href="#erster-start">Erster Start</a></li>
+        <li><a href="#browser">Browser verbinden</a></li>
+        <li><a href="#umziehen">Umziehen</a></li>
+        <li><a href="#weitere">SSH, KeeShare, Hello</a></li>
+        <li><a href="#kdbx">Daten in KDBX</a></li>
+        <li><a href="#bauen">Selbst bauen</a></li>
+        <li><a href="#probleme">Wenn etwas hakt</a></li>
+      </ol>
+    </nav>
+
+    <article class="article">
+      <section id="installieren">
+        <h2>Installieren</h2>
+        <h3>Windows</h3>
+        <ol>
+          <li>Lade unter <a href="./#download">Download</a> den Installer <code>AnotherKeepass_&lt;Version&gt;_x64-setup.exe</code> herunter.</li>
+          <li>Starte ihn. Warnt Windows vor einem unbekannten Herausgeber, liegt das an der noch fehlenden Code-Signatur (siehe <a href="#probleme">Wenn etwas hakt</a>).</li>
+          <li>Der Installer legt AnotherKeepass im Startmenü an. Die WebView2-Laufzeit ist bei Windows 11 schon vorhanden.</li>
+        </ol>
+        <h3>Linux (Vorschau)</h3>
+        <ol>
+          <li>Lade die Datei <code>.AppImage</code> herunter.</li>
+          <li>Mach sie ausführbar und starte sie:</li>
+        </ol>
+<pre><code>chmod +x AnotherKeepass_*.AppImage
+./AnotherKeepass_*.AppImage</code></pre>
+        <div class="note"><p>Die Linux-Version baut, ist aber noch kaum getestet. Windows Hello und andere reine Windows-Optionen sind ausgeblendet; Auto-Type-Fenstererkennung, Browser-Manifeste und Sperren bei Bildschirmsperre fehlen noch.</p></div>
+      </section>
+
+      <section id="updates">
+        <h2>Updates</h2>
+        <p>Die App prüft in den Einstellungen wöchentlich, ob es eine neue Version auf GitHub gibt, und kann sie direkt installieren. Installiert wird ein Update nur, wenn es die Signatur des Projekts trägt (minisign, der öffentliche Schlüssel ist in die App eingebaut).</p>
+        <p>Releases baut GitHub Actions aus dem getaggten Quellcode. Was sich geändert hat, steht im <a href="https://github.com/bohannjein/AnotherKeepass/blob/main/CHANGELOG.md">Changelog</a>.</p>
+        <div class="note warn"><p><strong>Von 0.1.0 auf eine neuere Version:</strong> Mit 0.2.0 hat sich der Herausgeber geändert. Deinstalliere 0.1.0 deshalb einmal von Hand und lösche dabei die App-Daten <em>nicht</em>.</p></div>
+      </section>
+
+      <section id="erster-start">
+        <h2>Erster Start</h2>
+        <ol>
+          <li>Wähle Sprache und Design (hell oder dunkel). Beides lässt sich später in den Einstellungen ändern.</li>
+          <li>Öffne eine vorhandene <code>.kdbx</code>-Datei oder lege einen neuen Tresor an. Optional gehört eine Schlüsseldatei dazu.</li>
+          <li>Weitere Tresore öffnest du über <strong>Tresor hinzufügen</strong> in der Seitenleiste. <strong>Alle Tresore</strong> zeigt die Einträge aller offenen Tresore zusammen.</li>
+        </ol>
+        <h3>Tastenkürzel</h3>
+        <ul>
+          <li><kbd>Strg</kbd> <kbd>K</kbd> – Befehlspalette: Einträge suchen, neue anlegen, Generator, Passwort-Gesundheit, Import.</li>
+          <li><kbd>Strg</kbd> <kbd>Alt</kbd> <kbd>K</kbd> – Schnellzugriff von überall: Enter kopiert das Passwort, Umschalt+Enter den Benutzernamen, Strg+Enter tippt die Anmeldung. Das Kürzel lässt sich in den Einstellungen ändern.</li>
+        </ul>
+        <div class="note"><p>Die Liste der zuletzt geöffneten Tresore merkt sich die App selbst, nicht die <code>.kdbx</code>-Dateien. Ist sie leer, öffne deine Tresore einmal über die Dateiauswahl.</p></div>
+      </section>
+
+      <section id="browser">
+        <h2>Browser verbinden</h2>
+        <p>AnotherKeepass stellt dieselbe lokale Verbindung bereit wie KeePassXC. Deshalb funktioniert die Erweiterung <strong>KeePassXC-Browser</strong>, inklusive Passkeys.</p>
+        <ol>
+          <li>Installiere KeePassXC-Browser in deinem Browser.</li>
+          <li>Aktiviere in AnotherKeepass unter Einstellungen <strong>Browserintegration aktivieren</strong> und hake deine Browser an.</li>
+          <li>Ist KeePassXC <em>nicht</em> installiert, schalte zusätzlich <strong>Native-Messaging-Manifeste beim Start aktualisieren</strong> ein. Dann meldet sich AnotherKeepass selbst als Proxy an. Ist KeePassXC installiert, läuft die Verbindung über dessen <code>keepassxc-proxy</code>.</li>
+          <li>Verbinde die Erweiterung und bestätige die Anfrage in AnotherKeepass.</li>
+        </ol>
+        <div class="note warn"><p>KeePassXC darf nicht gleichzeitig laufen – beide benutzen dieselbe Verbindung.</p></div>
+      </section>
+
+      <section id="umziehen">
+        <h2>Von einem anderen Manager umziehen</h2>
+        <h3>Import</h3>
+        <p>Öffne die Befehlspalette (<kbd>Strg</kbd> <kbd>K</kbd>) und wähle <strong>Importieren…</strong>. Unterstützt werden Exporte aus:</p>
+        <ul>
+          <li>Bitwarden</li>
+          <li>1Password</li>
+          <li>Proton Pass</li>
+          <li>KeePassXC (CSV)</li>
+        </ul>
+        <p>Kommst du von KeePass, KeePassXC oder KeePassDX, brauchst du keinen Import: Öffne einfach deine <code>.kdbx</code>-Datei.</p>
+        <h3>Vaultwarden</h3>
+        <p>Über <strong>Tresor hinzufügen → Vaultwarden</strong> erscheint dein Vaultwarden-Konto als Tresor. Änderungen werden auf dem Server gespeichert; ohne Verbindung lässt sich die letzte Kopie lesen. Der Server muss per https erreichbar sein.</p>
+        <p>Mit <strong>Mit Vaultwarden abgleichen…</strong> hältst du eine <code>.kdbx</code>-Datei und ein Konto in beide Richtungen synchron; die neuere Änderung gewinnt.</p>
+      </section>
+
+      <section id="weitere">
+        <h2>SSH, KeeShare und Windows Hello</h2>
+        <h3>SSH-Agent</h3>
+        <p>Unter Einstellungen <strong>SSH-Agent-Integration aktivieren</strong>. AnotherKeepass ist selbst kein Agent, sondern reicht die Schlüssel aus dem Tresor an einen laufenden Agent weiter – kompatibel mit KeeAgent.</p>
+        <h3>KeeShare</h3>
+        <p>Rechtsklick auf einen Ordner → <strong>Teilen</strong>. Als „Importieren“ oder „Synchronisieren“ geteilte Ordner werden aus ihrer Datei aktualisiert, sofern <strong>KeeShare-Import erlauben</strong> eingeschaltet ist.</p>
+        <h3>Windows Hello</h3>
+        <p>Mit <strong>Mit Windows Hello entsperren</strong> öffnest du einen gesperrten Tresor mit Gesicht, Fingerabdruck oder PIN statt mit dem Master-Passwort. Der Schlüssel bleibt im Speicher, bis du den Tresor schließt oder die App beendest.</p>
+      </section>
+
+      <section id="kdbx">
+        <h2>Wie Daten in der Datei liegen</h2>
+        <p>Alles bleibt Standard-KDBX. Was AnotherKeepass zusätzlich braucht, steht in den dafür vorgesehenen Zusatzdaten des Eintrags.</p>
+        <table class="map">
+          <thead><tr><th scope="col">In der App</th><th scope="col">In der KDBX-Datei</th></tr></thead>
+          <tbody>
+            <tr><td>Tresor</td><td>eine <code>.kdbx</code>-Datei</td></tr>
+            <tr><td>Ordner</td><td>Gruppe (Papierkorb = KeePass-Papierkorb)</td></tr>
+            <tr><td>Titel, Benutzername, Passwort, Website, Notiz</td><td>Standardfelder</td></tr>
+            <tr><td>Eigene Felder, Karte, Identität</td><td>eigene Felder (verdeckt/TOTP = geschützt)</td></tr>
+            <tr><td>Einmalcode (TOTP)</td><td>Feld <code>otp</code> (<code>otpauth://</code>, Format von KeePassXC)</td></tr>
+            <tr><td>Angeheftet</td><td>Tag <code>pinned</code></td></tr>
+            <tr><td>Eintragstyp, Feldarten</td><td>Zusatzdaten <code>AnotherKeepass.*</code></td></tr>
+            <tr><td>Anhänge, Ablaufdatum, Verlauf</td><td>native KDBX-Funktionen</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="bauen">
+        <h2>Selbst bauen</h2>
+        <p>Du brauchst Git, Node.js 24, Rust (stable) und die <a href="https://tauri.app/start/prerequisites/">Voraussetzungen von Tauri</a> – unter Windows die Visual Studio Build Tools mit „Desktopentwicklung mit C++“.</p>
+<pre><code>git clone https://github.com/bohannjein/AnotherKeepass.git
+cd AnotherKeepass
+npm ci
+npm run dev                          # Vorschau im Browser mit Demo-Tresoren
+npx tauri dev                        # Desktop-App mit echten .kdbx-Dateien
+npx tauri build --bundles nsis       # Windows-Installer
+npx tauri build --bundles appimage   # Linux</code></pre>
+        <p>Wie der Code aufgebaut ist, erklärt <a href="https://github.com/bohannjein/AnotherKeepass/blob/main/ARCHITECTURE.md">ARCHITECTURE.md</a>; wie du beitragen kannst, <a href="https://github.com/bohannjein/AnotherKeepass/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</p>
+      </section>
+
+      <section id="probleme">
+        <h2>Wenn etwas hakt</h2>
+        <h3>Windows warnt vor einem unbekannten Herausgeber</h3>
+        <p>Die Windows-Version ist noch nicht code-signiert; die Signierung über die SignPath Foundation ist auf dem Weg. Bis dahin kann SmartScreen warnen.</p>
+        <h3>Microsoft Defender meldet einen Trojaner</h3>
+        <p>Defenders KI-Scanner hält frische, unsignierte Builds manchmal fälschlich für Schadsoftware. Lade die App nur von der offiziellen GitHub-Releaseseite. Trag keine pauschale Ausnahme im Defender ein.</p>
+        <h3>Der Browser findet keine Einträge</h3>
+        <p>Prüfe, ob KeePassXC noch läuft – dann beenden. Ohne installiertes KeePassXC muss <strong>Native-Messaging-Manifeste beim Start aktualisieren</strong> eingeschaltet sein.</p>
+        <h3>Die Liste der Tresore ist leer</h3>
+        <p>Öffne deine <code>.kdbx</code>-Dateien einmal über die Dateiauswahl. Die Dateien selbst sind davon nicht betroffen.</p>
+        <h3>Noch offen?</h3>
+        <p><a href="https://github.com/bohannjein/AnotherKeepass/issues">Melde den Fehler auf GitHub</a> – mit Version, Betriebssystem und den Schritten bis zum Fehler.</p>
+      </section>
+    </article>
+  </div>
+</main>
+
+<footer class="site-footer on-dark">
+  <div class="wrap">
+    <div>
+      <a class="brand" href="./"><img src="img/logo.svg" alt="" width="36" height="36"><span>Another<b>Keepass</b></span></a>
+      <p style="margin-top:14px;max-width:36ch">KeePass-kompatibler Passwortmanager. Tauri 2, Rust und React.</p>
+    </div>
+    <div>
+      <h2>Projekt</h2>
+      <ul>
+        <li><a href="https://github.com/bohannjein/AnotherKeepass">Quellcode</a></li>
+        <li><a href="https://github.com/bohannjein/AnotherKeepass/releases">Releases</a></li>
+        <li><a href="https://github.com/bohannjein/AnotherKeepass/issues">Fehler melden</a></li>
+        <li><a href="https://github.com/bohannjein/AnotherKeepass/blob/main/CONTRIBUTING.md">Mitmachen</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Rechtliches</h2>
+      <ul>
+        <li><a href="https://github.com/bohannjein/AnotherKeepass/blob/main/LICENSE">Lizenz: GPL-3.0-or-later</a></li>
+        <li><a href="https://github.com/googlefonts/roboto-flex">Schrift: Roboto Flex (OFL)</a></li>
+      </ul>
+    </div>
+    <p class="fine">© 2026 bohannjein. Unabhängiges Projekt, nicht verbunden mit KeePass, KeePassXC oder Bitwarden.</p>
+  </div>
+</footer>
+</body>
+</html>
