@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.2
+
+- **Tray icon:** white shield by default, to match the Windows taskbar. It fades while every
+  vault is locked, and the tooltip says "Locked".
+- **Browser:** entries filled in by the browser extension count as used and show up under
+  "last used" in the desktop app.
+- **Unlock:** a wrong master password marks the field red, shakes it and selects the text, so
+  retyping replaces it.
+- **Dropdowns:** lists open in the app's colours instead of the grey Windows list.
+
 ## 0.2.1
 
 - **Entry list and quick access:** sorted by last use by default (KeePass "last access", set
