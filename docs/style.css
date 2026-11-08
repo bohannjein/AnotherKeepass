@@ -287,6 +287,8 @@ svg.blob { display: block; height: auto; aspect-ratio: 1; }
 .platform h3 { font-size: clamp(1.8rem, 1.3rem + 1.8vw, 2.8rem); font-weight: 900; font-stretch: 120%; letter-spacing: -.025em; line-height: 1; }
 .platform h3 small { display: block; margin-top: 8px; font-size: 1rem; font-weight: 600; font-stretch: 100%; letter-spacing: 0; color: var(--ink-soft); }
 .platform p { margin: 0; }
+.dl-stack { display: grid; gap: 8px; }
+.dl-stack .btn { justify-content: flex-start; justify-self: stretch; width: 100%; }
 .platform .tag { display: inline-block; font-size: .85rem; font-weight: 750; padding: 3px 12px; border-radius: 999px; background: var(--ochre); color: var(--ochre-deep); margin-bottom: 6px; }
 .platform.off h3 { color: var(--ink-soft); }
 

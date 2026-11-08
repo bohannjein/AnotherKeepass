@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>app.anotherkeepass.desktop</id>
+  <name>AnotherKeepass</name>
+  <summary>KeePass-compatible password manager</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="io.github.bohannjein">
+    <name>bohannjein</name>
+  </developer>
+  <description>
+    <p>
+      A password manager that reads and writes vaults in the KeePass format (KDBX 4). The files stay
+      compatible with KeePassXC, KeePass2 and KeePassDX. No account, no telemetry.
+    </p>
+    <ul>
+      <li>Several vaults at once, folders, tags, attachments, history, TOTP</li>
+      <li>Password generator and password health check</li>
+      <li>Browser integration through the KeePassXC-Browser extension</li>
+      <li>Vaultwarden accounts, import from Bitwarden, 1Password and Proton Pass</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">app.anotherkeepass.desktop.desktop</launchable>
+  <url type="homepage">https://bohannjein.github.io/AnotherKeepass/en/</url>
+  <url type="bugtracker">https://github.com/bohannjein/AnotherKeepass/issues</url>
+  <url type="vcs-browser">https://github.com/bohannjein/AnotherKeepass</url>
+  <content_rating type="oars-1.1"/>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://bohannjein.github.io/AnotherKeepass/img/app-dark.webp</image>
+      <caption>Vaults, entry list and entry details</caption>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="0.3.3" date="2026-11-08"/>
+  </releases>
+</component>

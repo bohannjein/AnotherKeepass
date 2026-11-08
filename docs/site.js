@@ -23,6 +23,9 @@
       const assets = {
         win: rel.assets.find(a => /-setup\.exe$/i.test(a.name)),
         linux: rel.assets.find(a => /\.AppImage$/i.test(a.name)),
+        deb: rel.assets.find(a => /\.deb$/i.test(a.name)),
+        rpm: rel.assets.find(a => /\.rpm$/i.test(a.name)),
+        flatpak: rel.assets.find(a => /\.flatpak$/i.test(a.name)),
       };
       for (const [os, a] of Object.entries(assets)) {
         if (!a) continue;

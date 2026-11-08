@@ -58,6 +58,12 @@ fn newest(json: &serde_json::Value, current: &str, beta: bool) -> Option<Update>
         })
 }
 
+/// Only the Windows installer and the AppImage can replace themselves. A .deb, .rpm or Flatpak
+/// belongs to the package manager: the app only reports a new version there.
+fn self_update() -> bool {
+    !cfg!(target_os = "linux") || std::env::var_os("APPIMAGE").is_some()
+}
+
 fn err(e: tauri_plugin_updater::Error) -> String {
     format!("update:{e}")
 }
@@ -85,7 +91,7 @@ pub async fn update_check(app: AppHandle, beta: bool) -> Result<Option<Update>, 
         url: format!("https://github.com/bohannjein/AnotherKeepass/releases/tag/v{}", u.version),
         notes: u.body.clone().unwrap_or_default().chars().take(500).collect(),
         version: u.version,
-        installable: true,
+        installable: self_update(),
     });
     if !beta {
         return Ok(stable);
@@ -110,6 +116,9 @@ fn pending_version(app: &AppHandle) -> Option<String> {
 /// `auto`, it is installed on its own as soon as nobody uses the app (see `idle`).
 #[tauri::command]
 pub async fn update_download(app: AppHandle, auto: bool) -> Result<Option<String>, String> {
+    if !self_update() {
+        return Ok(None);
+    }
     if pending_version(&app).is_none() {
         let Some(update) = app.updater().map_err(err)?.check().await.map_err(err)? else { return Ok(None) };
         log::info!("downloading update {}", update.version);

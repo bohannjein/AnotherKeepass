@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Linux packages:** besides the AppImage, every release now has a `.deb` (Debian, Ubuntu,
+  Mint), an `.rpm` (Fedora, openSUSE) and a Flatpak bundle. They install with a double-click and
+  add a menu entry. Only the AppImage updates itself; the packages report a new version.
+
 ## 0.3.2
 
 - **New program icon:** a dark round seal with a ring and the shield with keyhole, for the

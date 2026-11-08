@@ -76,12 +76,16 @@
           <li>Der Installer legt AnotherKeepass im Startmenü an. Die WebView2-Laufzeit ist bei Windows 11 schon vorhanden.</li>
         </ol>
         <h3>Linux (Vorschau)</h3>
-        <ol>
-          <li>Lade die Datei <code>.AppImage</code> herunter.</li>
-          <li>Mach sie ausführbar und starte sie:</li>
-        </ol>
+        <p>Unter <a href="./#download">Download</a> gibt es vier Varianten:</p>
+        <ul>
+          <li><strong>Debian, Ubuntu, Mint:</strong> die <code>.deb</code>-Datei herunterladen und doppelklicken. Die Software-Verwaltung installiert sie, danach steht AnotherKeepass im Startmenü. Im Terminal geht es mit <code>sudo apt install ./AnotherKeepass_*.deb</code>.</li>
+          <li><strong>Fedora, openSUSE:</strong> genauso mit der <code>.rpm</code>-Datei, im Terminal <code>sudo dnf install ./AnotherKeepass-*.rpm</code>.</li>
+          <li><strong>Flatpak</strong> (jede Distribution, auch Arch): <code>flatpak install --user ./AnotherKeepass_*.flatpak</code> oder Doppelklick. Läuft abgeschottet; die Browser-Verbindung und Auto-Type funktionieren in der Flatpak-Fassung noch nicht.</li>
+          <li><strong>AppImage:</strong> ohne Installation. Ausführbar machen und starten:</li>
+        </ul>
 <pre><code>chmod +x AnotherKeepass_*.AppImage
 ./AnotherKeepass_*.AppImage</code></pre>
+        <p>Nur das AppImage aktualisiert sich selbst. Bei <code>.deb</code>, <code>.rpm</code> und Flatpak meldet die App eine neue Version, installiert wird sie über die neue Datei von der Download-Seite.</p>
         <div class="note"><p>Die Linux-Version baut, ist aber noch kaum getestet. Windows Hello und andere reine Windows-Optionen sind ausgeblendet. Die Fenstererkennung für Auto-Type braucht <code>xdotool</code> und funktioniert nur unter X11, nicht unter Wayland. Das Sperren bei Bildschirmsperre nutzt <code>dbus-monitor</code>. Die Browser-Verbindung schreibt die Manifeste für Chrome, Chromium, Brave, Vivaldi, Edge und Firefox selbst.</p></div>
       </section>
 

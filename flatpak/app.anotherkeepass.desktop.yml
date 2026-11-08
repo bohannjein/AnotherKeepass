@@ -1,0 +1,47 @@
+# Flatpak of AnotherKeepass, built from the release .deb (see .github/workflows/build.yml).
+# Local build: put the .deb next to this file as anotherkeepass.deb, then
+#   flatpak-builder --user --install --force-clean build flatpak/app.anotherkeepass.desktop.yml
+id: app.anotherkeepass.desktop
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+command: anotherkeepass
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # update check, favicons, breach check, Vaultwarden
+  - --share=network
+  # .kdbx files and key files can live anywhere in the home folder
+  - --filesystem=home
+  # tray icon and notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.freedesktop.Notifications
+  # lock the vaults when the screen locks
+  - --talk-name=org.freedesktop.ScreenSaver
+  - --talk-name=org.gnome.ScreenSaver
+  # YubiKey challenge-response talks to the key over USB
+  - --device=all
+modules:
+  - name: anotherkeepass
+    buildsystem: simple
+    sources:
+      - type: file
+        path: anotherkeepass.deb
+      - type: file
+        path: app.anotherkeepass.desktop.metainfo.xml
+    build-commands:
+      - ar -x anotherkeepass.deb
+      - tar -xf data.tar.*
+      - install -Dm755 usr/bin/anotherkeepass /app/bin/anotherkeepass
+      - |
+        desktop=$(ls usr/share/applications/*.desktop | head -1)
+        sed -e "s/^Icon=.*/Icon=${FLATPAK_ID}/" "$desktop" > "${FLATPAK_ID}.desktop"
+        install -Dm644 "${FLATPAK_ID}.desktop" /app/share/applications/${FLATPAK_ID}.desktop
+      - |
+        for f in usr/share/icons/hicolor/*/apps/*.png; do
+          size=$(echo "$f" | cut -d/ -f5)
+          install -Dm644 "$f" /app/share/icons/hicolor/${size}/apps/${FLATPAK_ID}.png
+        done
+      - install -Dm644 app.anotherkeepass.desktop.metainfo.xml /app/share/metainfo/${FLATPAK_ID}.metainfo.xml
