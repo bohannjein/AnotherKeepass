@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.2
 
 - **New program icon:** a dark round seal with a ring and the shield with keyhole, for the
   taskbar, Start menu, installer and website. The logo inside the app stays as it is.
