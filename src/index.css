@@ -1199,3 +1199,71 @@ option { padding: 8px 12px; border-radius: var(--r-xs); font-size: 14px; font-we
 option:hover, option:focus-visible { background: var(--surface-highest); outline: none; }
 option:checked { background: var(--primary-container); color: var(--on-primary-container); font-weight: 600; }
 option::checkmark { display: none; }
+
+/* ================= color schemes =================
+   Terracotta (default) keeps its hand-tuned tokens above. Every other scheme gives a few base
+   colors per mode (--p-*); surfaces, containers and outlines are mixed from them, so light,
+   dark and OLED stay consistent. */
+:root[data-accent]:not([data-accent='terracotta']) {
+  --primary: var(--p-acc);
+  --on-primary: var(--p-on-acc);
+  --primary-container: color-mix(in oklab, var(--p-acc) 30%, var(--p-bg));
+  --on-primary-container: color-mix(in oklab, var(--p-acc) 45%, var(--p-fg));
+  --secondary: var(--p-sec);
+  --secondary-container: color-mix(in oklab, var(--p-sec) 24%, var(--p-bg));
+  --on-secondary-container: color-mix(in oklab, var(--p-sec) 40%, var(--p-fg));
+  --tertiary-container: color-mix(in oklab, var(--p-ter) 26%, var(--p-bg));
+  --on-tertiary-container: color-mix(in oklab, var(--p-ter) 45%, var(--p-fg));
+  --surface: var(--p-bg);
+  --surface-low: color-mix(in oklab, var(--p-fg) 5%, var(--p-bg));
+  --surface-c: color-mix(in oklab, var(--p-fg) 8%, var(--p-bg));
+  --surface-high: color-mix(in oklab, var(--p-fg) 12%, var(--p-bg));
+  --surface-highest: color-mix(in oklab, var(--p-fg) 17%, var(--p-bg));
+  --on-surface: var(--p-fg);
+  --on-surface-var: color-mix(in oklab, var(--p-fg) 78%, var(--p-bg));
+  --outline: color-mix(in oklab, var(--p-fg) 50%, var(--p-bg));
+  --outline-var: color-mix(in oklab, var(--p-fg) 20%, var(--p-bg));
+  --inverse-surface: var(--p-fg);
+  --inverse-on-surface: var(--p-bg);
+}
+:root[data-accent='nord'] { --p-bg: #2e3440; --p-fg: #eceff4; --p-acc: #88c0d0; --p-on-acc: #2e3440; --p-sec: #81a1c1; --p-ter: #ebcb8b; }
+:root[data-theme='light'][data-accent='nord'] { --p-bg: #eceff4; --p-fg: #2e3440; --p-acc: #5e81ac; --p-on-acc: #fff; --p-sec: #88c0d0; --p-ter: #d08770; }
+:root[data-accent='gruvbox'] { --p-bg: #282828; --p-fg: #ebdbb2; --p-acc: #fe8019; --p-on-acc: #282828; --p-sec: #b8bb26; --p-ter: #83a598; }
+:root[data-theme='light'][data-accent='gruvbox'] { --p-bg: #fbf1c7; --p-fg: #3c3836; --p-acc: #af3a03; --p-on-acc: #fbf1c7; --p-sec: #79740e; --p-ter: #076678; }
+:root[data-accent='solarized'] { --p-bg: #002b36; --p-fg: #eee8d5; --p-acc: #268bd2; --p-on-acc: #fdf6e3; --p-sec: #2aa198; --p-ter: #b58900; }
+:root[data-theme='light'][data-accent='solarized'] { --p-bg: #fdf6e3; --p-fg: #073642; --p-acc: #268bd2; --p-on-acc: #fff; --p-sec: #2aa198; --p-ter: #b58900; }
+:root[data-accent='rosepine'] { --p-bg: #191724; --p-fg: #e0def4; --p-acc: #ebbcba; --p-on-acc: #191724; --p-sec: #9ccfd8; --p-ter: #c4a7e7; }
+:root[data-theme='light'][data-accent='rosepine'] { --p-bg: #faf4ed; --p-fg: #575279; --p-acc: #b4637a; --p-on-acc: #fff; --p-sec: #56949f; --p-ter: #907aa9; }
+:root[data-accent='everforest'] { --p-bg: #2d353b; --p-fg: #d3c6aa; --p-acc: #a7c080; --p-on-acc: #2d353b; --p-sec: #83c092; --p-ter: #dbbc7f; }
+:root[data-theme='light'][data-accent='everforest'] { --p-bg: #fdf6e3; --p-fg: #5c6a72; --p-acc: #687d00; --p-on-acc: #fff; --p-sec: #35a77c; --p-ter: #dfa000; }
+:root[data-accent='tokyonight'] { --p-bg: #1a1b26; --p-fg: #c0caf5; --p-acc: #7aa2f7; --p-on-acc: #1a1b26; --p-sec: #bb9af7; --p-ter: #e0af68; }
+:root[data-theme='light'][data-accent='tokyonight'] { --p-bg: #e1e2e7; --p-fg: #343b58; --p-acc: #2e7de9; --p-on-acc: #fff; --p-sec: #9854f1; --p-ter: #8c6c3e; }
+:root[data-accent='dracula'] { --p-bg: #282a36; --p-fg: #f8f8f2; --p-acc: #bd93f9; --p-on-acc: #282a36; --p-sec: #ff79c6; --p-ter: #f1fa8c; }
+:root[data-theme='light'][data-accent='dracula'] { --p-bg: #fffbeb; --p-fg: #1f1f1f; --p-acc: #644ac9; --p-on-acc: #fff; --p-sec: #a3144d; --p-ter: #846e15; }
+
+/* OLED: dark variant on pure black; panes stay a hair lighter so the layout still reads */
+:root[data-theme='oled'] { --p-bg: #000; }
+:root[data-theme='oled'][data-accent='terracotta'], :root[data-theme='oled']:not([data-accent]) {
+  --surface: #000; --surface-low: #0c0a08; --surface-c: #13100d; --surface-high: #1c1814; --surface-highest: #27221c;
+  --outline-var: #3a332b; --inverse-on-surface: #000;
+}
+:root[data-theme='oled'] .pane { box-shadow: inset 0 0 0 1px var(--outline-var); }
+
+/* ---------- column resize handles (sit in the 12px gaps) ---------- */
+.app { position: relative; }
+.resizer {
+  position: absolute; top: 12px; bottom: 12px; width: 12px; z-index: 6;
+  cursor: col-resize; touch-action: none; border-radius: var(--r-full);
+}
+.resizer::after {
+  content: ''; position: absolute; top: 50%; left: 4px; width: 4px; height: 48px; margin-top: -24px;
+  border-radius: var(--r-full); background: var(--outline-var); opacity: 0;
+  transition: opacity .2s var(--ease), height .35s var(--spring), margin .35s var(--spring), background .2s var(--ease);
+}
+/* shows only after a short rest on the border (not when the mouse just passes by); hides at once */
+.resizer:hover::after { opacity: 1; transition-delay: .35s; }
+.resizer:focus-visible::after { opacity: 1; }
+.app.resizing .resizer::after, .resizer:active::after { opacity: 1; background: var(--primary); height: 96px; margin-top: -48px; transition-delay: 0s; }
+.resizer:focus-visible { outline: none; }
+.app.resizing { transition: none; cursor: col-resize; user-select: none; }
+.app.narrow:not(.rail) ~ .resizer, .app.narrow:not(.rail) > .resizer { display: none; }

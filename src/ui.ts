@@ -22,7 +22,7 @@ const TEXT = /\.(txt|md|log|json|xml|ya?ml|csv|ini|conf|cfg|pem|pub|key|crt|cer|
 /** Attachments the in-app preview can show. */
 export const previewable = (name: string) => IMAGE.test(name) || TEXT.test(name);
 
-export type Theme = 'dark' | 'light';
+export type Theme = 'dark' | 'light' | 'oled';
 
 export const TYPE_ICON: Record<ItemType, string> = {
   login: 'person', card: 'credit_card', note: 'sticky_note_2', pin: 'pin', identity: 'badge', other: 'category',

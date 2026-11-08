@@ -6,7 +6,8 @@ import { DEMO_VAULTS } from './mock';
 import { openOptions, openExternal } from './open';
 import { clearHistory, generate } from './generator';
 import { type Strings, strings } from './i18n';
-import { type Prefs, mergePrefs, DEFAULTS } from './settings';
+import { type Prefs, mergePrefs, DEFAULTS, clamp } from './settings';
+import { Resizer } from './Resizer';
 import { settingsStrings } from './i18n-settings';
 import VaultDialog, { type Known } from './VaultDialog';
 import { Icon } from './Icon';
@@ -236,6 +237,39 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, []);
+  // resizable columns: drawer | list | detail. Widths live in the settings; while dragging only in state.
+  const [winW, setWinW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const h = () => setWinW(window.innerWidth);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  const [live, setLive] = useState<{ drawer?: number; list?: number } | null>(null);
+  const zoom = settings.fontSize / 100;
+  const RAIL_W = 84, GAP = 12, MIN_DETAIL = 360;
+  const drawerW = clamp(live?.drawer ?? settings.drawerWidth, 200, 420);
+  const drawerCol = rail || isNarrow ? RAIL_W : drawerW;
+  const listMax = Math.max(240, winW / zoom - GAP - drawerCol - 2 * GAP - MIN_DETAIL);
+  const listW = clamp(Math.min(live?.list ?? settings.listWidth, listMax), 240, 720);
+  // the ref is updated with the state so a key step can drag and commit in one go
+  const liveRef = useRef(live);
+  const put = (l: { drawer?: number; list?: number }) => { liveRef.current = l; setLive(l); };
+  const dragDrawer = (w: number) => {
+    // pulling the drawer narrow folds it into the icon rail, pulling the rail out unfolds it
+    if (rail) { if (w > 160) { setRail(false); put({ ...liveRef.current, drawer: Math.max(200, w) }); } return; }
+    if (w < 140) { setRail(true); put({ ...liveRef.current, drawer: undefined }); return; }
+    put({ ...liveRef.current, drawer: w });
+  };
+  const endDrag = () => {
+    const l = liveRef.current;
+    liveRef.current = null;
+    setLive(null);
+    if (!l) return;
+    const next = { ...settings };
+    if (l.drawer !== undefined) next.drawerWidth = clamp(l.drawer, 200, 420);
+    if (l.list !== undefined) next.listWidth = clamp(Math.min(l.list, listMax), 240, 720);
+    if (next.drawerWidth !== settings.drawerWidth || next.listWidth !== settings.listWidth) onSettings(next);
+  };
   const ts = settingsStrings[settings.lang];
 
   // clear search query after it sat untouched
@@ -425,7 +459,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       { id: 'health', icon: 'health_and_safety', label: t.actHealth, run: close(() => selectVault(HEALTH)) },
       { id: 'trash', icon: 'delete', label: t.actTrash, run: close(() => selectVault(TRASH)) },
       { id: 'import', icon: 'upload_file', label: t.importItems, run: close(() => setImportFor(targetVault)) },
-      { id: 'theme', icon: 'contrast', label: t.actTheme, run: close(() => onSettings({ ...settings, theme: settings.theme === 'dark' ? 'light' : 'dark' })) },
+      { id: 'theme', icon: 'contrast', label: t.actTheme, run: close(() => toggleTheme()) },
       { id: 'settings', icon: 'settings', label: t.actSettings, run: close(() => setPage('settings')) },
       { id: 'lock', icon: 'lock', label: t.actLock, run: close(onLock) },
     ];
@@ -439,6 +473,17 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   }, [allItems, vaultList, t, settings, targetVault]); // eslint-disable-line react-hooks/exhaustive-deps
   const pinned = visible.filter(i => i.pinned);
   const rest = visible.filter(i => !i.pinned);
+
+  // light <-> the dark variant used last (dark or OLED black)
+  const toggleTheme = () => {
+    if (settings.theme !== 'light') {
+      try { localStorage.setItem('anotherkeepass.darkTheme', settings.theme); } catch { /* not essential */ }
+      return onSettings({ ...settings, theme: 'light' });
+    }
+    let dark: 'dark' | 'oled' = 'dark';
+    try { if (localStorage.getItem('anotherkeepass.darkTheme') === 'oled') dark = 'oled'; } catch { /* default */ }
+    onSettings({ ...settings, theme: dark });
+  };
 
   // keyboard shortcuts (KeePassXC-like); entry-level ones act on the selected entry
   const shortcutRef = useRef<(e: KeyboardEvent) => void>(() => {});
@@ -494,7 +539,16 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
 
   return (
     // narrow window: grid keeps the rail column, an opened drawer floats over the content
-    <div className={'app' + (rail ? ' rail' : '') + (isNarrow ? ' narrow' : '')}>
+    <div className={'app' + (rail ? ' rail' : '') + (isNarrow ? ' narrow' : '') + (live ? ' resizing' : '')}
+      style={{ gridTemplateColumns: `${drawerCol}px ${listW}px minmax(0, 1fr)` }}>
+      {!isNarrow && (
+        <Resizer label={t.resizeMenu} left={drawerCol} value={drawerCol} zoom={zoom}
+          onDrag={dragDrawer} onEnd={endDrag}
+          onReset={() => { setRail(false); onSettings({ ...settings, drawerWidth: DEFAULTS.drawerWidth }); }} />
+      )}
+      <Resizer label={t.resizeList} left={drawerCol + GAP + listW} value={listW} zoom={zoom}
+        onDrag={w => put({ ...liveRef.current, list: w })} onEnd={endDrag}
+        onReset={() => onSettings({ ...settings, listWidth: DEFAULTS.listWidth })} />
       {isNarrow && !rail && <div className="drawer-scrim" onClick={() => setRail(true)} />}
       <aside className="drawer">
         <div className="brand">
@@ -581,8 +635,8 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
             <Icon n="settings" />
           </button>
           <button className="icon-btn" title={t.theme} aria-label={t.theme}
-            onClick={() => onSettings({ ...settings, theme: settings.theme === 'dark' ? 'light' : 'dark' })}>
-            <Icon n={settings.theme === 'dark' ? 'light_mode' : 'dark_mode'} />
+            onClick={toggleTheme}>
+            <Icon n={settings.theme === 'light' ? 'dark_mode' : 'light_mode'} />
           </button>
           {update && (
             <button className="icon-btn update-btn" title={t.updateAvailable.replace('{v}', update.version)} aria-label={t.updateAvailable.replace('{v}', update.version)}

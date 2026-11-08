@@ -5,7 +5,7 @@ import type { Lang } from './i18n';
 export const DEFAULTS = {
   lang: 'en' as Lang,
   showPlanned: false,
-  theme: 'dark' as 'dark' | 'light',
+  theme: 'dark' as 'dark' | 'light' | 'oled',
 
   // General · startup
   singleInstance: true,
@@ -34,6 +34,8 @@ export const DEFAULTS = {
   faviconTimeout: 10,
   // General · interface
   fontSize: 100,
+  drawerWidth: 272,
+  listWidth: 360,
   accent: 'terracotta',
   listDensity: 'comfortable',
   letterAvatars: true,
@@ -176,8 +178,8 @@ export const SECTIONS: Section[] = [
       {
         id: 'look', items: [
           { key: 'lang', type: 'select', options: ['en', 'de', 'fr', 'es'] },
-          { key: 'theme', type: 'select', options: ['dark', 'light'] },
-          { key: 'accent', type: 'select', options: ['terracotta', 'sage', 'ochre', 'plum', 'sea'] },
+          { key: 'theme', type: 'select', options: ['dark', 'light', 'oled'] },
+          { key: 'accent', type: 'select', options: ['terracotta', 'nord', 'gruvbox', 'solarized', 'rosepine', 'everforest', 'tokyonight', 'dracula'] },
           { key: 'fontSize', type: 'number', min: 80, max: 150, step: 10, unit: '%' },
         ],
       },
