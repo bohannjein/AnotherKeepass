@@ -600,8 +600,10 @@ textarea.val.edit { resize: vertical; display: block; }
   transition: opacity .2s var(--ease);
 }
 .set-row + .set-row::before { content: ''; position: absolute; top: 0; left: 18px; right: 0; border-top: 1px solid color-mix(in srgb, var(--outline-var) 70%, transparent); }
-.set-row.indent { padding-left: 44px; animation: set-in .2s var(--ease) both; }
-.set-row.indent::after { content: ''; position: absolute; left: 26px; top: 12px; bottom: 12px; border-left: 1px solid var(--outline-var); }
+.set-row.indent { padding-left: 34px; animation: set-in .2s var(--ease) both; }
+/* sub-options: a slight inset and the divider starts with their text, no tree line */
+.set-row.indent::before { left: 34px !important; }
+.set-row.indent .set-label { font-weight: 500; }
 @keyframes set-in { from { opacity: 0; transform: translateY(-4px); } }
 @media (prefers-reduced-motion: reduce) { .settings-body, .set-row.indent { animation: none; } }
 .set-row.off { opacity: .5; }

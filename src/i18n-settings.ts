@@ -37,6 +37,7 @@ const en = {
     advanced: "Advanced",
     never: "Never",
     custom: "Custom",
+    installedVersion: "Installed version",
   },
   sections: {
     servers: 'Server accounts',
@@ -275,6 +276,7 @@ const de: SettingsStrings = {
     advanced: "Erweitert",
     never: "Nie",
     custom: "Eigener Wert",
+    installedVersion: "Installierte Version",
   },
   sections: {
     servers: 'Server-Konten',
@@ -511,6 +513,7 @@ const fr: SettingsStrings = {
     advanced: "Avancé",
     never: "Jamais",
     custom: "Autre",
+    installedVersion: "Version installée",
   },
   sections: {
     servers: 'Comptes serveur',
@@ -747,6 +750,7 @@ const es: SettingsStrings = {
     advanced: "Avanzado",
     never: "Nunca",
     custom: "Otro",
+    installedVersion: "Versión instalada",
   },
   sections: {
     servers: 'Cuentas de servidor',

@@ -243,7 +243,7 @@ function Row({ s, ts, prefs, disabled, set, patch, onAction, t, ssh, button, qui
   if (s.type === 'action') {
     return (
       <div className={'set-row' + (s.wip ? ' wip' : '')}>
-        <div className="set-text"><span className="set-label">{label}</span>{hint && <span className="set-hint">{hint}</span>}</div>
+        <div className="set-text"><span className="set-label">{s.key === 'updateNow' ? `${ts.ui.installedVersion} ${__APP_VERSION__}` : label}</span>{hint && <span className="set-hint">{hint}</span>}</div>
         {s.wip ? (
           <button className='wip-btn' disabled><Icon n={s.key === 'bwConnect' ? 'cloud' : 'dns'} />{label}<span className='pill'>{ts.ui.wip}</span></button>
         ) : (
