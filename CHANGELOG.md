@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Simpler settings:** six sections instead of ten, plain wording, times as one-tap choices
+  ("5 min", "Never") instead of seconds to type. Technical options sit under "Advanced" at the
+  end of each section; search still finds everything. Connecting the browser sets up the
+  installed browsers on its own.
+
 ## 0.3.4
 
 - **Faster:** pinning, moving to the recycle bin, restoring, editing and other changes show at

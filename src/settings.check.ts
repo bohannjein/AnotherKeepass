@@ -1,5 +1,5 @@
 // node src/settings.check.ts
-import { DEFAULTS, mergePrefs } from './settings.ts';
+import { DEFAULTS, SECTIONS, mergePrefs } from './settings.ts';
 
 const eq = (a: unknown, b: unknown, msg: string) => {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg}: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`);
@@ -33,5 +33,12 @@ eq(mergePrefs({ systemDark: 'pink' }).systemDark, 'dark', 'unknown system dark')
 eq(mergePrefs({ accent: 'custom' }).accent, 'custom', 'own scheme kept');
 eq(mergePrefs({ customDarkBg: '#123456' }).customDarkBg, '#123456', 'hex color kept');
 eq(mergePrefs({ customDarkBg: 'red; x: url(evil)' }).customDarkBg, DEFAULTS.customDarkBg, 'no CSS injection');
+
+// phone-style page: old stored values stay, presets don't overwrite them
+const old = mergePrefs({ autoLock: true, autoLockSeconds: 240, clipboardClear: false, clipboardSeconds: 45 });
+eq([old.autoLock, old.autoLockSeconds, old.clipboardClear, old.clipboardSeconds], [true, 240, false, 45], 'old timing values kept');
+const shown = SECTIONS.flatMap(s => s.groups.flatMap(g => g.items)).filter(i => !i.advanced && !('planned' in i && i.planned));
+eq(shown.length <= 32, true, `at most ~30 options without Advanced (${shown.length})`);
+eq(SECTIONS.length, 6, 'six sections');
 
 console.log('settings ok');

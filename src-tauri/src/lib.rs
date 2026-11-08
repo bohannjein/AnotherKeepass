@@ -116,6 +116,7 @@ pub fn run() {
             autotype::autotype_entry,
             browser_server::browser_answer,
             browser_server::browser_set_active,
+            browser_server::browsers_detected,
         ])
         .setup(move |app| {
             // log file in the app log dir (release too): actions, timings and errors, never secrets

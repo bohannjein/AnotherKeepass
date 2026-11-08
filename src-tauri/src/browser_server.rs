@@ -491,3 +491,55 @@ mod tests {
         });
     }
 }
+
+/// Browsers installed for this user, as the settings keys that switch them on (`bChrome` …).
+/// Windows: the registered web browsers (StartMenuInternet); Linux: their profile folders.
+#[tauri::command]
+pub fn browsers_detected() -> Vec<&'static str> {
+    const NAMES: [(&str, &str); 6] = [
+        ("chromium", "bChromium"),
+        ("chrome", "bChrome"),
+        ("firefox", "bFirefox"),
+        ("edge", "bEdge"),
+        ("brave", "bBrave"),
+        ("vivaldi", "bVivaldi"),
+    ];
+    let mut found: Vec<&'static str> = Vec::new();
+    let mut add = |name: &str| {
+        let n = name.to_lowercase();
+        if let Some((_, key)) = NAMES.iter().find(|(m, _)| n.contains(m))
+            && !found.contains(key)
+        {
+            found.push(key);
+        }
+    };
+    #[cfg(windows)]
+    {
+        use winreg::{
+            RegKey,
+            enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE},
+        };
+        for root in [HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER] {
+            if let Ok(k) = RegKey::predef(root).open_subkey(r"SOFTWARE\Clients\StartMenuInternet") {
+                k.enum_keys().flatten().for_each(|name| add(&name));
+            }
+        }
+    }
+    #[cfg(target_os = "linux")]
+    if let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) {
+        let config = std::env::var_os("XDG_CONFIG_HOME").map(std::path::PathBuf::from).unwrap_or_else(|| home.join(".config"));
+        for (dir, name) in [
+            (config.join("google-chrome"), "chrome"),
+            (config.join("chromium"), "chromium"),
+            (config.join("BraveSoftware/Brave-Browser"), "brave"),
+            (config.join("vivaldi"), "vivaldi"),
+            (config.join("microsoft-edge"), "edge"),
+            (home.join(".mozilla/firefox"), "firefox"),
+        ] {
+            if dir.is_dir() {
+                add(name);
+            }
+        }
+    }
+    found
+}

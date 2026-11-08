@@ -47,8 +47,18 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
   const set = (key: PrefKey, value: Prefs[PrefKey]) => {
     // Windows Hello replaces the master passwords: only after an explicit OK
     if (key === 'helloUnlock' && value === true && !prefs.helloUnlock) { setConfirmHello(true); return; }
+    // connecting the browser sets up the installed ones (the single list is under Advanced)
+    if (key === 'browserEnabled' && value === true) {
+      backend.browsersDetected()
+        .then(found => onChange({ ...prefs, browserEnabled: true, ...Object.fromEntries(found.map(k => [k, true])) }))
+        .catch(() => onChange({ ...prefs, browserEnabled: true }));
+      return;
+    }
     onChange({ ...prefs, [key]: value });
   };
+  const patch = (p: Partial<Prefs>) => onChange({ ...prefs, ...p });
+  // "Advanced" at the end of a section, closed by default
+  const [advOpen, setAdvOpen] = useState<string | null>(null);
 
   // a setting is active only if its whole dependsOn chain is switched on
   const enabled = (s: Setting): boolean => {
@@ -118,7 +128,7 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
               <section className="set-group" key={sec.id + g.id}>
                 <span className="label">{ts.sections[sec.id as keyof SettingsStrings['sections']]} · {ts.groups[g.id as keyof SettingsStrings['groups']]}</span>
                 <div className="set-card">
-                  {items.map(s => <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} onAction={runAction} t={t} ssh={ssh}
+                  {items.map(s => <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} patch={patch} onAction={runAction} t={t} ssh={ssh}
                     button={s.key === 'updateNow' && update ? (update.installable ? t.updateInstall : t.updateOpenPage) : undefined} />)}
                 </div>
               </section>
@@ -130,17 +140,42 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
               <span className="vi" style={{ background: `var(${current.tint})` }}><Icon n={current.icon} fill /></span>
               {ts.sections[current.id as keyof SettingsStrings['sections']]}
             </h2>
-            {current.groups.map(g => (
-              <section className="set-group" key={g.id}>
-                <span className="label">{ts.groups[g.id as keyof SettingsStrings['groups']]}</span>
-                <div className="set-card">
-                  {g.items.filter(enabled).map(s => (
-                    <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} onAction={runAction} t={t} ssh={ssh}
-                    button={s.key === 'updateNow' && update ? (update.installable ? t.updateInstall : t.updateOpenPage) : undefined} />
-                  ))}
-                </div>
+            {current.groups.map(g => {
+              const items = g.items.filter(i => !i.advanced && enabled(i));
+              if (!items.length) return null;
+              const notes = items.map(i => ts.hints[i.key as keyof SettingsStrings['hints']]).filter(Boolean);
+              return (
+                <section className="set-group" key={g.id}>
+                  <span className="label">{ts.groups[g.id as keyof SettingsStrings['groups']]}</span>
+                  <div className="set-card">
+                    {items.map(s => (
+                      <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} patch={patch} onAction={runAction} t={t} ssh={ssh} quiet
+                      button={s.key === 'updateNow' && update ? (update.installable ? t.updateInstall : t.updateOpenPage) : undefined} />
+                    ))}
+                  </div>
+                  {notes.length > 0 && <p className="set-foot">{notes.join(' ')}</p>}
+                </section>
+              );
+            })}
+            {current.groups.some(g => g.items.some(i => i.advanced)) && (
+              <section className="set-group set-adv">
+                <button className="set-adv-toggle" aria-expanded={advOpen === current.id}
+                  onClick={() => setAdvOpen(o => o === current.id ? null : current.id)}>
+                  <span>{ts.ui.advanced}</span><Icon n={advOpen === current.id ? 'expand_less' : 'expand_more'} />
+                </button>
+                {advOpen === current.id && current.groups.map(g => {
+                  const items = g.items.filter(i => i.advanced && enabled(i));
+                  return items.length > 0 && (
+                    <div className="set-adv-group" key={g.id}>
+                      <span className="label">{ts.groups[g.id as keyof SettingsStrings['groups']]}</span>
+                      <div className="set-card">
+                        {items.map(s => <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} patch={patch} onAction={runAction} t={t} ssh={ssh} />)}
+                      </div>
+                    </div>
+                  );
+                })}
               </section>
-            ))}
+            )}
           </>
         )}
       </main>
@@ -182,14 +217,17 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
   );
 }
 
-function Row({ s, ts, prefs, disabled, set, onAction, t, ssh, button }: {
+function Row({ s, ts, prefs, disabled, set, patch, onAction, t, ssh, button, quiet }: {
   s: Setting; ts: SettingsStrings; prefs: Prefs; disabled: boolean; t: Strings; ssh: { path: string; reachable: boolean } | null;
+  patch: (p: Partial<Prefs>) => void;
+  /** no explanation in the row (shown under the group instead) */
+  quiet?: boolean;
   /** replaces the action button's text ("check now" → "install and restart") */
   button?: string;
   set: (key: PrefKey, value: Prefs[PrefKey]) => void; onAction: (key: string) => void;
 }) {
   const label = ts.labels[s.key as keyof SettingsStrings['labels']];
-  const hint = ts.hints[s.key as keyof SettingsStrings['hints']];
+  const hint = quiet ? undefined : ts.hints[s.key as keyof SettingsStrings['hints']];
   const id = 'set-' + s.key;
   const indent = 'dependsOn' in s && s.dependsOn;
 
@@ -233,8 +271,19 @@ function Row({ s, ts, prefs, disabled, set, onAction, t, ssh, button }: {
     control = <input id={id} className="switch" type="checkbox" checked={value as boolean} disabled={disabled}
       onChange={e => set(s.key, e.target.checked)} />;
   } else if (s.type === 'number') {
-    control = <NumberField id={id} s={s} value={value as number} disabled={disabled} unit={s.unit === 'd' ? ts.ui.days : s.unit}
-      onCommit={n => set(s.key, n)} />;
+    control = s.presets
+      ? <Presets s={s} ts={ts} prefs={prefs} disabled={disabled} patch={patch} />
+      : <NumberField id={id} s={s} value={value as number} disabled={disabled} unit={s.unit === 'd' ? ts.ui.days : s.unit}
+        onCommit={n => set(s.key, n)} />;
+  } else if (s.type === 'select' && s.options.length <= 4 && s.key !== 'lang') {
+    control = (
+      <span className="seg" role="radiogroup" aria-label={label}>
+        {s.options.map(o => (
+          <button key={o} role="radio" aria-checked={value === o} className={value === o ? 'on' : ''} disabled={disabled}
+            onClick={() => set(s.key, o)}>{ts.options[o as keyof SettingsStrings['options']]}</button>
+        ))}
+      </span>
+    );
   } else if (s.type === 'select') {
     control = (
       <select id={id} className="set-select" value={value as string} disabled={disabled} onChange={e => set(s.key, e.target.value)}>
@@ -261,7 +310,8 @@ function Row({ s, ts, prefs, disabled, set, onAction, t, ssh, button }: {
   }
 
   return (
-    <div className={'set-row' + (indent ? ' indent' : '') + (disabled ? ' off' : '')}>
+    // time choices sit under their title, like a phone's settings
+    <div className={'set-row' + (s.type === 'number' && s.presets ? ' set-stack' : '') + (indent ? ' indent' : '') + (disabled ? ' off' : '')}>
       <label className="set-text" htmlFor={id}>
         <span className="set-label">{label}</span>
         {hint && <span className="set-hint">{hint}</span>}
@@ -393,5 +443,45 @@ function CustomColorsEditor({ ts, prefs, set }: LookProps) {
         );
       })}
     </div>
+  );
+}
+
+/** a time or size as people say it: 300 s → "5 min" */
+function amount(n: number, unit: string, ts: SettingsStrings) {
+  if (unit === 's') return n < 60 ? `${n} s` : n < 3600 ? `${Math.round(n / 60)} min` : `${Math.round(n / 360) / 10} h`;
+  if (unit === 'min') return n < 60 ? `${n} min` : `${Math.round(n / 6) / 10} h`;
+  if (unit === 'd') return `${n} ${ts.ui.days}`;
+  return unit ? `${n} ${unit}` : String(n);
+}
+
+/** One-tap choices (like a phone's settings) instead of typing a number. "Never" switches the
+ *  feature off; a stored value that is no preset shows as its own choice and stays editable. */
+function Presets({ s, ts, prefs, disabled, patch }: {
+  s: Extract<Setting, { type: 'number' }>; ts: SettingsStrings; prefs: Prefs; disabled: boolean; patch: (p: Partial<Prefs>) => void;
+}) {
+  const value = prefs[s.key] as number;
+  const presets = s.presets ?? [];
+  const never = s.never;
+  const isNever = typeof never === 'string' ? !prefs[never] : never !== undefined && value === never;
+  const custom = !isNever && !presets.includes(value);
+  const [editing, setEditing] = useState(false);
+  const choose = (n: number) => { patch({ [s.key]: n, ...(typeof never === 'string' ? { [never]: true } : {}) } as Partial<Prefs>); setEditing(false); };
+  const off = () => { patch((typeof never === 'string' ? { [never]: false } : { [s.key]: never }) as Partial<Prefs>); setEditing(false); };
+  return (
+    <span className="seg-wrap">
+      <span className="seg" role="radiogroup">
+        {presets.map(n => (
+          <button key={n} role="radio" aria-checked={!isNever && value === n} className={!isNever && value === n ? 'on' : ''} disabled={disabled}
+            onClick={() => choose(n)}>{amount(n, s.unit, ts)}</button>
+        ))}
+        {never !== undefined && (
+          <button role="radio" aria-checked={isNever} className={isNever ? 'on' : ''} disabled={disabled} onClick={off}>{ts.ui.never}</button>
+        )}
+        <button role="radio" aria-checked={custom} className={custom ? 'on' : ''} disabled={disabled} onClick={() => setEditing(e => !e)}>
+          {custom ? amount(value, s.unit, ts) : ts.ui.custom}
+        </button>
+      </span>
+      {editing && <NumberField id={'set-' + s.key} s={s} value={value} disabled={disabled} unit={s.unit === 'd' ? ts.ui.days : s.unit} onCommit={choose} />}
+    </span>
   );
 }

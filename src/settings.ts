@@ -66,7 +66,7 @@ export const DEFAULTS = {
   clipboardClear: true,
   clipboardSeconds: 10,
   autoLock: false,
-  autoLockSeconds: 240,
+  autoLockSeconds: 300,
   clearSearch: true,
   clearSearchMinutes: 5,
   helloUnlock: false,
@@ -127,12 +127,16 @@ export const DEFAULTS = {
 export type Prefs = typeof DEFAULTS;
 export type PrefKey = keyof Prefs;
 
+/** `advanced`: behind "Advanced" at the end of its section (search still finds it).
+ *  `presets` (numbers): one-tap choices instead of typing; `never` is the switch that "Never"
+ *  turns off (or, as a number, the value that means never), so switch and time are one row. */
+type Common = { planned?: boolean; dependsOn?: PrefKey; platform?: Platform; advanced?: boolean };
 export type Setting =
-  | { key: PrefKey; type: 'toggle' | 'text' | 'path' | 'shortcut'; planned?: boolean; dependsOn?: PrefKey; platform?: Platform }
-  | { key: PrefKey; type: 'number'; min: number; max: number; unit: 's' | 'ms' | 'min' | 'd' | '%' | ''; step?: number; planned?: boolean; dependsOn?: PrefKey; platform?: Platform }
-  | { key: PrefKey; type: 'select'; options: string[]; planned?: boolean; dependsOn?: PrefKey; platform?: Platform }
-  | { key: 'sshStatus' | 'sshAuthSockCurrent' | 'skProviderCurrent' | 'ksFingerprint'; type: 'info'; value: string; platform?: Platform }
-  | { key: 'reset' | 'import' | 'export' | 'updateNow' | 'layoutReset' | 'ksGenerate' | 'bwConnect' | 'vwConnect'; type: 'action'; planned?: boolean; wip?: boolean };
+  | ({ key: PrefKey; type: 'toggle' | 'text' | 'path' | 'shortcut' } & Common)
+  | ({ key: PrefKey; type: 'number'; min: number; max: number; unit: 's' | 'ms' | 'min' | 'd' | '%' | ''; step?: number; presets?: number[]; never?: PrefKey | number } & Common)
+  | ({ key: PrefKey; type: 'select'; options: string[] } & Common)
+  | { key: 'sshStatus' | 'sshAuthSockCurrent' | 'skProviderCurrent' | 'ksFingerprint'; type: 'info'; value: string; platform?: Platform; advanced?: boolean }
+  | { key: 'reset' | 'import' | 'export' | 'updateNow' | 'layoutReset' | 'ksGenerate' | 'bwConnect' | 'vwConnect'; type: 'action'; planned?: boolean; wip?: boolean; advanced?: boolean };
 
 export type Platform = 'windows' | 'linux-mac';
 export interface Group { id: string; items: Setting[] }
@@ -149,110 +153,64 @@ export const SECTIONS: Section[] = [
     id: 'general', icon: 'tune', tint: '--v-sand', groups: [
       {
         id: 'startup', items: [
-          { key: 'singleInstance', type: 'toggle' },
           { key: 'autostart', type: 'toggle' },
           { key: 'startMinimized', type: 'toggle' },
-          { key: 'minimizeAfterUnlock', type: 'toggle' },
+          { key: 'singleInstance', type: 'toggle', advanced: true },
+          { key: 'minimizeAfterUnlock', type: 'toggle', advanced: true },
         ],
       },
       {
         id: 'recent', items: [
           { key: 'rememberRecent', type: 'toggle' },
-          { key: 'recentCount', type: 'number', min: 1, max: 25, unit: '', dependsOn: 'rememberRecent' },
           { key: 'reopenLast', type: 'toggle', dependsOn: 'rememberRecent' },
-          { key: 'rememberKeyfiles', type: 'toggle', dependsOn: 'rememberRecent' },
+          { key: 'recentCount', type: 'number', min: 1, max: 25, unit: '', dependsOn: 'rememberRecent', advanced: true },
+          { key: 'rememberKeyfiles', type: 'toggle', dependsOn: 'rememberRecent', advanced: true },
         ],
       },
       {
         id: 'updates', items: [
           { key: 'updateAuto', type: 'toggle' },
           { key: 'updateNotify', type: 'toggle' },
-          { key: 'updateBeta', type: 'toggle' },
           { key: 'updateNow', type: 'action' },
+          { key: 'updateBeta', type: 'toggle', advanced: true },
         ],
       },
       {
-        id: 'notices', items: [
-          { key: 'showExpiring', type: 'toggle' },
-          { key: 'expiryDays', type: 'number', min: 0, max: 90, unit: 'd', dependsOn: 'showExpiring' },
+        id: 'ssh', items: [
+          { key: 'sshEnabled', type: 'toggle', advanced: true },
+          { key: 'sshStatus', type: 'info', value: '—', advanced: true },
+          { key: 'sshAuthSockCurrent', type: 'info', value: '—', advanced: true },
+          { key: 'sshAuthSock', type: 'path', dependsOn: 'sshEnabled', advanced: true },
+        ],
+      },
+      {
+        id: 'ksActivation', items: [
+          { key: 'ksImport', type: 'toggle', advanced: true },
+          { key: 'ksExport', type: 'toggle', advanced: true },
         ],
       },
     ],
   },
   {
-    id: 'appearance', icon: 'palette', tint: '--v-plum', groups: [
-      {
-        id: 'look', items: [
-          { key: 'lang', type: 'select', options: ['en', 'de', 'fr', 'es'] },
-          { key: 'theme', type: 'select', options: ['system', 'dark', 'light', 'oled'] },
-          { key: 'systemDark', type: 'select', options: ['dark', 'oled'] },
-          { key: 'accent', type: 'select', options: ['terracotta', 'nord', 'gruvbox', 'solarized', 'rosepine', 'everforest', 'tokyonight', 'dracula', 'custom'] },
-          { key: 'fontSize', type: 'number', min: 80, max: 150, step: 10, unit: '%' },
-          { key: 'layoutReset', type: 'action' },
-        ],
-      },
-      {
-        id: 'list', items: [
-          { key: 'listDensity', type: 'select', options: ['comfortable', 'compact'] },
-          { key: 'letterAvatars', type: 'toggle' },
-          { key: 'colorizePasswords', type: 'toggle' },
-          { key: 'monospaceNotes', type: 'toggle' },
-        ],
-      },
-      {
-        id: 'tray', items: [
-          { key: 'trayIcon', type: 'toggle' },
-          { key: 'trayStyle', type: 'select', options: ['colorful', 'monoLight', 'monoDark'], dependsOn: 'trayIcon' },
-          { key: 'hideToTray', type: 'toggle', dependsOn: 'trayIcon' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'entries', icon: 'folder_open', tint: '--v-ochre', groups: [
-      {
-        id: 'entries', items: [
-          { key: 'confirmTrash', type: 'toggle' },
-          { key: 'generateForNew', type: 'toggle' },
-          { key: 'copyOnDoubleClick', type: 'toggle' },
-          { key: 'urlDoubleClick', type: 'select', options: ['open', 'copy', 'edit'] },
-          { key: 'minimizeOnUrl', type: 'toggle' },
-          { key: 'onCopy', type: 'select', options: ['none', 'minimize', 'background'] },
-          { key: 'faviconTimeout', type: 'number', min: 1, max: 60, unit: 's' },
-        ],
-      },
-      {
-        id: 'files', items: [
-          { key: 'autoReload', type: 'toggle' },
-          { key: 'backupBeforeSave', type: 'toggle' },
-          { key: 'backupPath', type: 'path', dependsOn: 'backupBeforeSave' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'security', icon: 'shield_lock', tint: '--v-clay', block: true, groups: [
+    id: 'security', icon: 'shield_lock', tint: '--v-clay', groups: [
       {
         id: 'lock', items: [
-          { key: 'autoLock', type: 'toggle' },
-          { key: 'autoLockSeconds', type: 'number', min: 10, max: 43200, unit: 's', dependsOn: 'autoLock' },
+          { key: 'autoLockSeconds', type: 'number', min: 10, max: 43200, unit: 's', presets: [60, 300, 900, 3600], never: 'autoLock' },
           { key: 'lockOnSession', type: 'toggle' },
-          { key: 'lockOnUserSwitch', type: 'toggle', platform: 'windows' },
-          { key: 'lockOnMinimize', type: 'toggle' },
+          { key: 'lockOnUserSwitch', type: 'toggle', platform: 'windows', advanced: true },
+          { key: 'lockOnMinimize', type: 'toggle', advanced: true },
         ],
       },
       {
         id: 'unlock', items: [
           { key: 'helloUnlock', type: 'toggle', platform: 'windows' },
-          { key: 'helloRequirePassword', type: 'toggle', dependsOn: 'helloUnlock', platform: 'windows' },
+          { key: 'helloRequirePassword', type: 'toggle', dependsOn: 'helloUnlock', platform: 'windows', advanced: true },
         ],
       },
       {
         id: 'timeouts', items: [
-          { key: 'clipboardClear', type: 'toggle' },
-          { key: 'clipboardSeconds', type: 'number', min: 1, max: 999, unit: 's', dependsOn: 'clipboardClear' },
-          { key: 'clearSearch', type: 'toggle' },
-          { key: 'clearSearchMinutes', type: 'number', min: 1, max: 1440, unit: 'min', dependsOn: 'clearSearch' },
+          { key: 'clipboardSeconds', type: 'number', min: 1, max: 999, unit: 's', presets: [10, 30, 60], never: 'clipboardClear' },
+          { key: 'clearSearchMinutes', type: 'number', min: 1, max: 1440, unit: 'min', presets: [1, 5, 15], never: 'clearSearch', advanced: true },
         ],
       },
       {
@@ -263,48 +221,36 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
-    id: 'privacy', icon: 'visibility_off', tint: '--v-moss', groups: [
+    id: 'appearance', icon: 'palette', tint: '--v-plum', groups: [
       {
-        id: 'display', items: [
-          { key: 'passwordPlaceholder', type: 'toggle' },
-          { key: 'hideInEdit', type: 'toggle' },
-          { key: 'hidePwPreview', type: 'toggle' },
-          { key: 'revealSeconds', type: 'number', min: 0, max: 600, unit: 's' },
-          { key: 'hideTotpPreview', type: 'toggle' },
-          { key: 'hideNotesPreview', type: 'toggle' },
+        id: 'look', items: [
+          { key: 'theme', type: 'select', options: ['system', 'dark', 'light', 'oled'] },
+          { key: 'systemDark', type: 'select', options: ['dark', 'oled'] },
+          { key: 'accent', type: 'select', options: ['terracotta', 'nord', 'gruvbox', 'solarized', 'rosepine', 'everforest', 'tokyonight', 'dracula', 'custom'] },
+          { key: 'lang', type: 'select', options: ['en', 'de', 'fr', 'es'] },
+          { key: 'fontSize', type: 'number', min: 80, max: 150, step: 10, unit: '%', presets: [90, 100, 115, 130] },
+          { key: 'layoutReset', type: 'action', advanced: true },
         ],
       },
       {
-        id: 'privacy', items: [
-          { key: 'ddgFavicons', type: 'toggle' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'autotype', icon: 'keyboard', tint: '--v-sea', block: true, groups: [
-      {
-        id: 'shortcuts', items: [
-          { key: 'atShortcut', type: 'shortcut' },
-          { key: 'quickShortcut', type: 'shortcut' },
+        id: 'tray', items: [
+          { key: 'trayIcon', type: 'toggle' },
+          { key: 'hideToTray', type: 'toggle', dependsOn: 'trayIcon' },
+          { key: 'trayStyle', type: 'select', options: ['colorful', 'monoLight', 'monoDark'], dependsOn: 'trayIcon', advanced: true },
         ],
       },
       {
-        id: 'autotype', items: [
-          { key: 'atMatchTitle', type: 'toggle' },
-          { key: 'atMatchUrl', type: 'toggle' },
-          { key: 'atAlwaysAsk', type: 'toggle' },
-          { key: 'atHideExpired', type: 'toggle' },
-          { key: 'atRelock', type: 'toggle' },
-          { key: 'atRemember', type: 'number', min: 0, max: 60, unit: 's' },
-          { key: 'atStartDelay', type: 'number', min: 100, max: 10000, step: 100, unit: 'ms' },
-          { key: 'atCharDelay', type: 'number', min: 0, max: 1000, unit: 'ms' },
+        id: 'list', items: [
+          { key: 'listDensity', type: 'select', options: ['comfortable', 'compact'], advanced: true },
+          { key: 'letterAvatars', type: 'toggle', advanced: true },
+          { key: 'colorizePasswords', type: 'toggle', advanced: true },
+          { key: 'monospaceNotes', type: 'toggle', advanced: true },
         ],
       },
     ],
   },
   {
-    id: 'browser', icon: 'travel_explore', tint: '--v-clay', groups: [
+    id: 'browser', icon: 'travel_explore', tint: '--v-sea', groups: [
       {
         id: 'browserGeneral', items: [
           { key: 'browserEnabled', type: 'toggle' },
@@ -312,34 +258,52 @@ export const SECTIONS: Section[] = [
         ],
       },
       {
+        id: 'shortcuts', items: [
+          { key: 'quickShortcut', type: 'shortcut' },
+          { key: 'atShortcut', type: 'shortcut' },
+        ],
+      },
+      {
         id: 'browsers', items: [
-          { key: 'bChrome', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bFirefox', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bChromium', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bEdge', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bBrave', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bVivaldi', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bTor', type: 'toggle', dependsOn: 'browserEnabled' },
+          { key: 'bChrome', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bFirefox', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bChromium', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bEdge', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bBrave', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bVivaldi', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bTor', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
         ],
       },
       {
         id: 'matching', items: [
-          { key: 'bMatchScheme', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bBestMatch', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bAllowExpired', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bSearchAll', type: 'toggle', dependsOn: 'browserEnabled' },
+          { key: 'bMatchScheme', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bBestMatch', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bAllowExpired', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bSearchAll', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
         ],
       },
       {
         id: 'browserAdvanced', items: [
-          { key: 'bNoAccessConfirm', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bUpdateNoConfirm', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bSkipBasicAuth', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bKph', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bLocalhostPasskeys', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bUpdateManifests', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bCustomProxy', type: 'toggle', dependsOn: 'browserEnabled' },
-          { key: 'bProxyPath', type: 'path', dependsOn: 'bCustomProxy' },
+          { key: 'bNoAccessConfirm', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bUpdateNoConfirm', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bSkipBasicAuth', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bKph', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bLocalhostPasskeys', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bUpdateManifests', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bCustomProxy', type: 'toggle', dependsOn: 'browserEnabled', advanced: true },
+          { key: 'bProxyPath', type: 'path', dependsOn: 'bCustomProxy', advanced: true },
+        ],
+      },
+      {
+        id: 'autotype', items: [
+          { key: 'atMatchTitle', type: 'toggle', advanced: true },
+          { key: 'atMatchUrl', type: 'toggle', advanced: true },
+          { key: 'atAlwaysAsk', type: 'toggle', advanced: true },
+          { key: 'atHideExpired', type: 'toggle', advanced: true },
+          { key: 'atRelock', type: 'toggle', advanced: true },
+          { key: 'atRemember', type: 'number', min: 0, max: 60, unit: 's', advanced: true },
+          { key: 'atStartDelay', type: 'number', min: 100, max: 10000, step: 100, unit: 'ms', advanced: true },
+          { key: 'atCharDelay', type: 'number', min: 0, max: 1000, unit: 'ms', advanced: true },
         ],
       },
       {
@@ -352,29 +316,41 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
-    id: 'ssh', icon: 'terminal', tint: '--v-moss', groups: [
+    id: 'entries', icon: 'folder_open', tint: '--v-ochre', groups: [
       {
-        id: 'ssh', items: [
-          { key: 'sshEnabled', type: 'toggle' },
-          { key: 'sshStatus', type: 'info', value: '—' },
-          { key: 'sshAuthSockCurrent', type: 'info', value: '—' },
-          { key: 'sshAuthSock', type: 'path', dependsOn: 'sshEnabled' },
+        id: 'entries', items: [
+          { key: 'confirmTrash', type: 'toggle' },
+          { key: 'generateForNew', type: 'toggle' },
+          { key: 'expiryDays', type: 'number', min: 0, max: 90, unit: 'd', presets: [3, 7, 14, 30], never: 'showExpiring' },
+          { key: 'revealSeconds', type: 'number', min: 0, max: 600, unit: 's', presets: [10, 30, 60], never: 0 },
+          { key: 'copyOnDoubleClick', type: 'toggle', advanced: true },
+          { key: 'urlDoubleClick', type: 'select', options: ['open', 'copy', 'edit'], advanced: true },
+          { key: 'minimizeOnUrl', type: 'toggle', advanced: true },
+          { key: 'onCopy', type: 'select', options: ['none', 'minimize', 'background'], advanced: true },
+          { key: 'faviconTimeout', type: 'number', min: 1, max: 60, unit: 's', advanced: true },
+        ],
+      },
+      {
+        id: 'files', items: [
+          { key: 'autoReload', type: 'toggle' },
+          { key: 'backupBeforeSave', type: 'toggle', advanced: true },
+          { key: 'backupPath', type: 'path', dependsOn: 'backupBeforeSave', advanced: true },
+        ],
+      },
+      {
+        id: 'display', items: [
+          { key: 'passwordPlaceholder', type: 'toggle', advanced: true },
+          { key: 'hideInEdit', type: 'toggle', advanced: true },
+          { key: 'hidePwPreview', type: 'toggle', advanced: true },
+          { key: 'hideTotpPreview', type: 'toggle', advanced: true },
+          { key: 'hideNotesPreview', type: 'toggle', advanced: true },
+          { key: 'ddgFavicons', type: 'toggle', advanced: true },
         ],
       },
     ],
   },
   {
-    id: 'keeshare', icon: 'share', tint: '--v-ochre', groups: [
-      {
-        id: 'ksActivation', items: [
-          { key: 'ksImport', type: 'toggle' },
-          { key: 'ksExport', type: 'toggle' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'data', icon: 'database', tint: '--v-sand', block: true, groups: [
+    id: 'data', icon: 'database', tint: '--v-sand', groups: [
       {
         id: 'manage', items: [
           { key: 'export', type: 'action' },
