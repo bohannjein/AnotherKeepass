@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- **Menu footer:** the lock sits next to the settings gear; the gear has the same distance to the
+  left and the bottom edge. The line above the footer only shows when the menu list scrolls.
+
 ## 0.3.0
 
 - **Settings, look:** theme and color scheme are picked from preview cards (a small app window
