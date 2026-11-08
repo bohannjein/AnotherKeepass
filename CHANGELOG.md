@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.3
 
 - **Linux packages:** besides the AppImage, every release now has a `.deb` (Debian, Ubuntu,
   Mint), an `.rpm` (Fedora, openSUSE) and a Flatpak bundle. They install with a double-click and
