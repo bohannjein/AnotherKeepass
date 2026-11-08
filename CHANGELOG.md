@@ -1,11 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.3.5
 
 - **Simpler settings:** six sections instead of ten, plain wording, times as one-tap choices
   ("5 min", "Never") instead of seconds to type. Technical options sit under "Advanced" at the
   end of each section; search still finds everything. Connecting the browser sets up the
   installed browsers on its own.
+- **Settings look:** times and short lists show their value as a tonal pill that opens a menu;
+  switches with sub-options fold out in place. Theme cards, own colors and the YubiKey choice
+  follow Material 3 Expressive.
 
 ## 0.3.4
 
