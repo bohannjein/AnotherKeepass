@@ -380,6 +380,9 @@ export const SECTIONS: Section[] = [
 
 const SCHEMA = new Map(SECTIONS.flatMap(s => s.groups.flatMap(g => g.items)).map(i => [i.key, i] as const));
 
+/** column widths: not on the settings page, but range-checked like its numbers */
+const LAYOUT: Record<string, [number, number]> = { drawerWidth: [200, 420], listWidth: [240, 720] };
+
 export const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, Math.round(n)));
 
 /** Merge stored/imported JSON over defaults. Unknown keys, wrong types and invalid
@@ -390,7 +393,9 @@ export function mergePrefs(raw: unknown): Prefs {
   for (const [k, v] of Object.entries(raw)) {
     if (!(k in DEFAULTS) || typeof v !== typeof (DEFAULTS as Record<string, unknown>)[k]) continue;
     const s = SCHEMA.get(k as PrefKey);
-    if (s?.type === 'number') out[k] = Number.isFinite(v) ? clamp(v as number, s.min, s.max) : out[k];
+    const layout = LAYOUT[k];
+    if (layout) out[k] = Number.isFinite(v) ? clamp(v as number, layout[0], layout[1]) : out[k];
+    else if (s?.type === 'number') out[k] = Number.isFinite(v) ? clamp(v as number, s.min, s.max) : out[k];
     else if (s?.type === 'select') { if (s.options.includes(v as string)) out[k] = v; }
     else out[k] = v;
   }

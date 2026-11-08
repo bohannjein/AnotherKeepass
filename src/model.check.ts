@@ -1,5 +1,5 @@
 // Self-check for the KDBX ↔ UI mapping. Run: node src/model.check.ts
-import { normalizeTotp, rawToItem, toRawFields } from './model.ts';
+import { matchesQuery, normalizeTotp, rawToItem, toRawFields } from './model.ts';
 
 const eq = (a: unknown, b: unknown, msg: string) => {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg}: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`);
@@ -32,5 +32,16 @@ const note = rawToItem({
   ],
 }, vault);
 eq([note.type, note.fields.length, note.pinned, note.tags, note.folder], ['note', 0, true, ['x'], undefined], 'note entry');
+
+// search: plain fields, note and tags count, protected values don't
+const found = (q: string) => matchesQuery({
+  id: 's', vault: 'v', type: 'login', title: 'Mail', subtitle: 'jo@example.org', modified: '', tags: ['work'], note: 'Recovery codes in the safe',
+  fields: [
+    { key: 'username', value: 'jo@example.org', raw: 'UserName' }, { key: 'website', value: 'https://mail.example.org', kind: 'url', raw: 'URL' },
+    { key: 'password', value: 'hunter2', kind: 'hidden', protected: true, raw: 'Password' }, { label: 'Department', value: 'Finance', raw: 'Department' },
+  ],
+}, q);
+eq([found('mail.example'), found('finance'), found('department'), found('safe'), found('work'), found('example jo'), found('MAIL')], [true, true, true, true, true, true, true], 'search hits');
+eq([found('hunter2'), found('mail hunter2'), found('nothing')], [false, false, false], 'search misses, passwords never match');
 
 console.log('model ok');

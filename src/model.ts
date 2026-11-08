@@ -73,6 +73,21 @@ const isProtectedKind = (k?: FieldKind) => k === 'hidden' || k === 'totp';
 export const subtitleOf = (fields: Field[]) =>
   fields.find(f => (!f.kind || f.kind === 'text') && !f.protected && f.value)?.value.split('\n')[0] ?? '';
 
+/** Text the search looks at: title, tags, note and every plain field (user name, website,
+ *  custom fields). Protected values (passwords, PINs, TOTP secrets) stay out. */
+export const searchText = (i: Item) => [
+  i.title, i.subtitle, ...(i.tags ?? []), i.note ?? '',
+  ...i.fields.filter(f => !f.protected && !isProtectedKind(f.kind)).flatMap(f => [f.label ?? '', f.value]),
+].join('\n').toLowerCase();
+
+/** Every word of the query must occur somewhere (any order). */
+export const matchesQuery = (i: Item, query: string) => {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const text = searchText(i);
+  return words.every(w => text.includes(w));
+};
+
 function inferType(names: Set<string>, note: string): ItemType {
   if (names.has('Card number')) return 'card';
   if (names.has('Full name')) return 'identity';

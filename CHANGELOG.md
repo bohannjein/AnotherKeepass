@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **Autostart:** with "start minimized" and the tray icon, the window could open white and
+  unresponsive after logging in to Windows. The first time it is shown, it is now built fresh.
+- **Columns:** drag the borders between menu, list and entry to resize them (arrow keys work
+  too, a double-click restores the default). Dragging the menu narrow folds it into the icon
+  rail. The widths are saved.
+- **Color schemes:** the accent colors are replaced by eight full color schemes, each with a
+  light and a dark variant: Terracotta (default), Nord, Gruvbox, Solarized, Rosé Pine,
+  Everforest, Tokyo Night and Dracula.
+- **OLED black:** a new theme with pure black surfaces; it works with every color scheme.
+- **Search:** also finds user names, websites, notes and custom fields (not passwords).
+
 ## 0.2.2
 
 - **Tray icon:** white shield by default, to match the Windows taskbar. It fades while every

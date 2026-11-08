@@ -1,7 +1,7 @@
 import { lazy, useState, useCallback, useEffect, useRef, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { backend, type EntryUsed, type VaultData } from './backend';
-import { type ItemType, type Field, type Item, type Folder, type VaultInfo, type Draft, draftToInput, rawToItem } from './model';
+import { type ItemType, type Field, type Item, type Folder, type VaultInfo, type Draft, draftToInput, rawToItem, matchesQuery } from './model';
 import { DEMO_VAULTS } from './mock';
 import { openOptions, openExternal } from './open';
 import { clearHistory, generate } from './generator';
@@ -304,13 +304,13 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       const rank = (i: Item) => issuesOf(i.id).reduce((s, k) => s + (5 - ISSUES.indexOf(k)) ** 2, 0);
       return allItems
         .filter(i => !i.trashed && (issue ? issuesOf(i.id).includes(issue) : issuesOf(i.id).length > 0))
-        .filter(i => !q || (i.title + ' ' + i.subtitle).toLowerCase().includes(q))
+        .filter(i => matchesQuery(i, q))
         .sort((a, b) => rank(b) - rank(a) || a.title.localeCompare(b.title))
         .map(i => ({ ...i, pinned: false }));
     }
     let list = allItems.filter(i => vault === TRASH ? i.trashed
       : !i.trashed && (vault === ALL || i.vault === vault) && (!folder || i.folder === folder));
-    if (q) list = list.filter(i => (i.title + ' ' + i.subtitle + ' ' + (i.tags ?? []).join(' ')).toLowerCase().includes(q));
+    if (q) list = list.filter(i => matchesQuery(i, q));
     if (tag) list = list.filter(i => i.tags?.includes(tag));
     return sortItems(list, settings.entrySort as SortMode);
   }, [allItems, vault, folder, query, settings.entrySort, tag, issue, issuesOf]);
