@@ -59,8 +59,9 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
   const patch = (p: Partial<Prefs>) => onChange({ ...prefs, ...p });
   // "Advanced" at the end of a section, closed by default
   const [advOpen, setAdvOpen] = useState<string | null>(null);
-  // a switch with sub-options opens its own page (like a phone's settings)
-  const [sub, setSub] = useState<PrefKey | null>(null);
+  // a switch with sub-options folds open in place (arrow turns down, the card grows)
+  const [openSubs, setOpenSubs] = useState<string[]>([]);
+  const toggleSub = (key: string) => setOpenSubs(o => o.includes(key) ? o.filter(k => k !== key) : [...o, key]);
 
   // a setting is active only if its whole dependsOn chain is switched on
   // visible sub-options of a switch (advanced ones stay under Advanced)
@@ -126,7 +127,7 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
         <nav className="nav">
           {sections.map(s => (
             <button key={s.id} className={'nav-item' + (s.block ? ' block' : '') + (s.id === current.id && !q ? ' active' : '')}
-              onClick={() => { setSection(s.id); setQuery(''); setSub(null); }}>
+              onClick={() => { setSection(s.id); setQuery(''); }}>
               <span className="vi" style={{ background: `var(${s.tint})` }}><Icon n={s.icon} fill /></span>
               <span>{ts.sections[s.id as keyof SettingsStrings['sections']]}</span>
             </button>
@@ -134,7 +135,7 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
         </nav>
       </aside>
 
-      <main className="pane settings-body" key={q ? 'search' : sub ? 'sub-' + sub : current.id}>
+      <main className="pane settings-body" key={q ? 'search' : current.id}>
         {q ? (
           <>
             <h2>{ts.ui.searchSettings}</h2>
@@ -148,20 +149,6 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
                 </div>
               </section>
             ))}
-          </>
-        ) : sub && SCHEMA.get(sub) ? (
-          <>
-            <button className="btn text back sub-back" onClick={() => setSub(null)}>
-              <Icon n="arrow_back" />{ts.sections[current.id as keyof SettingsStrings['sections']]}
-            </button>
-            <h2>{ts.labels[sub as keyof SettingsStrings['labels']]}</h2>
-            <section className="set-group">
-              <div className="set-card">
-                {[SCHEMA.get(sub)!, ...childrenOf(sub)].map(s => (
-                  <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} patch={patch} onAction={runAction} t={t} ssh={ssh} quiet flat />
-                ))}
-              </div>
-            </section>
           </>
         ) : (
           <>
@@ -179,7 +166,9 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
                   <div className="set-card">
                     {items.map(s => childrenOf(s.key).length > 0
                       ? <SubRow key={s.key} label={ts.labels[s.key as keyof SettingsStrings['labels']]}
-                        summary={summary(s.key as PrefKey)} onOpen={() => setSub(s.key as PrefKey)} />
+                        summary={summary(s.key as PrefKey)} open={openSubs.includes(s.key)} onToggle={() => toggleSub(s.key)}>
+                        {[s, ...childrenOf(s.key)].map(c => <Row key={c.key} s={c} ts={ts} prefs={prefs} disabled={!enabled(c)} set={set} patch={patch} onAction={runAction} t={t} ssh={ssh} quiet flat />)}
+                      </SubRow>
                       : <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} patch={patch} onAction={runAction} t={t} ssh={ssh} quiet
                         button={s.key === 'updateNow' && update ? (update.installable ? t.updateInstall : t.updateOpenPage) : undefined} />)}
                   </div>
@@ -542,12 +531,18 @@ function Choice({ options, value, disabled, onPick }: { options: [string, string
   );
 }
 
-/** A switch with sub-options: summary on the right, opens its own page. */
-function SubRow({ label, summary, onOpen }: { label: string; summary: string; onOpen: () => void }) {
+/** A switch with sub-options: summary on the right; a click turns the arrow down and the
+ *  card grows with the switch and its options. */
+function SubRow({ label, summary, open, onToggle, children }: {
+  label: string; summary: string; open: boolean; onToggle: () => void; children: React.ReactNode;
+}) {
   return (
-    <button className="set-row set-nav" onClick={onOpen}>
-      <span className="set-text"><span className="set-label">{label}</span><span className="set-hint">{summary}</span></span>
-      <Icon n="chevron_right" />
-    </button>
+    <div className={'set-sub' + (open ? ' open' : '')}>
+      <button className="set-row set-nav" aria-expanded={open} onClick={onToggle}>
+        <span className="set-text"><span className="set-label">{label}</span>{!open && <span className="set-hint">{summary}</span>}</span>
+        <Icon n="chevron_right" />
+      </button>
+      {open && <div className="set-sub-body">{children}</div>}
+    </div>
   );
 }

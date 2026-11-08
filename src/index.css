@@ -1312,8 +1312,13 @@ option::checkmark { display: none; }
 .set-row.set-nav .set-text { flex: 1; }
 .set-row.set-nav > .ms { color: var(--on-surface-var); transition: transform .35s var(--spring); }
 .set-row.set-nav:hover { background: color-mix(in srgb, var(--on-surface) 5%, transparent); }
-.set-row.set-nav:hover > .ms { transform: translateX(3px); }
-.sub-back { margin: 0 0 6px -8px; }
+.set-row.set-nav[aria-expanded='true'] > .ms { transform: rotate(90deg); }
+.set-sub { position: relative; }
+.set-sub + .set-row::before, .set-row + .set-sub::before { content: ''; position: absolute; top: 0; left: 18px; right: 0; border-top: 1px solid color-mix(in srgb, var(--outline-var) 70%, transparent); }
+/* the folded-out options sit in a slightly deeper inset inside the same card */
+.set-sub-body { margin: 0 10px 10px; border-radius: var(--r-m); background: color-mix(in srgb, var(--on-surface) 4%, transparent); overflow: hidden; animation: sub-open .35s var(--spring); transform-origin: top; }
+@keyframes sub-open { from { opacity: 0; transform: scaleY(.85); } }
+@media (prefers-reduced-motion: reduce) { .set-sub-body { animation: none; } }
 .set-adv { margin-top: 8px; }
 .set-adv-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 760px; padding: 14px 18px; border-radius: var(--r-l); background: var(--surface-c); color: var(--on-surface-var); font-size: 14px; font-weight: 600; }
 .set-adv-toggle:hover { background: var(--surface-high); }
