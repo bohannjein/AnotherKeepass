@@ -59,8 +59,23 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
   const patch = (p: Partial<Prefs>) => onChange({ ...prefs, ...p });
   // "Advanced" at the end of a section, closed by default
   const [advOpen, setAdvOpen] = useState<string | null>(null);
+  // a switch with sub-options opens its own page (like a phone's settings)
+  const [sub, setSub] = useState<PrefKey | null>(null);
 
   // a setting is active only if its whole dependsOn chain is switched on
+  // visible sub-options of a switch (advanced ones stay under Advanced)
+  const childrenOf = (key: string) => SECTIONS.flatMap(x => x.groups.flatMap(g => g.items))
+    .filter(i => visible(i) && !i.advanced && 'dependsOn' in i && i.dependsOn === key);
+  const isChild = (i: Setting) => {
+    const dep = 'dependsOn' in i ? i.dependsOn : undefined;
+    return !!dep && !SCHEMA.get(dep)?.advanced && childrenOf(dep).some(c => c.key === i.key);
+  };
+  // "On · Open the last vault on start" / "Off"
+  const summary = (key: PrefKey) => {
+    if (!prefs[key]) return ts.ui.off;
+    const on = childrenOf(key).filter(c => c.type === 'toggle' && prefs[c.key]).map(c => ts.labels[c.key as keyof SettingsStrings['labels']]);
+    return [ts.ui.on, ...on].join(' · ');
+  };
   const enabled = (s: Setting): boolean => {
     if (s.key === 'systemDark') return prefs.theme === 'system';
     const dep = 'dependsOn' in s ? s.dependsOn : undefined;
@@ -111,7 +126,7 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
         <nav className="nav">
           {sections.map(s => (
             <button key={s.id} className={'nav-item' + (s.block ? ' block' : '') + (s.id === current.id && !q ? ' active' : '')}
-              onClick={() => { setSection(s.id); setQuery(''); }}>
+              onClick={() => { setSection(s.id); setQuery(''); setSub(null); }}>
               <span className="vi" style={{ background: `var(${s.tint})` }}><Icon n={s.icon} fill /></span>
               <span>{ts.sections[s.id as keyof SettingsStrings['sections']]}</span>
             </button>
@@ -119,7 +134,7 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
         </nav>
       </aside>
 
-      <main className="pane settings-body" key={q ? 'search' : current.id}>
+      <main className="pane settings-body" key={q ? 'search' : sub ? 'sub-' + sub : current.id}>
         {q ? (
           <>
             <h2>{ts.ui.searchSettings}</h2>
@@ -134,6 +149,20 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
               </section>
             ))}
           </>
+        ) : sub && SCHEMA.get(sub) ? (
+          <>
+            <button className="btn text back sub-back" onClick={() => setSub(null)}>
+              <Icon n="arrow_back" />{ts.sections[current.id as keyof SettingsStrings['sections']]}
+            </button>
+            <h2>{ts.labels[sub as keyof SettingsStrings['labels']]}</h2>
+            <section className="set-group">
+              <div className="set-card">
+                {[SCHEMA.get(sub)!, ...childrenOf(sub)].map(s => (
+                  <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} patch={patch} onAction={runAction} t={t} ssh={ssh} quiet flat />
+                ))}
+              </div>
+            </section>
+          </>
         ) : (
           <>
             <h2>
@@ -141,19 +170,19 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
               {ts.sections[current.id as keyof SettingsStrings['sections']]}
             </h2>
             {current.groups.map(g => {
-              const items = g.items.filter(i => !i.advanced && enabled(i));
+              // sub-options live on their switch's page
+              const items = g.items.filter(i => !i.advanced && enabled(i) && !(isChild(i)));
               if (!items.length) return null;
-              const notes = items.map(i => ts.hints[i.key as keyof SettingsStrings['hints']]).filter(Boolean);
               return (
                 <section className="set-group" key={g.id}>
                   <span className="label">{ts.groups[g.id as keyof SettingsStrings['groups']]}</span>
                   <div className="set-card">
-                    {items.map(s => (
-                      <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} patch={patch} onAction={runAction} t={t} ssh={ssh} quiet
-                      button={s.key === 'updateNow' && update ? (update.installable ? t.updateInstall : t.updateOpenPage) : undefined} />
-                    ))}
+                    {items.map(s => childrenOf(s.key).length > 0
+                      ? <SubRow key={s.key} label={ts.labels[s.key as keyof SettingsStrings['labels']]}
+                        summary={summary(s.key as PrefKey)} onOpen={() => setSub(s.key as PrefKey)} />
+                      : <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} patch={patch} onAction={runAction} t={t} ssh={ssh} quiet
+                        button={s.key === 'updateNow' && update ? (update.installable ? t.updateInstall : t.updateOpenPage) : undefined} />)}
                   </div>
-                  {notes.length > 0 && <p className="set-foot">{notes.join(' ')}</p>}
                 </section>
               );
             })}
@@ -217,11 +246,13 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
   );
 }
 
-function Row({ s, ts, prefs, disabled, set, patch, onAction, t, ssh, button, quiet }: {
+function Row({ s, ts, prefs, disabled, set, patch, onAction, t, ssh, button, quiet, flat }: {
   s: Setting; ts: SettingsStrings; prefs: Prefs; disabled: boolean; t: Strings; ssh: { path: string; reachable: boolean } | null;
   patch: (p: Partial<Prefs>) => void;
-  /** no explanation in the row (shown under the group instead) */
+  /** no explanation in the row */
   quiet?: boolean;
+  /** on a switch's own page: no indent for its sub-options */
+  flat?: boolean;
   /** replaces the action button's text ("check now" → "install and restart") */
   button?: string;
   set: (key: PrefKey, value: Prefs[PrefKey]) => void; onAction: (key: string) => void;
@@ -229,7 +260,7 @@ function Row({ s, ts, prefs, disabled, set, patch, onAction, t, ssh, button, qui
   const label = ts.labels[s.key as keyof SettingsStrings['labels']];
   const hint = quiet ? undefined : ts.hints[s.key as keyof SettingsStrings['hints']];
   const id = 'set-' + s.key;
-  const indent = 'dependsOn' in s && s.dependsOn;
+  const indent = !flat && 'dependsOn' in s && s.dependsOn;
 
   if (s.key === 'theme' || s.key === 'accent') {
     return (
@@ -508,5 +539,15 @@ function Choice({ options, value, disabled, onPick }: { options: [string, string
         </div>
       )}
     </>
+  );
+}
+
+/** A switch with sub-options: summary on the right, opens its own page. */
+function SubRow({ label, summary, onOpen }: { label: string; summary: string; onOpen: () => void }) {
+  return (
+    <button className="set-row set-nav" onClick={onOpen}>
+      <span className="set-text"><span className="set-label">{label}</span><span className="set-hint">{summary}</span></span>
+      <Icon n="chevron_right" />
+    </button>
   );
 }

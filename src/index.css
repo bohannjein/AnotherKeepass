@@ -1307,7 +1307,13 @@ option::checkmark { display: none; }
 .pick-list > button:hover { background: color-mix(in srgb, var(--on-surface) 8%, transparent); }
 .pick-list > button.on { background: var(--secondary-container); color: var(--on-secondary-container); font-weight: 600; border-radius: var(--r-full); }
 .pick-custom { padding: 8px 10px 6px; }
-.set-foot { margin: 8px 18px 0; font-size: 12.5px; line-height: 1.45; color: var(--on-surface-var); }
+/* a switch with sub-options: a navigation row to its own page */
+.set-row.set-nav { width: 100%; text-align: left; color: inherit; }
+.set-row.set-nav .set-text { flex: 1; }
+.set-row.set-nav > .ms { color: var(--on-surface-var); transition: transform .35s var(--spring); }
+.set-row.set-nav:hover { background: color-mix(in srgb, var(--on-surface) 5%, transparent); }
+.set-row.set-nav:hover > .ms { transform: translateX(3px); }
+.sub-back { margin: 0 0 6px -8px; }
 .set-adv { margin-top: 8px; }
 .set-adv-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 760px; padding: 14px 18px; border-radius: var(--r-l); background: var(--surface-c); color: var(--on-surface-var); font-size: 14px; font-weight: 600; }
 .set-adv-toggle:hover { background: var(--surface-high); }

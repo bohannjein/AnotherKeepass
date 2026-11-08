@@ -38,6 +38,7 @@ const en = {
     never: "Never",
     custom: "Custom",
     installedVersion: "Installed version",
+    on: "On", off: "Off",
   },
   sections: {
     servers: 'Server accounts',
@@ -277,6 +278,7 @@ const de: SettingsStrings = {
     never: "Nie",
     custom: "Eigener Wert",
     installedVersion: "Installierte Version",
+    on: "An", off: "Aus",
   },
   sections: {
     servers: 'Server-Konten',
@@ -514,6 +516,7 @@ const fr: SettingsStrings = {
     never: "Jamais",
     custom: "Autre",
     installedVersion: "Version installée",
+    on: "Activé", off: "Désactivé",
   },
   sections: {
     servers: 'Comptes serveur',
@@ -751,6 +754,7 @@ const es: SettingsStrings = {
     never: "Nunca",
     custom: "Otro",
     installedVersion: "Versión instalada",
+    on: "Activado", off: "Desactivado",
   },
   sections: {
     servers: 'Cuentas de servidor',
