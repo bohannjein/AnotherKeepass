@@ -9,7 +9,7 @@ fn roundtrip_create_edit_trash_reopen() {
     let state = Vaults::default();
     let path = temp_path("rt");
     let p = path.to_string_lossy().to_string();
-    let key = make_key(Some("pw"), None).unwrap();
+    let key = make_key(Some("pw"), None, None).unwrap();
 
     // create (direct, no tauri State needed)
     let mut db = Database::with_config(new_config());
@@ -81,7 +81,7 @@ fn roundtrip_create_edit_trash_reopen() {
 
     // wrong key is rejected
     let mut f = fs::File::open(&path).unwrap();
-    assert!(Database::open(&mut f, make_key(Some("nope"), None).unwrap()).is_err());
+    assert!(Database::open(&mut f, make_key(Some("nope"), None, None).unwrap()).is_err());
 
     // trash + restore + delete
     with_vault(&state, &p, |v| {
@@ -103,7 +103,7 @@ fn open_temp(state: &Vaults, name: &str) -> (String, String) {
     let mut db = Database::with_config(new_config());
     ensure_recycle_bin(&mut db);
     let root = db.root().id().to_string();
-    let mut v = OpenVault { path, db, key: make_key(Some("pw"), None).unwrap(), remote: None };
+    let mut v = OpenVault { path, db, key: make_key(Some("pw"), None, None).unwrap(), remote: None };
     write_db(&mut v).unwrap();
     state.0.lock().unwrap().insert(p.clone(), v);
     (p, root)
@@ -211,14 +211,14 @@ fn move_duplicate_and_cross_vault() {
     move_to_vault(&mut state.0.lock().unwrap(), &a, eid, &b, Some(&b_root)).unwrap();
     // reopen b from disk: same UUID, secret and attachment arrived
     let pb = PathBuf::from(&b);
-    let db = Database::open(&mut fs::File::open(&pb).unwrap(), make_key(Some("pw"), None).unwrap()).unwrap();
+    let db = Database::open(&mut fs::File::open(&pb).unwrap(), make_key(Some("pw"), None, None).unwrap()).unwrap();
     let e = db.entry(eid).expect("moved entry keeps its UUID");
     assert_eq!(e.get_password(), Some("pw-Mail"));
     assert!(e.fields["Password"].is_protected());
     assert_eq!(e.attachment_by_name("f.txt").unwrap().data.get(), b"data");
     assert_eq!(e.tags, vec!["work".to_string()]);
     let pa = PathBuf::from(&a);
-    let db = Database::open(&mut fs::File::open(&pa).unwrap(), make_key(Some("pw"), None).unwrap()).unwrap();
+    let db = Database::open(&mut fs::File::open(&pa).unwrap(), make_key(Some("pw"), None, None).unwrap()).unwrap();
     assert!(db.entry(eid).is_none());
     assert_eq!(db.iter_all_entries().count(), 1); // the duplicate stays in a
     let _ = (fs::remove_file(pa), fs::remove_file(pb));
@@ -240,7 +240,7 @@ fn compat_write_for_keepassxc() {
     db.meta.database_name = Some("Ours".into());
     ensure_recycle_bin(&mut db);
     let work = db.root_mut().add_group().edit(|g| g.name = "Work".into()).id().to_string();
-    let mut v = OpenVault { path, db, key: make_key(Some("compat-pw"), None).unwrap(), remote: None };
+    let mut v = OpenVault { path, db, key: make_key(Some("compat-pw"), None, None).unwrap(), remote: None };
     write_db(&mut v).unwrap();
     state.0.lock().unwrap().insert(p.clone(), v);
     save_for_test(
@@ -275,7 +275,7 @@ fn compat_write_for_keepassxc() {
 fn compat_edit_keepassxc_file() {
     let path = compat_dir().join("theirs.kdbx");
     let p = path.to_string_lossy().to_string();
-    let key = make_key(Some("compat-pw"), None).unwrap();
+    let key = make_key(Some("compat-pw"), None, None).unwrap();
     let db = Database::open(&mut fs::File::open(&path).unwrap(), key.clone()).unwrap();
     let e = db.iter_all_entries().find(|e| e.get_title() == Some("Mail")).expect("entry from KeePassXC");
     assert_eq!(e.get_username(), Some("alice"));
@@ -310,4 +310,23 @@ fn save_for_test(state: &Vaults, vault: &str, item: ItemInput) -> String {
     })
     .unwrap();
     out
+}
+
+/// Challenge-response key (what a YubiKey slot computes): needed to open and kept on save.
+/// A software HMAC-SHA1 secret stands in for the hardware key.
+#[test]
+fn challenge_response_key_roundtrip() {
+    use keepass::ChallengeResponseKey;
+    let dir = std::env::temp_dir().join(format!("akp-cr-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("cr.kdbx");
+    let secret = "0102030405060708090a0b0c0d0e0f1011121314".to_string();
+    let key = || make_key(Some("pw"), None, None).unwrap().with_challenge_response_key(ChallengeResponseKey::LocalChallenge(secret.clone()));
+    let mut db = Database::new();
+    db.root_mut().name = "cr".into();
+    db.save(&mut fs::File::create(&path).unwrap(), key()).unwrap();
+    assert!(Database::open(&mut fs::File::open(&path).unwrap(), key()).is_ok(), "opens with the response");
+    assert!(Database::open(&mut fs::File::open(&path).unwrap(), make_key(Some("pw"), None, None).unwrap()).is_err(), "password alone is not enough");
+    assert_eq!(make_key(Some("pw"), None, Some("3")).err().as_deref(), Some("yubikey:slot"));
+    let _ = fs::remove_dir_all(dir);
 }

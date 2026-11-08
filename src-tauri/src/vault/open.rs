@@ -49,8 +49,9 @@ pub fn vault_create(
     name: String,
     password: Option<String>,
     keyfile: Option<String>,
+    yubikey: Option<String>,
 ) -> R<VaultDto> {
-    let key = make_key(password.as_deref(), keyfile.as_deref())?;
+    let key = make_key(password.as_deref(), keyfile.as_deref(), yubikey.as_deref())?;
     let mut db = Database::with_config(new_config());
     db.meta.database_name = Some(name.clone());
     db.meta.generator = Some("AnotherKeepass".into());
@@ -65,19 +66,24 @@ pub fn vault_create(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri command: one argument per field the UI sends
 pub async fn vault_open(
     app: tauri::AppHandle,
     state: tauri::State<'_, Vaults>,
     path: String,
     password: Option<String>,
     keyfile: Option<String>,
+    yubikey: Option<String>,
     two_factor_provider: Option<u8>,
     two_factor_code: Option<String>,
 ) -> R<VaultDto> {
     if crate::bitwarden::is_remote(&path) {
         return open_remote(state, path, password.unwrap_or_default(), two_factor_provider.zip(two_factor_code)).await;
     }
-    let key = make_key(password.as_deref(), keyfile.as_deref())?;
+    // the YubiKey answers over USB and may wait for a touch: not on the async runtime
+    let key = tauri::async_runtime::spawn_blocking(move || make_key(password.as_deref(), keyfile.as_deref(), yubikey.as_deref()))
+        .await
+        .map_err(|e| format!("open:{e}"))??;
     open_with(app, state, path, key, true).await
 }
 
@@ -282,8 +288,8 @@ pub async fn vault_quick_unlock(app: tauri::AppHandle, state: tauri::State<'_, V
 }
 
 #[tauri::command]
-pub fn vault_change_key(state: tauri::State<'_, Vaults>, id: String, password: Option<String>, keyfile: Option<String>) -> R<()> {
-    let key = make_key(password.as_deref(), keyfile.as_deref())?;
+pub fn vault_change_key(state: tauri::State<'_, Vaults>, id: String, password: Option<String>, keyfile: Option<String>, yubikey: Option<String>) -> R<()> {
+    let key = make_key(password.as_deref(), keyfile.as_deref(), yubikey.as_deref())?;
     with_vault(&state, &id, |v| {
         v.key = key;
         v.db.meta.master_key_changed = Some(Times::now());

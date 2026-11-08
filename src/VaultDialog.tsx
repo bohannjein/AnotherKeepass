@@ -9,7 +9,7 @@ import { Icon } from './Icon';
 import { PasswordStrength } from './PasswordStrength';
 import { fileName, isRemote } from './ui';
 
-export interface Known { path: string; name: string; color: string; icon: string; keyfile?: string }
+export interface Known { path: string; name: string; color: string; icon: string; keyfile?: string; /** YubiKey slot */ yubikey?: string }
 
 const COLORS = ['--v-clay', '--v-moss', '--v-ochre'];
 const ICONS = ['shield_lock', 'cottage', 'apartment', 'work_history', 'savings', 'school'];
@@ -32,6 +32,9 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
   // remembered key file of the selected vault (only stored when "remember key files" is on)
   const keyfile = picked?.path === path ? picked.file : known.find(k => k.path === path)?.keyfile ?? '';
   const setKeyfile = (file: string) => setPicked({ path, file });
+  // YubiKey challenge-response slot: remembered per vault like the key file
+  const [ykPicked, setYkPicked] = useState<{ path: string; slot: string } | null>(null);
+  const yubikey = ykPicked?.path === path ? ykPicked.slot : known.find(k => k.path === path)?.yubikey ?? '';
   // quick unlock offered when this vault was locked (not closed) with the option on
   const [quickFor, setQuickFor] = useState<string | null>(null); // path that offers quick unlock
   const quick = mode === 'open' && !!path && quickFor === path;
@@ -44,7 +47,7 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
     setError(''); setBusy(true);
     try {
       const data = await backend.quickUnlock(path, t.helloPrompt);
-      onOpened(data, { ...meta(path, data.name), name: data.name, keyfile: keyfile || undefined });
+      onOpened(data, { ...meta(path, data.name), name: data.name, keyfile: keyfile || undefined, yubikey: yubikey || undefined });
     } catch (err) {
       setError(errorCode(err) === 'hello_cancel' ? t.helloFailed : explain(err));
     } finally { setBusy(false); }
@@ -80,6 +83,7 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
   const explain = (e: unknown) => {
     const code = errorCode(e);
     if (code === 'insecure_url') return t.errInsecure;
+    if (code === 'yubikey') return /No challenge|NoKeys|no.*key/i.test(String(e)) ? t.yubikeyMissing : t.yubikeyFailed;
     if (String(e).includes('kdf_insecure')) return t.errKdfInsecure;
     if (String(e).includes('kdf_weakened')) return t.errKdfWeakened;
     if (code === 'offline_no_cache') { const why = String(e).split('offline_no_cache:')[1]?.trim(); return why ? `${t.vwOffline}: ${why}` : t.vwOffline; }
@@ -99,10 +103,10 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
     try {
       const second: [number, string] | undefined = twoFactor && tfCode.trim() ? [tfProvider, tfCode.trim()] : undefined;
       const data = mode !== 'create'
-        ? await backend.open(target, password, isRemote(target) ? undefined : keyfile || undefined, second)
-        : await backend.create(target, name.trim() || fileName(target).replace(/\.kdbx$/, ''), password, keyfile || undefined);
+        ? await backend.open(target, password, isRemote(target) ? undefined : keyfile || undefined, second, isRemote(target) ? undefined : yubikey || undefined)
+        : await backend.create(target, name.trim() || fileName(target).replace(/\.kdbx$/, ''), password, keyfile || undefined, yubikey || undefined);
       setPassword(''); setConfirm(''); setTwoFactor(null); setTfCode(''); setTfNote('');
-      onOpened(data, { ...meta(target, data.name), name: data.name, keyfile: keyfile || undefined });
+      onOpened(data, { ...meta(target, data.name), name: data.name, keyfile: keyfile || undefined, yubikey: yubikey || undefined });
     } catch (err) {
       // file gone since last time: drop it from the remembered list
       if (mode === 'open' && errorCode(err) === 'io' && /os error [23]/.test(String(err))) {
@@ -242,6 +246,14 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
         <div className="keyfile-row">
           <button type="button" className="btn text" onClick={pickKeyfile}><Icon n="key_vertical" />{keyfile ? fileName(keyfile) : t.keyfile}</button>
           {keyfile && <button type="button" className="icon-btn" onClick={() => setKeyfile('')} aria-label={t.remove}><Icon n="close" /></button>}
+          <label className="yubikey-pick" title={t.yubikeyHint}>
+            <Icon n="usb" />
+            <select value={yubikey} onChange={e => setYkPicked({ path, slot: e.target.value })} aria-label={t.yubikey}>
+              <option value="">{t.yubikeyOff}</option>
+              <option value="1">{t.yubikey} · {t.yubikeySlot} 1</option>
+              <option value="2">{t.yubikey} · {t.yubikeySlot} 2</option>
+            </select>
+          </label>
         </div>
       )}
 
@@ -257,7 +269,7 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
       <div className="row">
         {onClose ? <button type="button" className="btn text" onClick={onClose}>{t.cancel}</button> : <span />}
         <button type="submit" className="btn filled" disabled={busy || (mode === 'server' ? !/^(https:\/\/.|http:\/\/(localhost|127\.0\.0\.1)\b)/.test(server.trim()) || !email.includes('@') || !password
-          : mode === 'create' ? (backend.desktop && !path) || !password : !path || (!password && !keyfile))}>
+          : mode === 'create' ? (backend.desktop && !path) || !password : !path || (!password && !keyfile && !yubikey))}>
           <Icon n={busy ? 'hourglass_top' : mode === 'create' ? 'check' : 'lock_open'} />{mode === 'create' ? t.create : t.unlock}
         </button>
       </div>

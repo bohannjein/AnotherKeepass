@@ -807,7 +807,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
           onOpened={(d, meta) => { onOpened(d, meta); setVaultDialog(null); setVault(d.id); setFolder(null); }} />
       )}
       {keyDialog && <KeyDialog t={t} onClose={() => setKeyDialog(null)}
-        onSubmit={async pw => { if ((await run(backend.changeKey(keyDialog, pw))) !== undefined) { setKeyDialog(null); notify(t.masterKeyChanged); } }} />}
+        onSubmit={async pw => { if ((await run(backend.changeKey(keyDialog, pw, undefined, known.find(k => k.path === keyDialog)?.yubikey))) !== undefined) { setKeyDialog(null); notify(t.masterKeyChanged); } }} />}
       {confirm && <ConfirmDialog t={t} confirm={confirm} onClose={() => setConfirm(null)} />}
       {snackbar}
     </div>

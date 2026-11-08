@@ -81,9 +81,10 @@ export interface PasskeyEntry { vault: string; uuid: string; title: string; user
 
 export interface Backend {
   desktop: boolean;
-  create(path: string, name: string, password: string, keyfile?: string): Promise<VaultData>;
+  create(path: string, name: string, password: string, keyfile?: string, yubikey?: string): Promise<VaultData>;
   /** twoFactor: [provider, code] for Vaultwarden accounts ("bw:<server>#<email>") */
-  open(path: string, password: string, keyfile?: string, twoFactor?: [number, string]): Promise<VaultData>;
+  /** yubikey: challenge-response slot "1" or "2" (KeePassXC compatible) */
+  open(path: string, password: string, keyfile?: string, twoFactor?: [number, string], yubikey?: string): Promise<VaultData>;
   vaultSync(id: string): Promise<VaultData>;
   /** link a .kdbx with an open account (null = unlink); syncs right away */
   syncLink(vault: string, remote: string | null): Promise<VaultData>;
@@ -96,7 +97,7 @@ export interface Backend {
   /** which remembered vault files still exist */
   pathsExist(paths: string[]): Promise<boolean[]>;
   lockAll(): Promise<void>;
-  changeKey(id: string, password: string, keyfile?: string): Promise<void>;
+  changeKey(id: string, password: string, keyfile?: string, yubikey?: string): Promise<void>;
   rename(id: string, name: string): Promise<VaultData>;
   vaultSettings(id: string): Promise<VaultSettings>;
   vaultSettingsSet(id: string, settings: VaultSettings): Promise<VaultData>;
@@ -175,8 +176,8 @@ export interface Backend {
 
 const desktop: Backend = {
   desktop: true,
-  create: (path, name, password, keyfile) => invoke('vault_create', { path, name, password, keyfile }),
-  open: (path, password, keyfile, twoFactor) => invoke('vault_open', { path, password, keyfile, twoFactorProvider: twoFactor?.[0], twoFactorCode: twoFactor?.[1] }),
+  create: (path, name, password, keyfile, yubikey) => invoke('vault_create', { path, name, password, keyfile, yubikey }),
+  open: (path, password, keyfile, twoFactor, yubikey) => invoke('vault_open', { path, password, keyfile, yubikey, twoFactorProvider: twoFactor?.[0], twoFactorCode: twoFactor?.[1] }),
   vaultSync: vault => invoke('vault_sync', { vault }),
   syncLink: (vault, remote) => invoke('sync_link', { vault, remote }),
   bwSendEmail: (path, password) => invoke('bw_send_email', { path, password }),
@@ -186,7 +187,7 @@ const desktop: Backend = {
   close: id => invoke('vault_close', { id }),
   pathsExist: paths => invoke('paths_exist', { paths }),
   lockAll: () => invoke('vault_lock_all'),
-  changeKey: (id, password, keyfile) => invoke('vault_change_key', { id, password, keyfile }),
+  changeKey: (id, password, keyfile, yubikey) => invoke('vault_change_key', { id, password, keyfile, yubikey }),
   rename: (id, name) => invoke('vault_rename', { id, name }),
   vaultSettings: vault => invoke('vault_settings_get', { vault }),
   vaultSettingsSet: (vault, settings) => invoke('vault_settings_set', { vault, settings }),

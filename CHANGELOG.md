@@ -11,6 +11,9 @@
 - **Search operators** like KeePassXC: `user:`, `url:`, `notes:`, `tag:`, `title:`, `is:weak`,
   `is:reused`, `is:old`, `is:breached`, `is:expired`, `is:pinned`, `is:totp`, phrases in quotes and
   `-` to exclude. Listed in the shortcuts overview (F1) and the search field's tooltip.
+- **YubiKey:** vaults protected with a YubiKey in KeePassXC (HMAC-SHA1 challenge-response, slot 1
+  or 2) open and save. Pick the slot next to the key file when unlocking; it is remembered per
+  vault. Not tested with real hardware yet.
 - **Reset column widths:** button in the settings (double-clicking a column border still works).
 - **Tray icon:** a thin shield outline with a keyhole and some space around it, drawn at the
   exact tray size, so it matches the other Windows tray icons.

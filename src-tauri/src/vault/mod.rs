@@ -70,7 +70,7 @@ impl OpenVault {
     }
     #[cfg(test)]
     pub fn new_for_test(path: PathBuf, db: Database) -> Self {
-        Self { path, db, key: make_key(Some("pw"), None).unwrap(), remote: None }
+        Self { path, db, key: make_key(Some("pw"), None, None).unwrap(), remote: None }
     }
 }
 
@@ -187,7 +187,10 @@ fn parse_uuid(s: &str) -> R<Uuid> {
     Uuid::parse_str(s).map_err(|_| "not_found".to_string())
 }
 
-fn make_key(password: Option<&str>, keyfile: Option<&str>) -> R<DatabaseKey> {
+/// Password, key file and/or YubiKey (HMAC-SHA1 challenge-response, slot "1" or "2", the first
+/// key found). Compatible with KeePassXC: the challenge is the KDF seed of the file, so the key
+/// must be present on every open and every save.
+fn make_key(password: Option<&str>, keyfile: Option<&str>, yubikey: Option<&str>) -> R<DatabaseKey> {
     let mut key = DatabaseKey::new();
     if let Some(p) = password.filter(|p| !p.is_empty()) {
         key = key.with_password(p);
@@ -195,6 +198,13 @@ fn make_key(password: Option<&str>, keyfile: Option<&str>) -> R<DatabaseKey> {
     if let Some(k) = keyfile.filter(|k| !k.is_empty()) {
         let mut f = fs::File::open(k).map_err(|e| format!("keyfile:{e}"))?;
         key = key.with_keyfile(&mut f).map_err(|e| format!("keyfile:{e}"))?;
+    }
+    if let Some(slot) = yubikey.filter(|s| !s.is_empty()) {
+        if slot != "1" && slot != "2" {
+            return Err("yubikey:slot".into());
+        }
+        let yk = keepass::ChallengeResponseKey::get_yubikey(None).map_err(|e| format!("yubikey:{e}"))?;
+        key = key.with_challenge_response_key(keepass::ChallengeResponseKey::YubikeyChallenge(yk, slot.to_string()));
     }
     if key.is_empty() {
         return Err("empty_key".into());
