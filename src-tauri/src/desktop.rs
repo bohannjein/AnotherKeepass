@@ -246,12 +246,61 @@ pub fn main_hwnd<R: Runtime>(app: &AppHandle<R>) -> isize {
     0
 }
 
+/// Set while the main window has never been shown since a hidden login autostart.
+static NEVER_SHOWN: AtomicBool = AtomicBool::new(false);
+/// Set while the main window is swapped for a fresh one, so the moment without any
+/// window doesn't end the app.
+pub static RECREATING: AtomicBool = AtomicBool::new(false);
+
 pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
+    // A WebView2 created hidden right at login can stay white and unresponsive when it is
+    // first shown hours later (GPU/compositor never attached). A manual start is fine, so on
+    // the first show swap the hidden webview for a fresh one - as long as it holds no state.
+    if NEVER_SHOWN.swap(false, Ordering::Relaxed) && app.state::<Vaults>().0.lock().is_ok_and(|m| m.is_empty()) {
+        recreate_main(app.clone());
+        return;
+    }
     if let Some(w) = main_window(app) {
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
     }
+}
+
+/// Destroy the (hidden) main window and build it again from tauri.conf.json, then show it.
+/// Runs off the main thread: the label is only free once the Destroyed event went through
+/// the event loop.
+fn recreate_main<R: Runtime>(app: AppHandle<R>) {
+    log::info!("first show after hidden autostart: fresh main window");
+    std::thread::spawn(move || {
+        RECREATING.store(true, Ordering::SeqCst);
+        if let Some(w) = main_window(&app) {
+            let _ = w.destroy();
+        }
+        for _ in 0..100 {
+            if main_window(&app).is_none() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let built = app
+            .config()
+            .app
+            .windows
+            .iter()
+            .find(|c| c.label == "main")
+            .cloned()
+            .ok_or_else(|| "no main window config".to_string())
+            .and_then(|c| tauri::WebviewWindowBuilder::from_config(&app, &c).and_then(|b| b.build()).map_err(|e| e.to_string()));
+        RECREATING.store(false, Ordering::SeqCst);
+        match built {
+            Ok(_) => {
+                apply_screen_protect(&app, prefs(&app).screen_protect);
+                show_main(&app);
+            }
+            Err(e) => log::error!("recreate main window: {e}"),
+        }
+    });
 }
 
 /// Drop every open vault (zeroizes keys and protected values) and tell the UI.
@@ -409,7 +458,10 @@ pub fn initial_show<R: Runtime>(app: &AppHandle<R>, p: &DesktopPrefs) {
     } else if !p.tray_icon {
         let _ = w.show();
         let _ = w.minimize();
-    } // with tray: stay hidden, the tray icon brings it back
+    } else {
+        // with tray: stay hidden, the tray icon brings it back (see show_main)
+        NEVER_SHOWN.store(true, Ordering::Relaxed);
+    }
 }
 
 // ---------------------------------------------------------------- apply from UI

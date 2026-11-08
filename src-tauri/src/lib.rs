@@ -158,6 +158,13 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
+            // the main window is being swapped for a fresh one: no window for a moment is not "quit"
+            if let tauri::RunEvent::ExitRequested { code: None, api, .. } = &event
+                && desktop::RECREATING.load(std::sync::atomic::Ordering::SeqCst)
+            {
+                api.prevent_exit();
+                return;
+            }
             // quitting (tray, update): write pending "last access" times of open vaults
             if let tauri::RunEvent::Exit = event
                 && let Ok(mut map) = app.state::<vault::Vaults>().0.lock()
