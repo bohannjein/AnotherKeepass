@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - **Settings, look:** theme and color scheme are picked from preview cards (a small app window
   in each scheme) instead of drop-down lists.
