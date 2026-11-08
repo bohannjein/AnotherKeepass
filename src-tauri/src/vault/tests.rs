@@ -63,7 +63,8 @@ fn roundtrip_create_edit_trash_reopen() {
     };
     save_for_test(&state, &p, edit);
 
-    // reopen from disk with the key
+    // reopen from disk with the key (after the background save)
+    writer::flush(&path);
     let mut f = fs::File::open(&path).unwrap();
     let db = Database::open(&mut f, key.clone()).unwrap();
     let e = db.entry(EntryId::from(Uuid::parse_str(&saved).unwrap())).unwrap();
@@ -333,4 +334,33 @@ fn challenge_response_key_roundtrip() {
     );
     assert_eq!(make_key(Some("pw"), None, Some("3")).err().as_deref(), Some("yubikey:slot"));
     let _ = fs::remove_dir_all(dir);
+}
+
+/// Changes save in the background; several quick ones end in one file with the newest state,
+/// and `flush` waits for it.
+#[test]
+fn background_save_coalesces_and_flushes() {
+    let path = temp_path("bg");
+    let key = make_key(Some("pw"), None, None).unwrap();
+    let mut db = Database::with_config(new_config());
+    db.meta.database_name = Some("A".into());
+    let mut v = OpenVault { path: path.clone(), db, key: key.clone(), remote: None };
+    write_db(&mut v).unwrap();
+    for name in ["B", "C", "D", "E"] {
+        v.db.meta.database_name = Some(name.into());
+        write_db_later(&mut v).unwrap();
+    }
+    writer::flush(&path);
+    assert!(!writer::busy(&path));
+    let reopened = Database::open(&mut fs::File::open(&path).unwrap(), key).unwrap();
+    assert_eq!(reopened.meta.database_name.as_deref(), Some("E"), "the newest state is on disk");
+    // a direct save after queued ones never gets overwritten by an older snapshot
+    v.db.meta.database_name = Some("F".into());
+    write_db_later(&mut v).unwrap();
+    v.db.meta.database_name = Some("G".into());
+    write_db(&mut v).unwrap();
+    writer::flush(&path);
+    let reopened = Database::open(&mut fs::File::open(&path).unwrap(), make_key(Some("pw"), None, None).unwrap()).unwrap();
+    assert_eq!(reopened.meta.database_name.as_deref(), Some("G"));
+    let _ = fs::remove_file(path);
 }

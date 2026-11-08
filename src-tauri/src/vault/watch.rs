@@ -57,6 +57,8 @@ pub fn watch_files(app: tauri::AppHandle) {
                 let Ok(map) = state.0.lock() else { continue };
                 let stamps = STAMPS.lock().ok().and_then(|s| s.clone()).unwrap_or_default();
                 map.iter()
+                    // our own background save is not someone else's change
+                    .filter(|(_, v)| !super::writer::busy(&v.path))
                     .filter(|(_, v)| matches!((mtime(&v.path), stamps.get(&v.path)), (Some(now), Some(seen)) if now != *seen))
                     .map(|(id, v)| (id.clone(), v.path.clone(), v.key.clone()))
                     .collect()

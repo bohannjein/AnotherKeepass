@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Faster:** pinning, moving to the recycle bin, restoring, editing and other changes show at
+  once. The vault file is saved in the background (a change took ~270 ms before, now ~1 ms);
+  locking, closing, quitting and updates wait until it is written. A failed save is reported.
+  Creating a vault, changing the master key and importing no longer freeze the window.
+
 ## 0.3.3
 
 - **Linux packages:** besides the AppImage, every release now has a `.deb` (Debian, Ubuntu,

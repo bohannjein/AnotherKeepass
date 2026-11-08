@@ -4,7 +4,7 @@ use super::*;
 
 /// Link a .kdbx vault with an open Vaultwarden account (None = unlink) and sync right away.
 #[tauri::command]
-pub fn sync_link(state: tauri::State<'_, Vaults>, vault: String, remote: Option<String>) -> R<VaultDto> {
+pub async fn sync_link(state: tauri::State<'_, Vaults>, vault: String, remote: Option<String>) -> R<VaultDto> {
     if remote.as_deref().is_some_and(|r| !crate::bitwarden::is_remote(r)) || crate::bitwarden::is_remote(&vault) {
         return Err("sync_link".into());
     }
@@ -43,7 +43,7 @@ pub(crate) fn new_config() -> DatabaseConfig {
 }
 
 #[tauri::command]
-pub fn vault_create(
+pub async fn vault_create(
     state: tauri::State<'_, Vaults>,
     path: String,
     name: String,
@@ -213,6 +213,7 @@ pub fn paths_exist(paths: Vec<String>) -> Vec<bool> {
 pub fn vault_close(state: tauri::State<'_, Vaults>, id: String) -> R<()> {
     let mut map = state.0.lock().map_err(|_| "lock")?;
     if let Some(v) = map.get_mut(&id) {
+        writer::flush(&v.path);
         save_used(v);
     }
     map.remove(&id); // drop zeroizes key + protected values
@@ -251,6 +252,7 @@ pub fn lock_vaults(map: &mut HashMap<String, OpenVault>) {
         }
     }
     for (id, v) in map.iter_mut() {
+        writer::flush(&v.path); // a change still being saved must reach the file before the key goes
         save_used(v);
         crate::ssh::on_lock(id);
     }
@@ -288,7 +290,7 @@ pub async fn vault_quick_unlock(app: tauri::AppHandle, state: tauri::State<'_, V
 }
 
 #[tauri::command]
-pub fn vault_change_key(
+pub async fn vault_change_key(
     state: tauri::State<'_, Vaults>,
     id: String,
     password: Option<String>,

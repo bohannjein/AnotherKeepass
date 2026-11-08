@@ -26,6 +26,7 @@ mod settings;
 #[cfg(test)]
 mod tests;
 mod watch;
+pub mod writer;
 
 pub use entries::*;
 pub use open::*;
@@ -257,37 +258,60 @@ fn backup_target(vault: &Path, pattern: &str) -> Option<PathBuf> {
     Some(if p.is_absolute() { p.to_path_buf() } else { vault.parent()?.join(p) })
 }
 
-/// Write via temp file + rename so a crash never leaves a half-written database.
+/// Write now, via temp file + rename so a crash never leaves a half-written database.
+/// Waits for a queued background save of the same file first (see `writer`).
 fn write_db(v: &mut OpenVault) -> R<()> {
-    // Vaultwarden: upload the changes, then show what the server has now
-    if let Some(r) = v.remote.as_mut() {
-        match crate::bitwarden::push(r, &v.db) {
-            Ok(db) => v.db = db,
-            Err(e) => {
-                let title = v.db.meta.database_name.clone().unwrap_or_default();
-                if let Ok(db) = crate::bitwarden::pull(r, &title) {
-                    v.db = db;
-                }
-                return Err(e);
-            }
-        }
+    if push_remote(v)? {
         return Ok(());
     }
     upgrade_to_kdbx4(v)?;
+    writer::before_sync_write(&v.path)?;
+    write_file(&v.path, &v.db, v.key.clone())
+}
+
+/// Save in the background: the change is already in memory, the file follows (`writer`).
+/// Vaultwarden vaults upload right away, as before.
+fn write_db_later(v: &mut OpenVault) -> R<()> {
+    if push_remote(v)? {
+        return Ok(());
+    }
+    upgrade_to_kdbx4(v)?;
+    writer::queue(&v.path, &v.db, &v.key);
+    Ok(())
+}
+
+/// Vaultwarden: upload the changes, then show what the server has now. true = it was remote.
+fn push_remote(v: &mut OpenVault) -> R<bool> {
+    let Some(r) = v.remote.as_mut() else { return Ok(false) };
+    match crate::bitwarden::push(r, &v.db) {
+        Ok(db) => v.db = db,
+        Err(e) => {
+            let title = v.db.meta.database_name.clone().unwrap_or_default();
+            if let Ok(db) = crate::bitwarden::pull(r, &title) {
+                v.db = db;
+            }
+            return Err(e);
+        }
+    }
+    Ok(true)
+}
+
+/// Encrypt and write one snapshot (backup copy, temp file + rename, KeeShare export).
+fn write_file(path: &Path, db: &Database, key: DatabaseKey) -> R<()> {
     let pattern = BACKUP_PATTERN.lock().ok().and_then(|p| p.clone());
-    if let Some(target) = pattern.and_then(|p| backup_target(&v.path, &p)).filter(|_| v.path.is_file())
-        && let Err(e) = fs::copy(&v.path, &target)
+    if let Some(target) = pattern.and_then(|p| backup_target(path, &p)).filter(|_| path.is_file())
+        && let Err(e) = fs::copy(path, &target)
     {
         log::warn!("backup before save failed: {e}");
     }
     let mut buf = Vec::new();
-    v.db.save(&mut buf, v.key.clone()).map_err(|e| format!("save:{e}"))?;
-    let tmp = v.path.with_extension("kdbx.tmp");
+    db.save(&mut buf, key).map_err(|e| format!("save:{e}"))?;
+    let tmp = path.with_extension("kdbx.tmp");
     fs::write(&tmp, &buf).map_err(|e| format!("io:{e}"))?;
-    fs::rename(&tmp, &v.path).map_err(|e| format!("io:{e}"))?;
-    stamp(&v.path);
-    forget_used(&v.path); // any save carries the "last access" times along
-    crate::keeshare::export_all(&v.db, &v.path);
+    fs::rename(&tmp, path).map_err(|e| format!("io:{e}"))?;
+    stamp(path);
+    forget_used(path); // any save carries the "last access" times along
+    crate::keeshare::export_all(db, path);
     Ok(())
 }
 
@@ -460,7 +484,7 @@ fn mutate(state: &Vaults, id: &str, f: impl FnOnce(&mut Database) -> R<()>) -> R
     let mut map = state.0.lock().map_err(|_| "lock".to_string())?;
     let v = map.get_mut(id).ok_or("vault_closed")?;
     f(&mut v.db)?;
-    write_db(v)?;
+    write_db_later(v)?;
     // a linked .kdbx / Vaultwarden partner gets the change too
     crate::sync::after_change(&mut map, id);
     Ok(dto(id, map.get(id).ok_or("vault_closed")?))

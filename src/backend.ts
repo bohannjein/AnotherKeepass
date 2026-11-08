@@ -162,6 +162,8 @@ export interface Backend {
   /** write to the app log file (desktop) / console (browser) */
   log(level: 'info' | 'warn' | 'error', message: string): void;
   trash(vault: string, id: string): Promise<VaultData>;
+  /** only the pin changes */
+  setPinned(vault: string, id: string, pinned: boolean): Promise<VaultData>;
   restore(vault: string, id: string): Promise<VaultData>;
   remove(vault: string, id: string): Promise<VaultData>;
   emptyTrash(vault: string): Promise<VaultData>;
@@ -235,6 +237,7 @@ const desktop: Backend = {
   log: (level, message) => { invoke('ui_log', { level, message }).catch(() => {}); },
   on: (event, cb) => { const p = listen(event, e => cb(e.payload as never)); return () => { p.then(f => f()); }; },
   trash: (vault, id) => invoke('entry_trash', { vault, id }),
+  setPinned: (vault, id, pinned) => invoke('entry_set_pinned', { vault, id, pinned }),
   restore: (vault, id) => invoke('entry_restore', { vault, id }),
   remove: (vault, id) => invoke('entry_delete', { vault, id }),
   emptyTrash: vault => invoke('trash_empty', { vault }),
@@ -435,6 +438,7 @@ const demo: Backend = {
   trayState: async () => {},
   log: (level, message) => console[level](message),
   async trash(vault, id) { const v = get(vault); item(v, id).trashed = true; return out(v); },
+  async setPinned(vault, id, pinned) { const it = item(get(vault), id); it.tags = [...it.tags.filter(t => t !== 'pinned'), ...(pinned ? ['pinned'] : [])]; return out(get(vault)); },
   async restore(vault, id) { const v = get(vault); item(v, id).trashed = false; return out(v); },
   async remove(vault, id) { const v = get(vault); v.data.items = v.data.items.filter(i => i.id !== id); return out(v); },
   async emptyTrash(vault) { const v = get(vault); v.data.items = v.data.items.filter(i => !i.trashed); return out(v); },

@@ -3,8 +3,8 @@
 // Every backend call goes through run(): errors become a snackbar instead of an exception.
 import { useEffect, useState } from 'react';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { backend, demoAttachment, type VaultData } from './backend';
-import { draftToInput, type Attachment, type Draft, type Field, type Folder, type Item, type VaultInfo } from './model';
+import { backend, demoAttachment, type RawItem, type VaultData } from './backend';
+import { type Attachment, type Field, type Folder, type Item, type VaultInfo } from './model';
 import { type Strings } from './i18n';
 import { type Prefs } from './settings';
 import { settingsStrings } from './i18n-settings';
@@ -53,7 +53,7 @@ export function useItemActions({ t, settings, notify, open, items, folders, vaul
   };
 
   const doTrash = async (item: Item) => {
-    if (apply(await run(backend.trash(item.vault, item.id)))) {
+    if (await optimistic(item.vault, item.id, r => ({ ...r, trashed: true }), backend.trash(item.vault, item.id))) {
       setSelected(null);
       notify(ts.ui.movedToTrash, false, { label: t.undo, run: async () => { if (apply(await run(backend.restore(item.vault, item.id)))) setSelected(item.id); } });
     }
@@ -61,7 +61,7 @@ export function useItemActions({ t, settings, notify, open, items, folders, vaul
   const requestTrash = (item: Item) => settings.confirmTrash
     ? setConfirm({ title: ts.ui.trashTitle, body: ts.ui.trashBody, label: ts.ui.moveToTrash, icon: 'delete', action: () => doTrash(item) })
     : doTrash(item);
-  const restoreItem = async (item: Item) => { if (apply(await run(backend.restore(item.vault, item.id)))) notify(t.restore); };
+  const restoreItem = async (item: Item) => { if (await optimistic(item.vault, item.id, r => ({ ...r, trashed: false }), backend.restore(item.vault, item.id))) notify(t.restore); };
   const deleteForever = (item: Item) => setConfirm({
     title: t.deleteForever, body: t.deleteForeverBody, label: t.deleteForever, icon: 'delete_forever',
     action: async () => { if (apply(await run(backend.remove(item.vault, item.id)))) setSelected(null); },
@@ -73,12 +73,18 @@ export function useItemActions({ t, settings, notify, open, items, folders, vaul
       setSelected(null);
     },
   });
-  const togglePin = async (item: Item) => {
-    const draft: Draft = { title: item.title, folder: item.folder ?? '', note: item.note ?? '', fields: item.fields, attachments: item.attachments ?? [], expires: item.expires ?? null, tags: item.tags ?? [] };
-    const input = await draftToInput({ ...item, pinned: !item.pinned }, draft, open[item.vault].root);
-    const res = await run(backend.save(item.vault, input));
-    if (res) onUpdate(res[1]);
+  // Quick toggles show the result at once and save behind it; a failure puts the old state back.
+  const optimistic = async (vault: string, id: string, change: (r: RawItem) => RawItem, call: Promise<VaultData>) => {
+    const before = open[vault];
+    if (before) onUpdate({ ...before, items: before.items.map(r => r.id === id ? change(r) : r) });
+    const res = await run(call);
+    if (res) onUpdate(res);
+    else if (before) onUpdate(before);
+    return !!res;
   };
+  const togglePin = (item: Item) => optimistic(item.vault, item.id,
+    r => ({ ...r, tags: [...r.tags.filter(t => t !== 'pinned'), ...(item.pinned ? [] : ['pinned'])] }),
+    backend.setPinned(item.vault, item.id, !item.pinned));
   const moveItem = async (it: Item, vaultId: string, folderId: string | null) => {
     if (it.id.startsWith('new:')) return;
     const target = folderId ? folders.find(f => f.id === folderId)?.name : vaultList.find(v => v.id === vaultId)?.name;

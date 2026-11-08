@@ -179,6 +179,7 @@ fn idle(app: &AppHandle) -> bool {
 fn install(app: &AppHandle) -> Result<(), String> {
     let pending = app.state::<Pending>().0.lock().map_err(|_| "lock")?.take();
     let Some((update, bytes)) = pending else { return Err("update:nothing downloaded".into()) };
+    crate::vault::writer::flush_all();
     if let Ok(mut map) = app.state::<crate::vault::Vaults>().0.lock() {
         map.values_mut().for_each(crate::vault::save_used);
     }

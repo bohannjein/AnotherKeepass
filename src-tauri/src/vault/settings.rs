@@ -46,7 +46,7 @@ pub fn vault_settings_get(state: tauri::State<'_, Vaults>, vault: String) -> R<V
 
 /// Saves name/description/recycle bin/history and (when changed) re-encrypts with the new KDF.
 #[tauri::command]
-pub fn vault_settings_set(state: tauri::State<'_, Vaults>, vault: String, settings: VaultSettings) -> R<VaultDto> {
+pub async fn vault_settings_set(state: tauri::State<'_, Vaults>, vault: String, settings: VaultSettings) -> R<VaultDto> {
     mutate(&state, &vault, |db| {
         let now = Some(Times::now());
         if db.meta.database_name.as_deref().unwrap_or_default() != settings.name {

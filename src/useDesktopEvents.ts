@@ -17,6 +17,8 @@ export function useDesktopEvents({ t, settings, notify, open, vault, items, desk
   useEffect(() => backend.on<BrowserAsk>('akp-browser-ask', a => setAsk(a)), []);
   useEffect(() => backend.on<string>('akp-sync-problem', e => notify(`${t.syncProblem}: ${e}`, true)), [t.syncProblem, notify]);
   useEffect(() => backend.on('akp-vault-reloaded', () => notify(t.vaultReloaded)), [t.vaultReloaded, notify]);
+  // saving runs in the background (Rust); a failed save still has to reach the user
+  useEffect(() => backend.on<string>('akp-save-failed', e => notify(`${t.saveError}: ${e}`, true)), [t.saveError, notify]);
 
   // auto-type errors come from Rust (the picker is the quick access window)
   useEffect(() => backend.on<string>('akp-autotype-error', e => notify(`${t.autoTypeError}: ${e}`, true)), [t.autoTypeError, notify]);

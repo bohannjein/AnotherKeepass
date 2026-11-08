@@ -140,7 +140,7 @@ pub(super) fn import_items(db: &mut Database, parent: Option<&str>, items: Vec<I
 }
 
 #[tauri::command]
-pub fn entry_import(
+pub async fn entry_import(
     state: tauri::State<'_, Vaults>,
     vault: String,
     parent: Option<String>,
@@ -362,6 +362,18 @@ pub(super) fn duplicate_entry(db: &mut Database, eid: EntryId, suffix: &str) -> 
     c.times.creation = Some(now);
     c.times.last_modification = Some(now);
     paste_entry(db, parent, None, c)
+}
+
+/// Pin or unpin: only the `pinned` tag changes (no history entry, no other fields sent).
+#[tauri::command]
+pub fn entry_set_pinned(state: tauri::State<'_, Vaults>, vault: String, id: String, pinned: bool) -> R<VaultDto> {
+    mutate_entry(&state, &vault, &id, |e| {
+        e.tags.retain(|t| t != "pinned");
+        if pinned {
+            e.tags.push("pinned".into());
+        }
+        e.times.last_modification = Some(Times::now());
+    })
 }
 
 #[tauri::command]

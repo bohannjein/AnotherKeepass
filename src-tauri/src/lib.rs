@@ -54,6 +54,7 @@ pub fn run() {
             vault::vault_change_key,
             vault::vault_rename,
             vault::entry_save,
+            vault::entry_set_pinned,
             vault::entry_import,
             vault::vault_sync,
             vault::sync_link,
@@ -154,6 +155,7 @@ pub fn run() {
             desktop::poll_lock(handle.clone());
             desktop::apply_screen_protect(handle, prefs.screen_protect);
             vault::watch_files(handle.clone());
+            vault::writer::init(handle.clone());
             desktop::initial_show(handle, &prefs);
             Ok(())
         })
@@ -168,6 +170,9 @@ pub fn run() {
                 return;
             }
             // quitting (tray, update): write pending "last access" times of open vaults
+            if let tauri::RunEvent::Exit = event {
+                vault::writer::flush_all();
+            }
             if let tauri::RunEvent::Exit = event
                 && let Ok(mut map) = app.state::<vault::Vaults>().0.lock()
             {
