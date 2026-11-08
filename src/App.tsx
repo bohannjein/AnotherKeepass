@@ -8,6 +8,7 @@ import { clearHistory, generate } from './generator';
 import { type Strings, strings } from './i18n';
 import { type Prefs, mergePrefs, DEFAULTS, clamp } from './settings';
 import { Resizer } from './Resizer';
+import { VirtualList, type VRow, type VirtualApi } from './VirtualList';
 import { useUpdates, type UpdateState } from './useUpdates';
 import { settingsStrings } from './i18n-settings';
 import VaultDialog, { type Known } from './VaultDialog';
@@ -467,8 +468,8 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     setMulti([]);
     setSelected(id);
   };
-  const row = (i: Item, group = '') => (
-    <Row key={group + i.id} t={t} item={i} letters={settings.letterAvatars} active={multi.length > 1 ? multi.includes(i.id) : i.id === selected} onClick={e => choose(e, i.id)}
+  const row = (i: Item, key = i.id) => (
+    <Row key={key} t={t} item={i} letters={settings.letterAvatars} active={multi.length > 1 ? multi.includes(i.id) : i.id === selected} onClick={e => choose(e, i.id)}
       dragRef={dragItem} onDragEnd={() => setDragOver(null)}
       onContextMenu={e => { if (!i.id.startsWith('new:')) { setSelected(i.id); openMenu(e, itemMenu(i)); } }} />
   );
@@ -495,6 +496,19 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   }, [allItems, vaultList, t, settings, targetVault]); // eslint-disable-line react-hooks/exhaustive-deps
   const pinned = visible.filter(i => i.pinned);
   const rest = visible.filter(i => !i.pinned);
+  // one flat row list (headers + entries) for the virtual list
+  const listRows: VRow<Item>[] = vault === HEALTH ? [] : grouped
+    ? grouped.flatMap(g => [
+      { key: 'h:' + g.key, head: <>{g.label}<small>{g.items.length}</small></> },
+      ...g.items.map(i => ({ key: g.key + i.id, id: i.id, item: i })),
+    ])
+    : [
+      ...(pinned.length ? [{ key: 'h:pinned', head: t.pinned }] : []),
+      ...pinned.map(i => ({ key: i.id, id: i.id, item: i })),
+      ...(pinned.length && rest.length ? [{ key: 'h:others', head: t.others }] : []),
+      ...rest.map(i => ({ key: i.id, id: i.id, item: i })),
+    ];
+  const listApi = useRef<VirtualApi | null>(null);
 
   // light <-> the dark variant used last (dark or OLED black)
   const toggleTheme = () => {
@@ -739,24 +753,15 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
           </div>
         )}
         </>}
-        <div className={'items' + (settings.listDensity === 'compact' ? ' compact' : '')} key={vault + '|' + (folder ?? '')}>
+        <VirtualList className={'items' + (settings.listDensity === 'compact' ? ' compact' : '')} key={vault + '|' + (folder ?? '')}
+          rows={listRows} render={row} selected={selected} apiRef={listApi}>
           {visible.length === 0 && <div className="empty"><Icon n={vault === HEALTH ? 'verified_user' : 'eco'} />{vault === HEALTH ? t.hOk : t.noItems}</div>}
-          {grouped && grouped.map(g => (
-            <div key={g.key} className="list-group" id={'grp-' + g.key}>
-              <span className="label group-label">{g.label}<small>{g.items.length}</small></span>
-              {g.items.map(i => row(i, g.key))}
-            </div>
-          ))}
-          {!grouped && pinned.length > 0 && <span className="label group-label">{t.pinned}</span>}
-          {!grouped && pinned.map(i => row(i))}
-          {!grouped && rest.length > 0 && pinned.length > 0 && <span className="label group-label">{t.others}</span>}
           {vault === HEALTH && rest.map(i => <HealthRow key={i.id} t={t} item={i} issues={issuesOf(i.id)} label={k => issueLabel(k, i.id)}
             active={i.id === selected} onClick={() => setSelected(i.id)} />)}
-          {vault !== HEALTH && !grouped && rest.map(i => row(i))}
-        </div>
+        </VirtualList>
         {grouped && settings.listGroup === 'letter' && grouped.length > 3 && (
           <nav className="jump-bar" aria-label={t.grLetter}>
-            {grouped.map(g => <button key={g.key} onClick={() => document.getElementById('grp-' + g.key)?.scrollIntoView({ block: 'start', behavior: 'smooth' })}>{g.label}</button>)}
+            {grouped.map(g => <button key={g.key} onClick={() => listApi.current?.scrollToKey('h:' + g.key)}>{g.label}</button>)}
           </nav>
         )}
       </section>
