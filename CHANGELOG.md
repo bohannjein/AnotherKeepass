@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.4
 
 - **Faster:** pinning, moving to the recycle bin, restoring, editing and other changes show at
   once. The vault file is saved in the background (a change took ~270 ms before, now ~1 ms);
