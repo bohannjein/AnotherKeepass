@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **New program icon:** a dark round seal with a ring and the shield with keyhole, for the
+  taskbar, Start menu, installer and website. The logo inside the app stays as it is.
+
 ## 0.3.1
 
 - **Menu footer:** the lock sits next to the settings gear; the gear has the same distance to the
