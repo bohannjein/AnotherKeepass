@@ -1,12 +1,20 @@
 // Retakes the website screenshots (docs/img) from the browser demo. Needs `npm run dev` on :5173
-// and Microsoft Edge. Run: node scripts/site-screenshots.mjs
+// and a Chromium browser (Edge, Chrome, Helium or EDGE=…). Run: node scripts/site-screenshots.mjs
 import { spawn } from 'node:child_process';
-import { writeFileSync, mkdtempSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const OUT = 'docs/img';
-const EDGE = process.env.EDGE ?? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+// any Chromium browser works: $EDGE, else the first one found
+const local = process.env.LOCALAPPDATA ?? '';
+const EDGE = process.env.EDGE ?? [
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  `${local}/Google/Chrome/Application/chrome.exe`,
+  `${local}/imput/Helium/Application/chrome.exe`,
+].find(existsSync);
+if (!EDGE) throw new Error('no Chromium browser found; set EDGE=path/to/browser.exe');
 const port = 9333;
 const edge = spawn(EDGE, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${mkdtempSync(join(tmpdir(), 'akp-shot-'))}`, '--hide-scrollbars', 'about:blank']);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
