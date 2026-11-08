@@ -4,19 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AnotherKeepass – KeePass-kompatibler Passwortmanager</title>
-<meta name="description" content="Passwortmanager für den Desktop. Deine Tresore bleiben normale .kdbx-Dateien, die auch KeePassXC, KeePass2 und KeePassDX öffnen. Kostenlos und quelloffen (GPL-3.0).">
+<meta name="description" content="Passwortmanager für Windows und Linux. Tresore sind normale KDBX-4-Dateien, die auch KeePassXC, KeePass2 und KeePassDX öffnen. Quelloffen (GPL-3.0), ohne Konto, ohne Telemetrie.">
 <meta name="theme-color" content="#fff8f3">
 <link rel="icon" href="img/logo.svg" type="image/svg+xml">
 <link rel="preload" href="fonts/roboto-flex.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 <meta property="og:title" content="AnotherKeepass">
-<meta property="og:description" content="KeePass-kompatibler Passwortmanager für den Desktop.">
+<meta property="og:description" content="KeePass-kompatibler Passwortmanager für Windows und Linux.">
 <meta property="og:image" content="img/app-dark.webp">
 </head>
-<body>
+<body class="home">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <!-- the organic "cookie" from the app logo -->
-  <symbol id="cookie" viewBox="0 0 1024 1024"><path fill="currentColor" d="M512 64c96 0 150 52 226 74s152 34 192 106 6 160 18 246-26 168-74 238-128 98-212 130-118 102-150 102-82-58-166-90-170-56-222-128-58-158-54-246-34-170 14-242 140-94 216-118 116-72 212-72z"/></symbol>
   <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></symbol>
   <symbol id="i-gh" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2z"/></symbol>
 </svg>
@@ -28,6 +26,8 @@
     <a class="brand" href="./" aria-label="AnotherKeepass, Startseite"><img src="img/logo.svg" alt="" width="42" height="42"><span>Another<b>Keepass</b></span></a>
     <nav class="nav" aria-label="Hauptnavigation">
       <a href="#funktionen">Funktionen</a>
+      <a href="#designs">Designs</a>
+      <a href="#sicherheit">Sicherheit</a>
       <a href="anleitung.html">Dokumentation</a>
       <a href="https://github.com/bohannjein/AnotherKeepass"><svg aria-hidden="true"><use href="#i-gh"/></svg> GitHub</a>
       <a class="nav-dl" href="#download">Download</a>
@@ -36,6 +36,8 @@
       <summary>Menü</summary>
       <nav class="menu-panel" aria-label="Hauptnavigation">
         <a href="#funktionen">Funktionen</a>
+        <a href="#designs">Designs</a>
+        <a href="#sicherheit">Sicherheit</a>
         <a href="#download">Download</a>
         <a href="anleitung.html">Dokumentation</a>
         <a href="https://github.com/bohannjein/AnotherKeepass">GitHub</a>
@@ -46,171 +48,199 @@
 
 <main id="main">
 
-  <section class="hero" aria-labelledby="hero-title">
-    <div class="wrap">
-      <h1 id="hero-title" class="display h-xl">Passwörter in einer Datei, die <span class="accent">dir</span> gehört.</h1>
-      <div class="hero-grid">
-        <div class="hero-copy">
-          <p class="lead">AnotherKeepass ist ein Passwortmanager für den Desktop. Deine Tresore bleiben ganz normale KeePass-Dateien – neu ist nur, wie angenehm man damit arbeitet.</p>
+  <!-- ============ overview ============ -->
+  <section class="intro" aria-labelledby="intro-title">
+    <div class="wrap intro-grid">
+      <div>
+        <h1 id="intro-title" class="h-page">AnotherKeepass</h1>
+        <p class="lead-plain">Ein Passwortmanager für Windows und Linux, der Tresore im KeePass-Format (KDBX&nbsp;4) liest und schreibt. Die Dateien bleiben mit KeePassXC, KeePass2 und KeePassDX kompatibel.</p>
+        <div class="intro-actions">
           <a class="btn btn-primary" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-dl="primary">
             <svg aria-hidden="true"><use href="#i-down"/></svg>
             <span><span data-dl-label>Für Windows herunterladen</span><small data-dl-sub>Installer, 64-Bit</small></span>
           </a>
-          <p class="dl-meta"><span data-version-line>Kostenlos und quelloffen (GPL-3.0)</span> · <a href="#download" data-dl-other>Linux und weitere Optionen</a></p>
-          <p class="mobile-note">AnotherKeepass läuft auf Windows- und Linux-Rechnern. Für Smartphones gibt es keine eigene App – deine <code>.kdbx</code>-Datei öffnet dort aber zum Beispiel KeePassDX.</p>
+          <a class="btn btn-ghost" href="anleitung.html">Dokumentation</a>
         </div>
-        <div class="hero-shot">
-          <svg viewBox="0 0 1024 1024" class="blob" aria-hidden="true"><use href="#cookie"/></svg>
-          <svg viewBox="0 0 1024 1024" class="blob b2" aria-hidden="true"><use href="#cookie"/></svg>
-          <img class="shot" src="img/app-dark.webp" width="1280" height="800" fetchpriority="high"
-               alt="Hauptfenster von AnotherKeepass im dunklen Design: links drei geöffnete Tresore (Work, Personal, Freelance), in der Mitte die Eintragsliste, rechts der Eintrag „Proton login“ mit Benutzername, verdecktem Passwort und Website.">
-        </div>
+        <p class="dl-meta"><span data-version-line>Kostenlos und quelloffen (GPL-3.0)</span> · <a href="#download" data-dl-other>Linux und weitere Optionen</a></p>
+        <p class="mobile-note">Für Smartphones gibt es keine eigene App. Deine <code>.kdbx</code>-Datei öffnet dort zum Beispiel KeePassDX.</p>
       </div>
+      <figure class="intro-shot">
+        <img class="shot" src="img/app-dark.webp" width="1280" height="800" fetchpriority="high"
+             alt="Hauptfenster von AnotherKeepass im dunklen Design: links drei geöffnete Tresore, in der Mitte die Eintragsliste, rechts ein Eintrag mit Benutzername, verdecktem Passwort und Website.">
+        <figcaption>Hauptfenster: Tresore und Ordner, Eintragsliste, Detailansicht. Die Spaltenbreiten lassen sich ziehen.</figcaption>
+      </figure>
     </div>
   </section>
 
-  <section class="band band-moss" aria-labelledby="format-title">
+  <section class="sec" aria-labelledby="facts-title">
     <div class="wrap">
-      <div class="format">
-        <p class="big" aria-hidden="true">.kdbx</p>
-        <div>
-          <h2 id="format-title" class="display h-m">Kein eigenes Format. Kein Konto. Kein Umzug.</h2>
-          <p class="measure">AnotherKeepass liest und schreibt KDBX 4, das Format von KeePass. Deine Tresore liegen als Dateien dort, wo du sie hinlegst – auf der Festplatte, im Netzlaufwerk oder in deinem Cloud-Ordner. Wenn du die App morgen nicht mehr willst, öffnest du dieselbe Datei einfach mit einem anderen Programm.</p>
-          <p class="measure muted">Ältere KDBX-3.1-Dateien werden gelesen und beim ersten Speichern auf KDBX 4 gehoben, wie in KeePassXC. Das Original bleibt als <code>.kdbx3-backup</code> liegen.</p>
-        </div>
-      </div>
-      <ul class="apps" aria-label="Öffnen dieselben Dateien">
-        <li>KeePassXC</li><li>KeePass2</li><li>KeePassDX</li>
-      </ul>
-    </div>
-  </section>
-
-  <section id="funktionen" class="band" aria-labelledby="vaults-title">
-    <div class="wrap split-head">
-      <h2 id="vaults-title" class="display h-l">Mehrere Tresore, gleichzeitig offen.</h2>
-      <p class="lead">Öffne mehrere Tresore auf einmal und such über alle zugleich. Jeder Tresor bekommt Farbe und Symbol, damit du nie im falschen speicherst.</p>
-    </div>
-    <div class="wide-shot">
-      <svg viewBox="0 0 1024 1024" class="blob" aria-hidden="true"><use href="#cookie"/></svg>
-      <img class="shot" src="img/app-light.webp" width="1280" height="800" loading="lazy" decoding="async"
-           alt="AnotherKeepass im hellen Design. Ausgewählt ist der Eintrag „GitHub“ mit Benutzername, Passwort, Website, sechsstelligem Einmalcode mit Countdown, eigenen Feldern, Notiz und einer angehängten Datei.">
-    </div>
-    <div class="wrap">
-      <ul class="facts">
-        <li><b>Ordner und Tags</b>Ordner sind KeePass-Gruppen, Tags bleiben Tags. Wichtiges heftest du oben an.</li>
-        <li><b>Mehr als Logins</b>Karten, Identitäten, PINs, Notizen und Vorlagen – mit eigenen Feldern, wo du sie brauchst.</li>
-        <li><b>Einmalcodes</b>TOTP direkt im Eintrag, im selben Format wie KeePassXC.</li>
-        <li><b>Anhänge und Verlauf</b>Dateien, Ablaufdaten und frühere Versionen eines Eintrags – alles native KDBX-Funktionen.</li>
-        <li><b>Papierkorb</b>Gelöschtes landet im KeePass-Papierkorb und lässt sich zurückholen.</li>
-        <li><b>Hell oder dunkel</b>Zwei Designs, vier Sprachen: Deutsch, Englisch, Französisch und Spanisch.</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="band band-night on-dark" aria-labelledby="keys-title">
-    <div class="wrap keys">
-      <div class="keys-shot">
-        <svg viewBox="0 0 1024 1024" class="blob" aria-hidden="true"><use href="#cookie"/></svg>
-        <img src="img/palette-crop.webp" width="660" height="576" loading="lazy" decoding="async"
-             alt="Befehlspalette mit Suchfeld „Einträge und Aktionen suchen“ und Aktionen wie Neu: Login, Neu: Karte, Passwortgenerator und Passwort-Gesundheit.">
-      </div>
-      <div>
-        <h2 id="keys-title" class="display h-l">Die Maus darf liegen bleiben.</h2>
-        <ul class="keylist">
-          <li><span class="k"><kbd>Strg</kbd> <kbd>K</kbd></span><p><b>Befehlspalette.</b> Einträge finden, neue anlegen, den Generator öffnen – alles aus einem Suchfeld.</p></li>
-          <li><span class="k"><kbd>Strg</kbd> <kbd>Alt</kbd> <kbd>K</kbd></span><p><b>Schnellzugriff von überall.</b> Ein kleines Suchfenster über jeder Anwendung: Enter kopiert das Passwort, Umschalt+Enter den Benutzernamen, Strg+Enter tippt die Anmeldung.</p></li>
-          <li><span class="k">Auto-Type</span><p><b>Anmeldung eintippen lassen.</b> Passende Einträge stehen oben, gewählt wird im Schnellzugriff.</p></li>
-          <li><span class="k">Infobereich</span><p><b>Läuft leise mit.</b> Das Symbol in der Taskleiste zeigt, ob noch ein Tresor offen ist.</p></li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
-  <section class="band band-ochre" aria-labelledby="tools-title">
-    <div class="wrap tools">
-      <div>
-        <h2 id="tools-title" class="display h-l">Gute Passwörter, ohne darüber nachzudenken.</h2>
-        <div class="pairs">
-          <div>
-            <h3>Generator</h3>
-            <p>Zufällige Zeichenfolgen oder einprägsame Passphrasen aus einer Wortliste – mit Trennzeichen, Zahlen und Großschreibung nach Wahl.</p>
-          </div>
-          <div>
-            <h3>Ehrliche Stärkeanzeige</h3>
-            <p>Bewertet mit zxcvbn: Wörter, Daten, Tastaturmuster und die eigenen Daten des Eintrags zählen als schwach.</p>
-          </div>
-          <div>
-            <h3>Passwort-Gesundheit</h3>
-            <p>Findet schwache, mehrfach verwendete und alte Passwörter in allen offenen Tresoren.</p>
-          </div>
-          <div>
-            <h3>Datenlecks prüfen</h3>
-            <p>Fragt auf Wunsch haveibeenpwned.com anonym ab, ob ein Passwort in bekannten Lecks aufgetaucht ist.</p>
-          </div>
-        </div>
-      </div>
-      <div class="tools-shot">
-        <svg viewBox="0 0 1024 1024" class="blob" aria-hidden="true"><use href="#cookie"/></svg>
-        <img src="img/generator-crop.webp" width="520" height="557" loading="lazy" decoding="async"
-             alt="Passwort-Generator mit einer Passphrase aus fünf Wörtern, Stärkeanzeige „Stark“ und Schaltern für Großschreibung, Zahlen und Trennzeichen.">
-      </div>
-    </div>
-  </section>
-
-  <section class="band" aria-labelledby="integr-title">
-    <div class="wrap integr">
-      <div class="integr-title">
-        <h2 id="integr-title" class="display h-l">Passt zu dem, was du schon benutzt.</h2>
-      </div>
-      <dl class="ilist">
-        <div><dt>Browser</dt><dd>Funktioniert mit der Erweiterung KeePassXC-Browser für Firefox, Chrome, Edge und andere – einschließlich Passkeys.</dd></div>
-        <div><dt>Vaultwarden</dt><dd>Öffne ein Vaultwarden-Konto wie einen Tresor, auch mit Organisationen und Sammlungen. Oder halte eine <code>.kdbx</code>-Datei und ein Konto in beide Richtungen synchron.</dd></div>
-        <div><dt>Umzug</dt><dd>Importiere Exporte aus Bitwarden, 1Password, Proton Pass und KeePassXC (CSV).</dd></div>
-        <div><dt>SSH-Schlüssel</dt><dd>Reicht Schlüssel aus dem Tresor an deinen SSH-Agent weiter, kompatibel mit KeeAgent.</dd></div>
-        <div><dt>KeeShare</dt><dd>Teile Ordner über eine eigene Datei mit anderen – im selben Verfahren wie KeePassXC.</dd></div>
-        <div><dt>Windows Hello</dt><dd>Nach dem Sperren mit Gesicht, Fingerabdruck oder PIN wieder entsperren statt mit dem Master-Passwort.</dd></div>
+      <h2 id="facts-title" class="h-sec">Eckdaten</h2>
+      <dl class="facttable">
+        <div><dt>Dateiformat</dt><dd>KDBX 4 (lesen und schreiben). KDBX 3.1 wird gelesen und beim ersten Speichern auf KDBX 4 gehoben; das Original bleibt als <code>.kdbx3-backup</code> liegen.</dd></div>
+        <div><dt>Kompatibel mit</dt><dd>KeePassXC, KeePass2, KeePassDX und allen anderen Programmen, die KDBX 4 öffnen</dd></div>
+        <div><dt>Plattformen</dt><dd>Windows 10/11 (x64). Linux als AppImage (Vorschau). Kein macOS, keine Mobil-App.</dd></div>
+        <div><dt>Konto / Cloud</dt><dd>Nicht nötig. Tresore liegen als Dateien dort, wo du sie speicherst. Optional: Vaultwarden-Konto anbinden.</dd></div>
+        <div><dt>Telemetrie</dt><dd>Keine. Netzwerkzugriffe nur für Update-Prüfung, Favicons, die optionale Leck-Prüfung und Vaultwarden – jeweils abschaltbar.</dd></div>
+        <div><dt>Sprachen</dt><dd>Deutsch, Englisch, Französisch, Spanisch</dd></div>
+        <div><dt>Technik</dt><dd>Tauri 2, Rust (Tresor-Logik), React (Oberfläche), WebView2 unter Windows</dd></div>
+        <div><dt>Lizenz</dt><dd>GPL-3.0-or-later, Quellcode auf <a href="https://github.com/bohannjein/AnotherKeepass">GitHub</a></dd></div>
       </dl>
     </div>
   </section>
 
-  <section class="band band-forest on-dark" aria-labelledby="secure-title">
-    <svg viewBox="0 0 1024 1024" class="blob" aria-hidden="true"><use href="#cookie"/></svg>
-    <div class="wrap" style="position:relative">
-      <h2 id="secure-title" class="display secure-quote">Geheimnisse bleiben, wo sie hingehören.</h2>
-      <div class="secure-grid">
+  <!-- ============ features ============ -->
+  <section id="funktionen" class="sec sec-tint" aria-labelledby="feat-title">
+    <div class="wrap">
+      <h2 id="feat-title" class="h-sec">Funktionen</h2>
+      <div class="featgrid">
         <div>
-          <h3>Getrennte Prozesse</h3>
-          <p>Der Tresor liegt in einem Rust-Prozess. Die Oberfläche sieht ein Passwort nur, wenn du es anzeigen oder bearbeiten willst. Beim Sperren werden geschützte Werte im Speicher überschrieben.</p>
+          <h3>Tresore und Einträge</h3>
+          <ul>
+            <li>Mehrere Tresore gleichzeitig geöffnet, Suche über alle</li>
+            <li>Farbe und Symbol pro Tresor</li>
+            <li>Ordner (KeePass-Gruppen), Tags, angeheftete Einträge</li>
+            <li>Eintragstypen: Login, Karte, Identität, PIN, Notiz, Sonstiges, Vorlagen</li>
+            <li>Eigene Felder, Anhänge mit Vorschau, Ablaufdatum, Verlauf früherer Versionen</li>
+            <li>TOTP-Einmalcodes im KeePassXC-Format</li>
+            <li>Papierkorb (KeePass-Papierkorb), Mehrfachauswahl zum Verschieben und Löschen</li>
+            <li>Sortieren nach letzter Nutzung, Titel, Änderungs- oder Erstelldatum; Gruppieren nach Buchstabe, Typ, Ordner, Tresor, Domain, Tag oder Datum</li>
+          </ul>
         </div>
         <div>
-          <h3>Vorsichtige Zwischenablage</h3>
-          <p>Kopierte Passwörter gehen direkt in die Zwischenablage, tauchen nicht im Windows-Verlauf auf und werden nach der eingestellten Zeit gelöscht – nur, wenn du inzwischen nichts anderes kopiert hast.</p>
+          <h3>Passwörter</h3>
+          <ul>
+            <li>Generator für Zeichenfolgen und Passphrasen (EFF-Wortliste)</li>
+            <li>Stärkeanzeige mit zxcvbn, berücksichtigt die Daten des Eintrags</li>
+            <li>Passwort-Gesundheit: schwache, mehrfach verwendete, alte und abgelaufene Passwörter</li>
+            <li>Optional: Abgleich mit haveibeenpwned.com (k-Anonymität, das Passwort verlässt den Rechner nicht)</li>
+            <li>Zwischenablage wird nach einstellbarer Zeit geleert und erscheint nicht im Windows-Verlauf</li>
+          </ul>
         </div>
         <div>
-          <h3>Gehärtet</h3>
-          <p>Andere Programme können den Speicher der App nicht auslesen, Browser- und SSH-Verbindung sind nur für dich offen, Kontodaten schützt Windows DPAPI. Master-Passwörter werden nie gespeichert.</p>
+          <h3>Anbindungen</h3>
+          <ul>
+            <li>Browser über die Erweiterung KeePassXC-Browser, inklusive Passkeys</li>
+            <li>Vaultwarden-Konto als Tresor öffnen oder mit einer <code>.kdbx</code> synchron halten</li>
+            <li>Import aus Bitwarden, 1Password, Proton Pass und KeePassXC (CSV)</li>
+            <li>SSH-Schlüssel an den SSH-Agent weiterreichen (KeeAgent-kompatibel)</li>
+            <li>KeeShare zum Teilen von Ordnern über eigene Dateien</li>
+            <li>Auto-Type: Anmeldedaten in andere Programme eintippen</li>
+          </ul>
         </div>
         <div>
-          <h3>Signierte Updates</h3>
-          <p>Die App sucht selbst nach neuen Versionen und installiert nur, was die Signatur des Projekts trägt.</p>
-        </div>
-        <div>
-          <h3>Offen gebaut</h3>
-          <p>Der Quellcode steht unter GPL-3.0 auf GitHub, Releases baut GitHub Actions direkt aus dem getaggten Stand.</p>
+          <h3>Oberfläche</h3>
+          <ul>
+            <li>8 Farbschemata, jeweils hell, dunkel und OLED-Schwarz (<a href="#designs">Übersicht</a>)</li>
+            <li>Spaltenbreiten per Ziehen anpassbar, Menü klappt zur Symbolleiste ein</li>
+            <li>Befehlspalette (<kbd>Strg</kbd> <kbd>K</kbd>) und globaler Schnellzugriff</li>
+            <li>Symbol im Infobereich, Start mit Windows, minimiert starten</li>
+            <li>Schriftgröße 80–150 %, kompakte Listenansicht</li>
+          </ul>
         </div>
       </div>
-      <p class="limit muted"><strong>Was nicht geschützt ist:</strong> Alles, was gerade auf dem Bildschirm steht, liegt auch im Speicher der Oberfläche. Wir schreiben das lieber hin, als es wegzulassen.</p>
     </div>
   </section>
 
-  <section id="download" class="band band-apricot" aria-labelledby="dl-title">
+  <section class="sec" aria-labelledby="keys-title">
+    <div class="wrap two">
+      <div>
+        <h2 id="keys-title" class="h-sec">Tastenkürzel</h2>
+        <p class="muted">Angelehnt an KeePassXC. <kbd>F1</kbd> zeigt die vollständige Liste in der App.</p>
+      </div>
+      <table class="map keys-table">
+        <thead><tr><th scope="col">Kürzel</th><th scope="col">Aktion</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>Strg</kbd> <kbd>Alt</kbd> <kbd>K</kbd></td><td>Schnellzugriff über jedem Programm (global). Enter kopiert das Passwort, Umschalt+Enter den Benutzernamen, Strg+Enter tippt die Anmeldung.</td></tr>
+          <tr><td><kbd>Strg</kbd> <kbd>K</kbd></td><td>Befehlspalette: Einträge und Aktionen suchen</td></tr>
+          <tr><td><kbd>Strg</kbd> <kbd>F</kbd></td><td>Suche</td></tr>
+          <tr><td><kbd>Strg</kbd> <kbd>N</kbd></td><td>Neuer Eintrag</td></tr>
+          <tr><td><kbd>Strg</kbd> <kbd>E</kbd></td><td>Eintrag bearbeiten</td></tr>
+          <tr><td><kbd>Strg</kbd> <kbd>B</kbd> / <kbd>C</kbd> / <kbd>T</kbd></td><td>Benutzername / Passwort / Einmalcode kopieren</td></tr>
+          <tr><td><kbd>Strg</kbd> <kbd>U</kbd></td><td>Website öffnen</td></tr>
+          <tr><td><kbd>Strg</kbd> <kbd>Umschalt</kbd> <kbd>V</kbd></td><td>Auto-Type für den gewählten Eintrag</td></tr>
+          <tr><td><kbd>Strg</kbd> <kbd>D</kbd></td><td>Eintrag duplizieren</td></tr>
+          <tr><td><kbd>Entf</kbd></td><td>In den Papierkorb</td></tr>
+          <tr><td><kbd>Strg</kbd> <kbd>L</kbd></td><td>Alle Tresore sperren</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="plattformen" class="sec sec-tint" aria-labelledby="plat-title">
+    <div class="wrap">
+      <h2 id="plat-title" class="h-sec">Windows und Linux im Vergleich</h2>
+      <p class="muted measure">Die Linux-Version ist eine Vorschau. Einige Funktionen hängen an Windows-Schnittstellen und fehlen dort noch.</p>
+      <div class="table-scroll">
+        <table class="map matrix">
+          <thead><tr><th scope="col">Funktion</th><th scope="col">Windows</th><th scope="col">Linux</th></tr></thead>
+          <tbody>
+            <tr><td>Tresore, Einträge, Generator, Gesundheit, Import</td><td class="y">ja</td><td class="y">ja</td></tr>
+            <tr><td>Browser-Erweiterung (KeePassXC-Browser)</td><td class="y">ja</td><td class="p">ja, Einrichtung manuell</td></tr>
+            <tr><td>Auto-Type mit Fenstererkennung</td><td class="y">ja</td><td class="n">noch nicht</td></tr>
+            <tr><td>Sperren beim Sperren des Bildschirms</td><td class="y">ja</td><td class="n">noch nicht</td></tr>
+            <tr><td>Windows Hello zum Entsperren</td><td class="y">ja</td><td class="n">–</td></tr>
+            <tr><td>Schutz vor Bildschirmaufnahmen</td><td class="y">ja</td><td class="n">–</td></tr>
+            <tr><td>Automatische Updates</td><td class="y">ja</td><td class="y">ja (AppImage)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ themes ============ -->
+  <section id="designs" class="sec" aria-labelledby="themes-title">
+    <div class="wrap">
+      <div class="two themes-head">
+        <div>
+          <h2 id="themes-title" class="h-sec">Designs</h2>
+          <p class="muted measure">Acht Farbschemata, jedes mit einer hellen und einer dunklen Variante. Der OLED-Modus legt die dunkle Variante auf reines Schwarz. Einstellbar unter <em>Einstellungen → Darstellung</em>.</p>
+        </div>
+        <fieldset class="modes">
+          <legend class="visually-hidden">Modus der Vorschau</legend>
+          <input type="radio" name="mode" id="m-dark" value="dark" checked><label for="m-dark">Dunkel</label>
+          <input type="radio" name="mode" id="m-light" value="light"><label for="m-light">Hell</label>
+          <input type="radio" name="mode" id="m-oled" value="oled"><label for="m-oled">OLED</label>
+        </fieldset>
+      </div>
+      <ul class="tgrid">
+        <li class="tcard" data-s="terracotta"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Terrakotta</b><span>Standard. Erdige Töne, eigens für die App abgestimmt.</span></p></li>
+        <li class="tcard" data-s="nord"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Nord</b><span>Kühles Blaugrau aus dem Nord-Farbschema.</span></p></li>
+        <li class="tcard" data-s="gruvbox"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Gruvbox</b><span>Warmer Retro-Kontrast mit Orange.</span></p></li>
+        <li class="tcard" data-s="solarized"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Solarized</b><span>Klassisches Petrol und Creme mit Blau.</span></p></li>
+        <li class="tcard" data-s="rosepine"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Rosé Pine</b><span>Gedämpftes Violett mit Rosé (hell: „Dawn“).</span></p></li>
+        <li class="tcard" data-s="everforest"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Everforest</b><span>Weiches Waldgrün, augenschonend.</span></p></li>
+        <li class="tcard" data-s="tokyonight"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Tokyo Night</b><span>Nachtblau mit leuchtendem Blau (hell: „Day“).</span></p></li>
+        <li class="tcard" data-s="dracula"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Dracula</b><span>Dunkelgrau mit Violett und Pink (hell: „Alucard“).</span></p></li>
+      </ul>
+      <p class="muted small">Vereinfachte Vorschau aus denselben Farbwerten wie in der App. Die Schemata gehen auf die gleichnamigen freien Farbpaletten zurück.</p>
+    </div>
+  </section>
+
+  <!-- ============ security ============ -->
+  <section id="sicherheit" class="sec sec-dark on-dark" aria-labelledby="secure-title">
+    <div class="wrap">
+      <h2 id="secure-title" class="h-sec">Sicherheit</h2>
+      <dl class="facttable on-dark-table">
+        <div><dt>Verschlüsselung</dt><dd>Die von KDBX 4: AES-256 oder ChaCha20, Schlüsselableitung mit Argon2 oder AES-KDF. Die App warnt bei schwachen Ableitungs-Einstellungen. Master-Passwort, optional Schlüsseldatei.</dd></div>
+        <div><dt>Trennung</dt><dd>Der geöffnete Tresor liegt im Rust-Prozess. Die Oberfläche erhält ein Passwort nur, wenn du es anzeigst, kopierst oder bearbeitest.</dd></div>
+        <div><dt>Sperren</dt><dd>Beim Sperren werden Schlüssel und geschützte Werte im Speicher überschrieben. Automatisch bei Inaktivität, Bildschirmsperre oder Benutzerwechsel (einstellbar).</dd></div>
+        <div><dt>Härtung</dt><dd>Andere Prozesse des Benutzers können den Speicher der App nicht auslesen. Browser- und SSH-Verbindung sind nur für den eigenen Benutzer erreichbar. Kontodaten für Vaultwarden schützt Windows DPAPI.</dd></div>
+        <div><dt>Gespeichert wird nie</dt><dd>Das Master-Passwort. Für das Entsperren mit Windows Hello bleibt nach dem Sperren nur ein Schlüssel im Arbeitsspeicher, nicht auf der Festplatte; Schließen eines Tresors verwirft ihn.</dd></div>
+        <div><dt>Updates</dt><dd>Nur Pakete mit der Signatur des Projekts werden installiert. Releases baut GitHub Actions aus dem getaggten Quellstand.</dd></div>
+        <div><dt>Grenzen</dt><dd>Was gerade auf dem Bildschirm steht, liegt auch im Speicher der Oberfläche. Die Windows-Version ist noch nicht code-signiert. Es gab noch kein externes Sicherheitsaudit.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ============ download ============ -->
+  <section id="download" class="sec" aria-labelledby="dl-title">
     <div class="wrap">
       <div class="dl-head">
         <div>
-          <h2 id="dl-title" class="display h-l">Herunterladen</h2>
+          <h2 id="dl-title" class="h-sec">Download</h2>
           <span class="version" data-version-big>Neueste Version auf GitHub</span>
         </div>
-        <p class="lead" style="max-width:40ch">Kostenlos, ohne Konto und ohne Registrierung. Einmal installiert, hält sich die App selbst aktuell.</p>
+        <p class="muted" style="max-width:48ch;margin:0">Ohne Konto und ohne Registrierung. Die installierte App prüft selbst auf neue Versionen (abschaltbar).</p>
       </div>
 
       <div class="platforms">
@@ -223,39 +253,39 @@
         </div>
         <div class="platform">
           <h3>Linux<small>64-Bit, AppImage</small></h3>
-          <p><span class="tag">Vorschau</span><br>Baut auf Ubuntu 22.04 und sollte auf den meisten aktuellen Distributionen starten, ist aber noch kaum getestet. Auto-Type-Fenstererkennung, Browser-Registrierung und Sperren mit dem Bildschirm fehlen noch.</p>
+          <p><span class="tag">Vorschau</span><br>Gebaut auf Ubuntu 22.04, sollte auf den meisten aktuellen Distributionen laufen, ist aber wenig getestet. Einschränkungen siehe <a href="#plattformen">Vergleich oben</a>.</p>
           <a class="btn btn-ghost" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-asset="linux">
             <svg aria-hidden="true"><use href="#i-down"/></svg><span>AppImage<small data-size="linux">von GitHub</small></span>
           </a>
         </div>
         <div class="platform off">
-          <h3>macOS<small>derzeit nicht</small></h3>
-          <p>Es gibt keine Builds für macOS.</p>
+          <h3>macOS<small>nicht verfügbar</small></h3>
+          <p>Es gibt derzeit keine Builds für macOS.</p>
           <span></span>
         </div>
       </div>
 
       <div class="dl-more">
         <div>
-          <h3>Gut zu wissen</h3>
+          <h3>Bekannte Hinweise</h3>
           <ul>
-            <li>Die Windows-Version ist noch nicht code-signiert. Windows kann deshalb vor einem unbekannten Herausgeber warnen.</li>
-            <li>Microsoft Defender meldet frische, unsignierte Builds manchmal fälschlich. Die Signierung ist beantragt.</li>
-            <li>Von 0.1.0 kommend: einmal von Hand deinstallieren, App-Daten dabei behalten.</li>
+            <li>Weil der Installer noch nicht code-signiert ist, warnt Windows SmartScreen vor einem unbekannten Herausgeber.</li>
+            <li>Microsoft Defender meldet frische, unsignierte Builds gelegentlich fälschlich.</li>
+            <li>Beim Update von 0.1.0: einmal von Hand deinstallieren, App-Daten behalten.</li>
           </ul>
         </div>
         <div>
           <h3>Selbst bauen</h3>
-          <p>Mit Node.js, Rust und den Tauri-Voraussetzungen:</p>
+          <p>Voraussetzungen: Node.js, Rust und die Tauri-Abhängigkeiten.</p>
 <pre><code>git clone https://github.com/bohannjein/AnotherKeepass.git
 cd AnotherKeepass && npm ci
 npx tauri build</code></pre>
         </div>
         <div>
-          <h3>Mehr</h3>
+          <h3>Weiteres</h3>
           <ul>
             <li><a href="https://github.com/bohannjein/AnotherKeepass/releases">Alle Versionen und Update-Signaturen</a></li>
-            <li><a href="https://github.com/bohannjein/AnotherKeepass/blob/main/CHANGELOG.md">Was sich geändert hat</a></li>
+            <li><a href="https://github.com/bohannjein/AnotherKeepass/blob/main/CHANGELOG.md">Änderungsprotokoll</a></li>
             <li><a href="anleitung.html#installieren">Installationsanleitung</a></li>
           </ul>
         </div>
@@ -263,11 +293,11 @@ npx tauri build</code></pre>
     </div>
   </section>
 
-  <section class="band band-ochre" aria-labelledby="docs-title">
+  <section class="sec sec-tint" aria-labelledby="docs-title">
     <div class="wrap docs">
       <div>
-        <h2 id="docs-title" class="display h-l">Anleitung</h2>
-        <p class="muted" style="margin-top:20px">Von der Installation bis zur Browser-Erweiterung, Schritt für Schritt.</p>
+        <h2 id="docs-title" class="h-sec">Dokumentation</h2>
+        <p class="muted">Installation, Einrichtung und Fehlerbehebung.</p>
       </div>
       <ul class="doclinks">
         <li><a href="anleitung.html#installieren"><span><strong>Installieren und aktualisieren</strong><span>Windows, Linux, automatische Updates</span></span><span class="arr" aria-hidden="true">→</span></a></li>
@@ -275,7 +305,7 @@ npx tauri build</code></pre>
         <li><a href="anleitung.html#browser"><span><strong>Browser verbinden</strong><span>KeePassXC-Browser einrichten</span></span><span class="arr" aria-hidden="true">→</span></a></li>
         <li><a href="anleitung.html#umziehen"><span><strong>Von einem anderen Manager umziehen</strong><span>Bitwarden, 1Password, Proton Pass, Vaultwarden</span></span><span class="arr" aria-hidden="true">→</span></a></li>
         <li><a href="anleitung.html#kdbx"><span><strong>Wie Daten in der Datei liegen</strong><span>Zuordnung zu KDBX</span></span><span class="arr" aria-hidden="true">→</span></a></li>
-        <li><a href="anleitung.html#probleme"><span><strong>Wenn etwas hakt</strong><span>Warnungen, Defender, KeePassXC parallel</span></span><span class="arr" aria-hidden="true">→</span></a></li>
+        <li><a href="anleitung.html#probleme"><span><strong>Fehlerbehebung</strong><span>Warnungen, Defender, KeePassXC parallel</span></span><span class="arr" aria-hidden="true">→</span></a></li>
       </ul>
     </div>
   </section>
