@@ -4,6 +4,8 @@
 
 - **Autostart:** with "start minimized" and the tray icon, the window could open white and
   unresponsive after logging in to Windows. The first time it is shown, it is now built fresh.
+- **White window after a crash:** if WebView2 crashes (graphics driver, standby), the page
+  reloads or the window is rebuilt instead of staying white. Open vaults are locked first.
 - **Columns:** drag the borders between menu, list and entry to resize them (arrow keys work
   too, a double-click restores the default). Dragging the menu narrow folds it into the icon
   rail. The widths are saved.
@@ -12,6 +14,8 @@
   Everforest, Tokyo Night and Dracula.
 - **OLED black:** a new theme with pure black surfaces; it works with every color scheme.
 - **Search:** also finds user names, websites, notes and custom fields (not passwords).
+- **Menu header:** shows the app version and the number of entries, or a waiting update,
+  instead of the "KeePass compatible" tagline.
 
 ## 0.2.2
 

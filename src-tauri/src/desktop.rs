@@ -257,7 +257,7 @@ pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
     // first shown hours later (GPU/compositor never attached). A manual start is fine, so on
     // the first show swap the hidden webview for a fresh one - as long as it holds no state.
     if NEVER_SHOWN.swap(false, Ordering::Relaxed) && app.state::<Vaults>().0.lock().is_ok_and(|m| m.is_empty()) {
-        recreate_main(app.clone());
+        recreate_main(app.clone(), "first show after hidden autostart", true);
         return;
     }
     if let Some(w) = main_window(app) {
@@ -270,8 +270,8 @@ pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
 /// Destroy the (hidden) main window and build it again from tauri.conf.json, then show it.
 /// Runs off the main thread: the label is only free once the Destroyed event went through
 /// the event loop.
-fn recreate_main<R: Runtime>(app: AppHandle<R>) {
-    log::info!("first show after hidden autostart: fresh main window");
+fn recreate_main<R: Runtime>(app: AppHandle<R>, why: &str, show: bool) {
+    log::info!("{why}: fresh main window");
     std::thread::spawn(move || {
         RECREATING.store(true, Ordering::SeqCst);
         if let Some(w) = main_window(&app) {
@@ -296,11 +296,87 @@ fn recreate_main<R: Runtime>(app: AppHandle<R>) {
         match built {
             Ok(_) => {
                 apply_screen_protect(&app, prefs(&app).screen_protect);
-                show_main(&app);
+                watch_webview(&app);
+                if show {
+                    show_main(&app);
+                }
             }
             Err(e) => log::error!("recreate main window: {e}"),
         }
     });
+}
+
+/// Recoveries in the last minute; more than a few means the webview keeps dying and
+/// reloading would only loop.
+static RECOVERIES: Mutex<Vec<std::time::Instant>> = Mutex::new(Vec::new());
+
+/// Recover from a crashed WebView2 instead of leaving a white, dead window behind (GPU
+/// process after standby, driver update, killed renderer). A dead renderer gets a reload,
+/// a dead browser process a fresh window. Open vaults are locked first: the reloaded page
+/// starts at the unlock screen and must not disagree with the backend.
+#[cfg(windows)]
+pub fn watch_webview<R: Runtime>(app: &AppHandle<R>) {
+    use webview2_com::{
+        Microsoft::Web::WebView2::Win32::{
+            COREWEBVIEW2_PROCESS_FAILED_KIND, COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED,
+            COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED,
+            COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE,
+        },
+        ProcessFailedEventHandler,
+    };
+    let Some(w) = main_window(app) else { return };
+    let app = app.clone();
+    let res = w.with_webview(move |pw| {
+        let Ok(core) = (unsafe { pw.controller().CoreWebView2() }) else {
+            log::warn!("webview watch: no CoreWebView2");
+            return;
+        };
+        let handler = ProcessFailedEventHandler::create(Box::new(move |sender, args| {
+            let mut kind = COREWEBVIEW2_PROCESS_FAILED_KIND::default();
+            if let Some(a) = &args {
+                unsafe { a.ProcessFailedKind(&mut kind)? };
+            }
+            let browser = kind == COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED;
+            let renderer = kind == COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED
+                || kind == COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE;
+            log::warn!("webview process failed (kind {})", kind.0);
+            // GPU, utility and iframe processes are restarted by WebView2 itself
+            if !(browser || renderer) || !may_recover() {
+                return Ok(());
+            }
+            lock_all(&app);
+            if browser {
+                let visible = main_window(&app).and_then(|w| w.is_visible().ok()).unwrap_or(false);
+                recreate_main(app.clone(), "webview browser process exited", visible);
+            } else if let Some(s) = sender {
+                log::info!("webview renderer failed: reload");
+                unsafe { s.Reload()? };
+            }
+            Ok(())
+        }));
+        let mut token = 0i64;
+        if let Err(e) = unsafe { core.add_ProcessFailed(&handler, &mut token) } {
+            log::warn!("webview watch: {e}");
+        }
+    });
+    if let Err(e) = res {
+        log::warn!("webview watch: {e}");
+    }
+}
+
+#[cfg(not(windows))]
+pub fn watch_webview<R: Runtime>(_app: &AppHandle<R>) {}
+
+fn may_recover() -> bool {
+    let now = std::time::Instant::now();
+    let Ok(mut recent) = RECOVERIES.lock() else { return false };
+    recent.retain(|t| now.duration_since(*t).as_secs() < 60);
+    if recent.len() >= 3 {
+        log::error!("webview keeps failing; not recovering again for now");
+        return false;
+    }
+    recent.push(now);
+    true
 }
 
 /// Drop every open vault (zeroizes keys and protected values) and tell the UI.
@@ -451,6 +527,7 @@ pub fn on_window_event<R: Runtime>(window: &tauri::Window<R>, event: &WindowEven
 /// Window starts hidden (tauri.conf.json) so "start minimized" doesn't flash.
 pub fn initial_show<R: Runtime>(app: &AppHandle<R>, p: &DesktopPrefs) {
     let Some(w) = main_window(app) else { return };
+    watch_webview(app);
     // "start minimized" is for the login autostart only; a manual start always shows the window
     let autostarted = std::env::args().any(|a| a == AUTOSTART_ARG);
     if !(p.start_minimized && autostarted) {

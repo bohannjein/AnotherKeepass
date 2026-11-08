@@ -1,6 +1,6 @@
 import { lazy, useState, useCallback, useEffect, useRef, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
-import { backend, type EntryUsed, type VaultData } from './backend';
+import { backend, isDemo, type EntryUsed, type VaultData } from './backend';
 import { type ItemType, type Field, type Item, type Folder, type VaultInfo, type Draft, draftToInput, rawToItem, matchesQuery } from './model';
 import { DEMO_VAULTS } from './mock';
 import { openOptions, openExternal } from './open';
@@ -280,6 +280,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   }, [query, settings.clearSearch, settings.clearSearchMinutes]);
 
   const items = useMemo(() => Object.values(open).flatMap(v => v.items.map(r => rawToItemCached(r, v))), [open]);
+  const liveCount = useMemo(() => items.filter(i => !i.trashed).length, [items]);
   const allItems = useMemo(() => pending ? [...items, pending] : items, [items, pending]);
   const folders: Folder[] = useMemo(() => Object.values(open).flatMap(v =>
     v.folders.map(f => ({ id: f.id, vault: v.id, name: f.name, parent: f.parent, share: f.share }))), [open]);
@@ -555,7 +556,10 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
           <button className="logo" onClick={() => setRail(r => !r)} title={t.toggleMenu} aria-label={t.toggleMenu} aria-expanded={!rail}>
             <Icon n={rail ? 'menu' : 'encrypted'} fill />
           </button>
-          <h1>Another<span>Keepass</span><small>{t.kdbxCompat}</small></h1>
+          <h1>Another<span>Keepass</span><small>v{__APP_VERSION__} · {update
+            ? <b className="brand-update">{t.brandUpdate.replace('{v}', update.version)}</b>
+            : isDemo ? t.brandDemo
+            : liveCount === 1 ? t.brandEntry : t.brandEntries.replace('{n}', liveCount.toLocaleString(settings.lang))}</small></h1>
         </div>
         <div className="new-wrap">
           <button className="fab" onClick={() => setNewMenu(m => !m)} aria-expanded={newMenu}><Icon n="add" /><span className="fab-label">{t.newItem}</span></button>

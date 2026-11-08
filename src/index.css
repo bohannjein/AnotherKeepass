@@ -175,7 +175,8 @@ button { cursor: pointer; border: 0; background: none; }
 }
 .brand h1 { font-size: 20px; font-weight: 700; letter-spacing: -.01em; line-height: 1.1; }
 .brand h1 span { color: var(--primary); }
-.brand small { display: block; font-size: 11px; color: var(--on-surface-var); font-weight: 500; }
+.brand small { display: block; font-size: 11px; color: var(--on-surface-var); font-weight: 500; font-variant-numeric: tabular-nums; }
+.brand-update { color: var(--primary); font-weight: 600; }
 .drawer .fab { margin: 0 0 20px 4px; align-self: flex-start; }
 .nav { flex: 1; overflow-y: auto; }
 .nav .label { display: block; padding: 8px 16px; }

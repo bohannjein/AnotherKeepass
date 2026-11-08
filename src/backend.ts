@@ -487,7 +487,8 @@ const demo: Backend = {
 /** Demo only: bytes of an attachment added in this session (desktop saves via dialog). */
 export const demoAttachment = (vault: string, id: string, name: string) => demoVaults.get(vault)?.files.get(id + '/' + name);
 
-export const backend: Backend = '__TAURI_INTERNALS__' in window ? desktop : demo;
+export const isDemo = !('__TAURI_INTERNALS__' in window);
+export const backend: Backend = isDemo ? demo : desktop;
 
 /** Maps backend error codes to something a user can act on. */
 export const errorCode = (e: unknown) => String(e instanceof Error ? e.message : e).split(':')[0];
