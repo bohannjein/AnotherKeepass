@@ -337,8 +337,7 @@ pub fn watch_webview<R: Runtime>(app: &AppHandle<R>) {
     use webview2_com::{
         Microsoft::Web::WebView2::Win32::{
             COREWEBVIEW2_PROCESS_FAILED_KIND, COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED,
-            COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED,
-            COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE,
+            COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED, COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE,
         },
         ProcessFailedEventHandler,
     };
@@ -429,7 +428,7 @@ fn tray_image<R: Runtime>(app: &AppHandle<R>, style: &str) -> Option<tauri::imag
         return Some(img);
     }
     let mut px = img.rgba().to_vec();
-    px.chunks_exact_mut(4).for_each(|p| p[3] = (p[3] as u16 * 2 / 5) as u8);
+    px.as_chunks_mut::<4>().0.iter_mut().for_each(|p| p[3] = (p[3] as u16 * 2 / 5) as u8);
     Some(tauri::image::Image::new_owned(px, img.width(), img.height()))
 }
 
@@ -798,8 +797,47 @@ pub fn poll_lock(app: AppHandle) {
 #[cfg(not(windows))]
 pub fn poll_lock(_app: AppHandle) {}
 
-// ponytail: Linux/macOS screen-lock signals (logind D-Bus / NSWorkspace) not wired yet
-#[cfg(not(windows))]
+/// Linux: listen for the screen saver's ActiveChanged signal on the session bus (freedesktop:
+/// KDE, Xfce, Cinnamon …; GNOME's own interface) through `dbus-monitor`, which nearly every
+/// desktop ships. `true` = the screen locked: handled like Windows' session lock.
+#[cfg(target_os = "linux")]
+pub fn watch_session(app: AppHandle) {
+    use std::io::{BufRead, BufReader};
+    std::thread::spawn(move || {
+        let child = std::process::Command::new("dbus-monitor")
+            .args([
+                "--session",
+                "type='signal',interface='org.freedesktop.ScreenSaver',member='ActiveChanged'",
+                "type='signal',interface='org.gnome.ScreenSaver',member='ActiveChanged'",
+            ])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+        let mut child = match child {
+            Ok(c) => c,
+            Err(e) => {
+                log::warn!("screen lock watch: dbus-monitor not available ({e})");
+                return;
+            }
+        };
+        let Some(out) = child.stdout.take() else { return };
+        let mut in_signal = false;
+        for line in BufReader::new(out).lines().map_while(Result::ok) {
+            if line.contains("member=ActiveChanged") {
+                in_signal = true;
+            } else if in_signal && line.trim_start().starts_with("boolean") {
+                in_signal = false;
+                if line.contains("true") {
+                    log::info!("screen locked (D-Bus ScreenSaver)");
+                    on_session_event(&app, 0x7);
+                }
+            }
+        }
+    });
+}
+
+// ponytail: macOS screen-lock signals (NSWorkspace) not wired yet
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn watch_session(_app: AppHandle) {}
 
 #[cfg(test)]

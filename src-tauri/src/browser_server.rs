@@ -371,8 +371,64 @@ pub fn sync_manifests(p: &desktop::DesktopPrefs) -> Vec<String> {
     problems
 }
 
-// ponytail: Linux/macOS manifest files (~/.config/google-chrome/NativeMessagingHosts …) not written yet
-#[cfg(not(windows))]
+/// Linux: one manifest file per browser in its NativeMessagingHosts folder. A file that is not
+/// ours (usually KeePassXC's) is kept as `.akp-backup` and put back when switched off.
+#[cfg(target_os = "linux")]
+pub fn sync_manifests(p: &desktop::DesktopPrefs) -> Vec<String> {
+    use std::path::PathBuf;
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return vec!["manifest:no HOME".into()] };
+    let config = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".config"));
+    // an AppImage runs from a new mount point every start: point at the AppImage file itself
+    let exe = if p.b_custom_proxy && !p.b_proxy_path.trim().is_empty() {
+        PathBuf::from(p.b_proxy_path.trim())
+    } else {
+        std::env::var_os("APPIMAGE").map(PathBuf::from).unwrap_or_else(|| std::env::current_exe().unwrap_or_default())
+    };
+    let on = p.browser_enabled && p.b_update_manifests;
+    // (folder, firefox?, enabled)
+    let targets = [
+        (config.join("google-chrome/NativeMessagingHosts"), false, p.b_chrome),
+        (config.join("chromium/NativeMessagingHosts"), false, p.b_chromium),
+        (config.join("BraveSoftware/Brave-Browser/NativeMessagingHosts"), false, p.b_brave),
+        (config.join("vivaldi/NativeMessagingHosts"), false, p.b_vivaldi),
+        (config.join("microsoft-edge/NativeMessagingHosts"), false, p.b_edge),
+        (home.join(".mozilla/native-messaging-hosts"), true, p.b_firefox),
+    ];
+    let mut problems = Vec::new();
+    for (dir, firefox, enabled) in targets {
+        let file = dir.join(format!("{HOST_NAME}.json"));
+        let backup = dir.join(format!("{HOST_NAME}.json.akp-backup"));
+        let current = std::fs::read(&file).ok();
+        let ours = current
+            .as_deref()
+            .and_then(|b| serde_json::from_slice::<serde_json::Value>(b).ok())
+            .is_some_and(|v| v["description"] == "AnotherKeepass browser integration");
+        if on && enabled {
+            let manifest = if firefox {
+                json!({ "name": HOST_NAME, "description": "AnotherKeepass browser integration", "path": exe, "type": "stdio", "allowed_extensions": [FIREFOX_ID] })
+            } else {
+                json!({ "name": HOST_NAME, "description": "AnotherKeepass browser integration", "path": exe, "type": "stdio", "allowed_origins": CHROMIUM_ORIGINS })
+            };
+            let bytes = serde_json::to_vec_pretty(&manifest).unwrap_or_default();
+            if current.as_ref() == Some(&bytes) {
+                continue;
+            }
+            if let (Some(prev), false) = (&current, ours) {
+                let _ = std::fs::write(&backup, prev);
+            }
+            if let Err(e) = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&file, &bytes)) {
+                problems.push(format!("manifest:{e}"));
+            }
+        } else if ours {
+            // switched off: give the slot back to whoever had it (e.g. KeePassXC)
+            let _ = if backup.exists() { std::fs::rename(&backup, &file) } else { std::fs::remove_file(&file) };
+        }
+    }
+    problems
+}
+
+// ponytail: macOS manifest files (~/Library/Application Support/…/NativeMessagingHosts) not written yet
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn sync_manifests(_p: &desktop::DesktopPrefs) -> Vec<String> {
     Vec::new()
 }

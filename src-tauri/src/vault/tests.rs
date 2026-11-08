@@ -321,12 +321,16 @@ fn challenge_response_key_roundtrip() {
     fs::create_dir_all(&dir).unwrap();
     let path = dir.join("cr.kdbx");
     let secret = "0102030405060708090a0b0c0d0e0f1011121314".to_string();
-    let key = || make_key(Some("pw"), None, None).unwrap().with_challenge_response_key(ChallengeResponseKey::LocalChallenge(secret.clone()));
+    let key =
+        || make_key(Some("pw"), None, None).unwrap().with_challenge_response_key(ChallengeResponseKey::LocalChallenge(secret.clone()));
     let mut db = Database::new();
     db.root_mut().name = "cr".into();
     db.save(&mut fs::File::create(&path).unwrap(), key()).unwrap();
     assert!(Database::open(&mut fs::File::open(&path).unwrap(), key()).is_ok(), "opens with the response");
-    assert!(Database::open(&mut fs::File::open(&path).unwrap(), make_key(Some("pw"), None, None).unwrap()).is_err(), "password alone is not enough");
+    assert!(
+        Database::open(&mut fs::File::open(&path).unwrap(), make_key(Some("pw"), None, None).unwrap()).is_err(),
+        "password alone is not enough"
+    );
     assert_eq!(make_key(Some("pw"), None, Some("3")).err().as_deref(), Some("yubikey:slot"));
     let _ = fs::remove_dir_all(dir);
 }

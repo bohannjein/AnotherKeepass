@@ -14,6 +14,10 @@
 - **YubiKey:** vaults protected with a YubiKey in KeePassXC (HMAC-SHA1 challenge-response, slot 1
   or 2) open and save. Pick the slot next to the key file when unlocking; it is remembered per
   vault. Not tested with real hardware yet.
+- **Linux (untested):** Auto-Type reads and focuses the active window on X11 through `xdotool`;
+  the browser manifests for Chrome, Chromium, Brave, Vivaldi, Edge and Firefox are written (an
+  existing KeePassXC one is kept and restored); vaults lock when the screen locks (D-Bus screen
+  saver signal). CI now also builds on Linux.
 - **Reset column widths:** button in the settings (double-clicking a column border still works).
 - **Tray icon:** a thin shield outline with a keyhole and some space around it, drawn at the
   exact tray size, so it matches the other Windows tray icons.

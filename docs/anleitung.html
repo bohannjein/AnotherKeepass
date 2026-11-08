@@ -80,7 +80,7 @@
         </ol>
 <pre><code>chmod +x AnotherKeepass_*.AppImage
 ./AnotherKeepass_*.AppImage</code></pre>
-        <div class="note"><p>Die Linux-Version baut, ist aber noch kaum getestet. Windows Hello und andere reine Windows-Optionen sind ausgeblendet. Es fehlen noch: Fenstererkennung für Auto-Type, automatisch eingerichtete Browser-Verbindung und Sperren bei Bildschirmsperre.</p></div>
+        <div class="note"><p>Die Linux-Version baut, ist aber noch kaum getestet. Windows Hello und andere reine Windows-Optionen sind ausgeblendet. Die Fenstererkennung für Auto-Type braucht <code>xdotool</code> und funktioniert nur unter X11, nicht unter Wayland. Das Sperren bei Bildschirmsperre nutzt <code>dbus-monitor</code>. Die Browser-Verbindung schreibt die Manifeste für Chrome, Chromium, Brave, Vivaldi, Edge und Firefox selbst.</p></div>
       </section>
 
       <section id="updates">

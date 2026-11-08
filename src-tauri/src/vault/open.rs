@@ -288,7 +288,13 @@ pub async fn vault_quick_unlock(app: tauri::AppHandle, state: tauri::State<'_, V
 }
 
 #[tauri::command]
-pub fn vault_change_key(state: tauri::State<'_, Vaults>, id: String, password: Option<String>, keyfile: Option<String>, yubikey: Option<String>) -> R<()> {
+pub fn vault_change_key(
+    state: tauri::State<'_, Vaults>,
+    id: String,
+    password: Option<String>,
+    keyfile: Option<String>,
+    yubikey: Option<String>,
+) -> R<()> {
     let key = make_key(password.as_deref(), keyfile.as_deref(), yubikey.as_deref())?;
     with_vault(&state, &id, |v| {
         v.key = key;

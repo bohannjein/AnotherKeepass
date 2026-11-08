@@ -237,7 +237,7 @@ export const SECTIONS: Section[] = [
         id: 'lock', items: [
           { key: 'autoLock', type: 'toggle' },
           { key: 'autoLockSeconds', type: 'number', min: 10, max: 43200, unit: 's', dependsOn: 'autoLock' },
-          { key: 'lockOnSession', type: 'toggle', platform: 'windows' },
+          { key: 'lockOnSession', type: 'toggle' },
           { key: 'lockOnUserSwitch', type: 'toggle', platform: 'windows' },
           { key: 'lockOnMinimize', type: 'toggle' },
         ],

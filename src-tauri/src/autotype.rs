@@ -213,12 +213,37 @@ fn focus(h: isize) {
     unsafe { SetForegroundWindow(h as _) };
 }
 
-// ponytail: active-window title on Linux/macOS not wired (X11 _NET_ACTIVE_WINDOW / NSWorkspace)
-#[cfg(not(windows))]
+/// Linux: X11 (and XWayland windows) through `xdotool`, if installed. Wayland has no way to
+/// read or focus another program's window, so there the title stays empty and Auto-Type falls
+/// back to the picker.
+#[cfg(target_os = "linux")]
+fn xdotool(args: &[&str]) -> Option<String> {
+    std::process::Command::new("xdotool")
+        .args(args)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+}
+
+#[cfg(target_os = "linux")]
+fn foreground() -> (Option<isize>, String) {
+    let Some(id) = xdotool(&["getactivewindow"]) else { return (None, String::new()) };
+    let title = xdotool(&["getwindowname", &id]).unwrap_or_default();
+    (id.parse::<isize>().ok(), title)
+}
+
+#[cfg(target_os = "linux")]
+fn focus(h: isize) {
+    let _ = xdotool(&["windowactivate", "--sync", &h.to_string()]);
+}
+
+// ponytail: active-window title on macOS not wired (NSWorkspace)
+#[cfg(not(any(windows, target_os = "linux")))]
 fn foreground() -> (Option<isize>, String) {
     (None, String::new())
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 fn focus(_h: isize) {}
 
 // ---------------------------------------------------------------- flow
