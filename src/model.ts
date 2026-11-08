@@ -80,14 +80,6 @@ export const searchText = (i: Item) => [
   ...i.fields.filter(f => !f.protected && !isProtectedKind(f.kind)).flatMap(f => [f.label ?? '', f.value]),
 ].join('\n').toLowerCase();
 
-/** Every word of the query must occur somewhere (any order). */
-export const matchesQuery = (i: Item, query: string) => {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!words.length) return true;
-  const text = searchText(i);
-  return words.every(w => text.includes(w));
-};
-
 function inferType(names: Set<string>, note: string): ItemType {
   if (names.has('Card number')) return 'card';
   if (names.has('Full name')) return 'identity';

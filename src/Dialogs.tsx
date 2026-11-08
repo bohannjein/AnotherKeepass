@@ -71,6 +71,7 @@ export function ShortcutsDialog({ t, onClose }: { t: Strings; onClose: () => voi
             <div key={keys}><dt><kbd>{keys}</kbd></dt><dd>{t[label]}</dd></div>
           ))}
         </dl>
+        <p className="search-ops"><Icon n="search" /><code>{t.searchOps}</code></p>
         <small className="label">{t.dragHint}</small>
         <div className="row"><button className="btn filled" onClick={onClose}>{t.close}</button></div>
       </div>

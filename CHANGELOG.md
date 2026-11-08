@@ -8,6 +8,9 @@
   live. A sub-option decides whether dark means the normal dark theme or OLED black.
 - **Own colors:** a ninth scheme with your own background, text and accent color for dark and
   light; the app warns when the contrast is too low.
+- **Search operators** like KeePassXC: `user:`, `url:`, `notes:`, `tag:`, `title:`, `is:weak`,
+  `is:reused`, `is:old`, `is:breached`, `is:expired`, `is:pinned`, `is:totp`, phrases in quotes and
+  `-` to exclude. Listed in the shortcuts overview (F1) and the search field's tooltip.
 - **Reset column widths:** button in the settings (double-clicking a column border still works).
 - **Tray icon:** a thin shield outline with a keyhole and some space around it, drawn at the
   exact tray size, so it matches the other Windows tray icons.

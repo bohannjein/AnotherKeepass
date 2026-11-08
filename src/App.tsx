@@ -1,7 +1,8 @@
 import { lazy, useState, useCallback, useEffect, useRef, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { backend, isDemo, type EntryUsed, type VaultData } from './backend';
-import { type ItemType, type Field, type Item, type Folder, type VaultInfo, type Draft, draftToInput, rawToItem, matchesQuery } from './model';
+import { type ItemType, type Field, type Item, type Folder, type VaultInfo, type Draft, draftToInput, rawToItem } from './model';
+import { matchesTerms, needsHealth, parseQuery } from './search';
 import { DEMO_VAULTS } from './mock';
 import { openOptions, openExternal } from './open';
 import { clearHistory, generate } from './generator';
@@ -327,24 +328,25 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const { run, apply, copyText, copyField, requestTrash, restoreItem, deleteForever, emptyTrash, togglePin, moveItem, duplicate, loadIcons, removeIcon, historyRestore, download, bulkTrash, bulkMove, bulkPin } =
     useItemActions({ t, settings, notify, open, items, folders, vaultList, chosen, onUpdate, setSelected, setConfirm, setMulti });
 
+  const terms = useMemo(() => parseQuery(query), [query]);
   const { health, breaches, checking, issue, setIssue, issuesOf, issueName, issueLabel, checkBreaches, healthCounts } =
-    useHealth({ t, active: vault === HEALTH, open, notify });
+    useHealth({ t, active: vault === HEALTH || needsHealth(terms), open, notify });
   const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = terms.length > 0;
     if (vault === HEALTH) {
       const rank = (i: Item) => issuesOf(i.id).reduce((s, k) => s + (5 - ISSUES.indexOf(k)) ** 2, 0);
       return allItems
         .filter(i => !i.trashed && (issue ? issuesOf(i.id).includes(issue) : issuesOf(i.id).length > 0))
-        .filter(i => matchesQuery(i, q))
+        .filter(i => !q || matchesTerms(i, terms, issuesOf))
         .sort((a, b) => rank(b) - rank(a) || a.title.localeCompare(b.title))
         .map(i => ({ ...i, pinned: false }));
     }
     let list = allItems.filter(i => vault === TRASH ? i.trashed
       : !i.trashed && (vault === ALL || i.vault === vault) && (!folder || i.folder === folder));
-    if (q) list = list.filter(i => matchesQuery(i, q));
+    if (q) list = list.filter(i => matchesTerms(i, terms, issuesOf));
     if (tag) list = list.filter(i => i.tags?.includes(tag));
     return sortItems(list, settings.entrySort as SortMode);
-  }, [allItems, vault, folder, query, settings.entrySort, tag, issue, issuesOf]);
+  }, [allItems, vault, folder, terms, settings.entrySort, tag, issue, issuesOf]);
   // tags present in the current vault/folder scope, for the filter chips
   const scopeTags = useMemo(() => [...new Set(allItems
     .filter(i => vault === TRASH ? i.trashed : !i.trashed && (vault === ALL || i.vault === vault) && (!folder || i.folder === folder))
@@ -698,7 +700,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       <section className="pane">
         <label className="searchbar">
           <Icon n="search" />
-          <input ref={searchRef} placeholder={t.search} value={query} onChange={e => setQuery(e.target.value)} aria-label={t.search} title={`${t.scSearch} (Ctrl+F)`} />
+          <input ref={searchRef} placeholder={t.search} value={query} onChange={e => setQuery(e.target.value)} aria-label={t.search} title={`${t.scSearch} (Ctrl+F) · ${t.searchOps}`} />
           {query && <button className="icon-btn" onClick={() => setQuery('')} aria-label={t.close}><Icon n="close" /></button>}
         </label>
         {activeVault && (
