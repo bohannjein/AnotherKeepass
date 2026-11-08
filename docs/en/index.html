@@ -246,37 +246,38 @@
         <p class="muted" style="max-width:48ch;margin:0">No account, no sign-up. The installed app looks for new versions every day and can install them on its own (can be switched off).</p>
       </div>
 
-      <div class="platforms">
-        <div class="platform">
-          <h3>Windows<small>64-bit (x64)</small></h3>
-          <p></p>
-          <a class="btn btn-primary" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-asset="win">
-            <svg aria-hidden="true"><use href="#i-down"/></svg><span>Installer (.exe)<small data-size="win">from GitHub</small></span>
-          </a>
-        </div>
-        <div class="platform">
-          <h3>Linux<small>64-bit</small></h3>
-          <p><span class="tag">Preview</span></p>
-          <div class="dl-stack">
-            <a class="btn btn-ghost" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-asset="deb">
-              <svg aria-hidden="true"><use href="#i-down"/></svg><span>.deb<small data-size="deb">from GitHub</small></span>
-            </a>
-            <a class="btn btn-ghost" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-asset="rpm">
-              <svg aria-hidden="true"><use href="#i-down"/></svg><span>.rpm<small data-size="rpm">from GitHub</small></span>
-            </a>
-            <a class="btn btn-ghost" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-asset="flatpak">
-              <svg aria-hidden="true"><use href="#i-down"/></svg><span>Flatpak<small data-size="flatpak">from GitHub</small></span>
-            </a>
-            <a class="btn btn-ghost" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-asset="linux">
-              <svg aria-hidden="true"><use href="#i-down"/></svg><span>AppImage<small data-size="linux">from GitHub</small></span>
-            </a>
+      <div class="dl-list">
+        <section class="dl-os"><h3>Windows</h3>
+          <div class="dl-row">
+            <span class="dl-name">Installer (x64, Windows 10 / 11)<small data-size="win"></small></span>
+            <a class="btn btn-primary dl-btn" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-asset="win"><svg aria-hidden="true"><use href="#i-down"/></svg>Download</a>
+            <span class="dl-links"><a href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-sig="win">Signature</a><a href="https://github.com/bohannjein/AnotherKeepass/releases/latest/download/SHA256SUMS.txt">SHA-256</a></span>
           </div>
-        </div>
-        <div class="platform off">
-          <h3>macOS<small>not available</small></h3>
-          <p></p>
-          <span></span>
-        </div>
+        </section>
+        <section class="dl-os"><h3>Linux</h3>
+          <p class="muted small">The Linux packages are a preview and barely tested.</p>
+          <div class="dl-row">
+            <span class="dl-name">Debian, Ubuntu, Mint (.deb, x64)<small data-size="deb"></small></span>
+            <a class="btn btn-primary dl-btn" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-asset="deb"><svg aria-hidden="true"><use href="#i-down"/></svg>Download</a>
+            <span class="dl-links"><a href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-sig="deb">Signature</a><a href="https://github.com/bohannjein/AnotherKeepass/releases/latest/download/SHA256SUMS.txt">SHA-256</a></span>
+          </div>
+          <div class="dl-row">
+            <span class="dl-name">Fedora, openSUSE (.rpm, x64)<small data-size="rpm"></small></span>
+            <a class="btn btn-primary dl-btn" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-asset="rpm"><svg aria-hidden="true"><use href="#i-down"/></svg>Download</a>
+            <span class="dl-links"><a href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-sig="rpm">Signature</a><a href="https://github.com/bohannjein/AnotherKeepass/releases/latest/download/SHA256SUMS.txt">SHA-256</a></span>
+          </div>
+          <div class="dl-row">
+            <span class="dl-name">Flatpak (x64, any distribution)<small data-size="flatpak"></small></span>
+            <a class="btn btn-primary dl-btn" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-asset="flatpak"><svg aria-hidden="true"><use href="#i-down"/></svg>Download</a>
+            <span class="dl-links"><a href="https://github.com/bohannjein/AnotherKeepass/releases/latest/download/SHA256SUMS.txt">SHA-256</a></span>
+          </div>
+          <div class="dl-row">
+            <span class="dl-name">AppImage (x64, no installation)<small data-size="linux"></small></span>
+            <a class="btn btn-primary dl-btn" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-asset="linux"><svg aria-hidden="true"><use href="#i-down"/></svg>Download</a>
+            <span class="dl-links"><a href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-sig="linux">Signature</a><a href="https://github.com/bohannjein/AnotherKeepass/releases/latest/download/SHA256SUMS.txt">SHA-256</a></span>
+          </div>
+        </section>
+        <section class="dl-os off"><h3>macOS</h3><p class="muted small">No macOS builds at the moment.</p></section>
       </div>
 
       <div class="dl-more">

@@ -130,3 +130,13 @@ jobs:
           f=$(ls *.flatpak | head -1)
           mv "$f" "AnotherKeepass_${GITHUB_REF_NAME#v}_x86_64.flatpak"
           gh release upload "$GITHUB_REF_NAME" AnotherKeepass_*.flatpak --clobber -R "$GITHUB_REPOSITORY"
+      # SHA-256 of every download, linked from the website
+      - name: Checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir sums && cd sums
+          gh release download "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" -p '*.exe' -p '*.deb' -p '*.rpm' -p '*.AppImage' -p '*.flatpak'
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          gh release upload "$GITHUB_REF_NAME" SHA256SUMS.txt --clobber -R "$GITHUB_REPOSITORY"

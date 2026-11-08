@@ -496,3 +496,22 @@ body:has(#m-oled:checked) .mock .m-list, body:has(#m-oled:checked) .mock .m-det 
   .facttable div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
 @media (max-width: 480px) { .tgrid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- download list: one row per file ---------- */
+.dl-list { display: grid; gap: 8px; margin-top: 8px; }
+.dl-os { padding: 18px 0; border-bottom: 1px solid rgba(35, 26, 18, .2); }
+.dl-os h3 { font-size: 1.5rem; font-weight: 850; font-stretch: 110%; margin-bottom: 6px; }
+.dl-os .small { margin: 0 0 8px; }
+.dl-os.off { opacity: .7; }
+.dl-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 15rem); gap: 10px 24px; align-items: center; padding: 10px 0; }
+.dl-row + .dl-row { border-top: 1px solid rgba(35, 26, 18, .1); }
+.dl-name { font-weight: 650; }
+.dl-name small { margin-left: 10px; font-weight: 500; color: var(--ink-soft); font-size: .9rem; }
+.dl-btn { padding: 8px 18px; min-height: 0; }
+.dl-btn svg { width: 18px; height: 18px; }
+.dl-links { display: flex; gap: 18px; font-size: .95rem; }
+.dl-links a { color: var(--clay-deep); }
+@media (max-width: 700px) {
+  .dl-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .dl-links { grid-column: 1 / -1; }
+}

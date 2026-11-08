@@ -31,6 +31,7 @@
         if (!a) continue;
         document.querySelectorAll(`[data-asset="${os}"]`).forEach(el => { el.href = a.browser_download_url; });
         document.querySelectorAll(`[data-size="${os}"]`).forEach(el => { el.textContent = mb(a.size); });
+        document.querySelectorAll(`[data-sig="${os}"]`).forEach(el => { el.href = a.browser_download_url + '.sig'; });
       }
       const mine = assets[linux ? 'linux' : 'win'];
       if (primary && mine) primary.href = mine.browser_download_url;
