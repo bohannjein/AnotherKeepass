@@ -9,7 +9,7 @@ import { clearHistory, generate } from './generator';
 import { type Strings, strings } from './i18n';
 import { type Prefs, mergePrefs, DEFAULTS } from './settings';
 import { Resizer } from './Resizer';
-import { useColumns, GAP } from './useColumns';
+import { useColumns, useScrolls, GAP } from './useColumns';
 import { NewMenu } from './NewMenu';
 import { applyLook, prefersDark, resolveTheme, type Theme } from './schemes';
 import { VirtualList, type VRow, type VirtualApi } from './VirtualList';
@@ -234,6 +234,8 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const searchRef = useRef<HTMLInputElement>(null);
   const { notify, snackbar } = useSnack();
   const [page, setPage] = useState<'vault' | 'settings'>('vault');
+  // the line above the footer only when the menu list actually scrolls
+  const [navRef, navScrolls] = useScrolls();
   const { isNarrow, rail, setRail, resizing, zoom, drawerCol, listW, dragDrawer, dragList, endDrag, resetDrawer, resetList } = useColumns(settings, onSettings);
   const ts = settingsStrings[settings.lang];
 
@@ -558,7 +560,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
         </div>
         <NewMenu t={t} onCreate={createItem} onGenerator={() => setShowGen(true)}
           onFolder={() => setFolderDialog({ mode: 'create', vault: targetVault })} onImport={() => setImportFor(targetVault)} />
-        <nav className="nav">
+        <nav className="nav" ref={navRef}>
           <span className="label">{t.vaults}</span>
           <NavItem active={vault === ALL} onClick={() => selectVault(ALL)} icon="stacks" bg="--surface-highest"
             name={t.allVaults} count={items.filter(i => !i.trashed).length} />
@@ -600,10 +602,11 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
           <NavItem active={vault === TRASH} onClick={() => selectVault(TRASH)} icon="delete" bg="--surface-highest"
             name={t.trash} count={items.filter(i => i.trashed).length} />
         </nav>
-        <div className="drawer-foot">
+        <div className={'drawer-foot' + (navScrolls ? ' divided' : '')}>
           <button className="icon-btn" title={ts.ui.settings} aria-label={ts.ui.settings} onClick={() => setPage('settings')}>
             <Icon n="settings" />
           </button>
+          <button className="icon-btn" title={t.lock} aria-label={t.lock} onClick={onLock}><Icon n="lock" /></button>
           {update && (
             <button className="icon-btn update-btn" title={updateTitle!} aria-label={updateTitle!}
               onClick={() => setConfirm({
@@ -611,8 +614,6 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
                 label: update.installable ? t.updateInstall : t.updateOpenPage, action: installUpdate,
               })}><Icon n="system_update" /></button>
           )}
-          <span className="foot-spacer" />
-          <button className="icon-btn" title={t.lock} aria-label={t.lock} onClick={onLock}><Icon n="lock" /></button>
         </div>
       </aside>
 

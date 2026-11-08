@@ -8,6 +8,25 @@ const NARROW = '(max-width: 1199px)';
 export const RAIL_W = 84, GAP = 12, MIN_DETAIL = 360;
 type Live = { drawer?: number; list?: number };
 
+/** [callback ref, whether the element's content is taller than the element (it scrolls)].
+ *  A callback ref, so a re-mounted element (rail toggle) is observed again. */
+export function useScrolls() {
+  const [el, setEl] = useState<HTMLElement | null>(null);
+  const [scrolls, setScrolls] = useState(false);
+  useEffect(() => {
+    if (!el) return;
+    const check = () => setScrolls(el.scrollHeight > el.clientHeight + 1);
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    // content changes (vaults, folders) don't resize the box itself
+    const mo = new MutationObserver(check);
+    mo.observe(el, { childList: true, subtree: true });
+    check();
+    return () => { ro.disconnect(); mo.disconnect(); };
+  }, [el]);
+  return [setEl, scrolls] as const;
+}
+
 export function useColumns(settings: Prefs, onSettings: (s: Prefs) => void) {
   const [isNarrow, setIsNarrow] = useState(() => window.matchMedia(NARROW).matches);
   const [rail, setRail] = useState(isNarrow);
