@@ -24,6 +24,8 @@ export const previewable = (name: string) => IMAGE.test(name) || TEXT.test(name)
 
 export type Theme = 'dark' | 'light' | 'oled';
 
+/** entry types offered under "New entry" (PIN only through templates/import) */
+export const NEW_TYPES: ItemType[] = ['login', 'card', 'note', 'identity', 'other'];
 export const TYPE_ICON: Record<ItemType, string> = {
   login: 'person', card: 'credit_card', note: 'sticky_note_2', pin: 'pin', identity: 'badge', other: 'category',
 };

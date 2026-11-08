@@ -7,8 +7,10 @@ import { DEMO_VAULTS } from './mock';
 import { openOptions, openExternal } from './open';
 import { clearHistory, generate } from './generator';
 import { type Strings, strings } from './i18n';
-import { type Prefs, mergePrefs, DEFAULTS, clamp } from './settings';
+import { type Prefs, mergePrefs, DEFAULTS } from './settings';
 import { Resizer } from './Resizer';
+import { useColumns, GAP } from './useColumns';
+import { NewMenu } from './NewMenu';
 import { applyLook, prefersDark, resolveTheme, type Theme } from './schemes';
 import { VirtualList, type VRow, type VirtualApi } from './VirtualList';
 import { useUpdates, type UpdateState } from './useUpdates';
@@ -23,7 +25,7 @@ import { ShareDialog } from './ShareDialog';
 import { HealthRow, HealthOverview } from './HealthOverview';
 import { ContextMenuProvider, useContextMenu, type MenuItem } from './ContextMenu';
 import { Setup } from './Setup';
-import { today, TYPE_ICON, fileName, isRemote, ISSUES, ISSUE_ICON } from './ui';
+import { today, TYPE_ICON, NEW_TYPES, fileName, isRemote, ISSUES, ISSUE_ICON } from './ui';
 import { Row, NavItem } from './ItemList';
 import { Detail, Generator } from './Detail';
 import { useSnack } from './useSnack';
@@ -49,14 +51,6 @@ const TEMPLATES: Partial<Record<ItemType, Field[]>> = {
     { key: 'address', value: '' }, { key: 'birthdate', value: '', kind: 'date' },
   ],
 };
-const NEW_TYPES: ItemType[] = ['login', 'card', 'note', 'identity', 'other'];
-/** extra entry layouts built from custom fields (labels in the user's language at creation time) */
-const TEMPLATE_PRESETS: { id: string; type: ItemType; icon: string; label: 'tplWifi' | 'tplLicense' | 'tplBank' | 'tplServer'; fields: (t: Strings) => Field[] }[] = [
-  { id: 'wifi', type: 'other', icon: 'wifi', label: 'tplWifi', fields: t => [{ label: t.fSsid, value: '' }, { key: 'password', value: '', kind: 'hidden' }, { label: t.fSecurity, value: 'WPA2/WPA3' }] },
-  { id: 'license', type: 'other', icon: 'license', label: 'tplLicense', fields: t => [{ label: t.fProduct, value: '' }, { label: t.fLicenseKey, value: '', kind: 'hidden', protected: true }, { key: 'email', value: '' }, { label: t.fVersion, value: '' }] },
-  { id: 'bank', type: 'other', icon: 'account_balance', label: 'tplBank', fields: t => [{ label: t.fHolder, value: '' }, { label: t.fIban, value: '' }, { label: t.fBic, value: '' }, { key: 'username', value: '' }, { key: 'password', value: '', kind: 'hidden' }, { key: 'pin', value: '', kind: 'hidden' }] },
-  { id: 'server', type: 'login', icon: 'dns', label: 'tplServer', fields: t => [{ label: t.fHost, value: '' }, { label: t.fPort, value: '22' }, { key: 'username', value: '' }, { key: 'password', value: '', kind: 'hidden' }, { key: 'website', value: '', kind: 'url' }] },
-];
 
 const ALL = 'all';
 const TRASH = 'trash';
@@ -218,7 +212,6 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const setMulti = (ids: string[]) => setMultiSel({ scope, ids });
   const [selected, setSelected] = useState<string | null>(null);
   const [pending, setPending] = useState<Item | null>(null); // new entry, not saved yet
-  const [newMenu, setNewMenu] = useState(false);
   const [showGen, setShowGen] = useState(false);
   const [importFor, setImportFor] = useState<string | null>(null);
   const [shareFor, setShareFor] = useState<Folder | null>(null);
@@ -241,49 +234,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const searchRef = useRef<HTMLInputElement>(null);
   const { notify, snackbar } = useSnack();
   const [page, setPage] = useState<'vault' | 'settings'>('vault');
-  // drawer collapses to an icon rail: automatically on narrow windows, or via the toggle
-  const narrow = '(max-width: 1199px)';
-  const [isNarrow, setIsNarrow] = useState(() => window.matchMedia(narrow).matches);
-  const [rail, setRail] = useState(isNarrow);
-  useEffect(() => {
-    const mq = window.matchMedia(narrow);
-    const onChange = () => { setIsNarrow(mq.matches); setRail(mq.matches); };
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-  // resizable columns: drawer | list | detail. Widths live in the settings; while dragging only in state.
-  const [winW, setWinW] = useState(() => window.innerWidth);
-  useEffect(() => {
-    const h = () => setWinW(window.innerWidth);
-    window.addEventListener('resize', h);
-    return () => window.removeEventListener('resize', h);
-  }, []);
-  const [live, setLive] = useState<{ drawer?: number; list?: number } | null>(null);
-  const zoom = settings.fontSize / 100;
-  const RAIL_W = 84, GAP = 12, MIN_DETAIL = 360;
-  const drawerW = clamp(live?.drawer ?? settings.drawerWidth, 200, 420);
-  const drawerCol = rail || isNarrow ? RAIL_W : drawerW;
-  const listMax = Math.max(240, winW / zoom - GAP - drawerCol - 2 * GAP - MIN_DETAIL);
-  const listW = clamp(Math.min(live?.list ?? settings.listWidth, listMax), 240, 720);
-  // the ref is updated with the state so a key step can drag and commit in one go
-  const liveRef = useRef(live);
-  const put = (l: { drawer?: number; list?: number }) => { liveRef.current = l; setLive(l); };
-  const dragDrawer = (w: number) => {
-    // pulling the drawer narrow folds it into the icon rail, pulling the rail out unfolds it
-    if (rail) { if (w > 160) { setRail(false); put({ ...liveRef.current, drawer: Math.max(200, w) }); } return; }
-    if (w < 140) { setRail(true); put({ ...liveRef.current, drawer: undefined }); return; }
-    put({ ...liveRef.current, drawer: w });
-  };
-  const endDrag = () => {
-    const l = liveRef.current;
-    liveRef.current = null;
-    setLive(null);
-    if (!l) return;
-    const next = { ...settings };
-    if (l.drawer !== undefined) next.drawerWidth = clamp(l.drawer, 200, 420);
-    if (l.list !== undefined) next.listWidth = clamp(Math.min(l.list, listMax), 240, 720);
-    if (next.drawerWidth !== settings.drawerWidth || next.listWidth !== settings.listWidth) onSettings(next);
-  };
+  const { isNarrow, rail, setRail, resizing, zoom, drawerCol, listW, dragDrawer, dragList, endDrag, resetDrawer, resetList } = useColumns(settings, onSettings);
   const ts = settingsStrings[settings.lang];
 
   // clear search query after it sat untouched
@@ -365,7 +316,6 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     };
     setPending(item);
     setSelected(item.id);
-    setNewMenu(false);
   };
   const saveItem = async (item: Item, draft: Draft) => {
     const input = await draftToInput(item, draft, open[item.vault].root);
@@ -587,16 +537,14 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
 
   return (
     // narrow window: grid keeps the rail column, an opened drawer floats over the content
-    <div className={'app' + (rail ? ' rail' : '') + (isNarrow ? ' narrow' : '') + (live ? ' resizing' : '')}
+    <div className={'app' + (rail ? ' rail' : '') + (isNarrow ? ' narrow' : '') + (resizing ? ' resizing' : '')}
       style={{ gridTemplateColumns: `${drawerCol}px ${listW}px minmax(0, 1fr)` }}>
       {!isNarrow && (
         <Resizer label={t.resizeMenu} left={drawerCol} value={drawerCol} zoom={zoom}
-          onDrag={dragDrawer} onEnd={endDrag}
-          onReset={() => { setRail(false); onSettings({ ...settings, drawerWidth: DEFAULTS.drawerWidth }); }} />
+          onDrag={dragDrawer} onEnd={endDrag} onReset={resetDrawer} />
       )}
       <Resizer label={t.resizeList} left={drawerCol + GAP + listW} value={listW} zoom={zoom}
-        onDrag={w => put({ ...liveRef.current, list: w })} onEnd={endDrag}
-        onReset={() => onSettings({ ...settings, listWidth: DEFAULTS.listWidth })} />
+        onDrag={dragList} onEnd={endDrag} onReset={resetList} />
       {isNarrow && !rail && <div className="drawer-scrim" onClick={() => setRail(true)} />}
       <aside className="drawer">
         <div className="brand">
@@ -608,37 +556,8 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
             : isDemo ? t.brandDemo
             : liveCount === 1 ? t.brandEntry : t.brandEntries.replace('{n}', liveCount.toLocaleString(settings.lang))}</small></h1>
         </div>
-        <div className="new-wrap">
-          <button className="fab" onClick={() => setNewMenu(m => !m)} aria-expanded={newMenu}><Icon n="add" /><span className="fab-label">{t.newItem}</span></button>
-          {newMenu && (
-            <>
-              <div className="menu-scrim" onClick={() => setNewMenu(false)} />
-              <div className="menu new-menu" role="menu">
-                {NEW_TYPES.map(type => (
-                  <button key={type} role="menuitem" onClick={() => createItem(type)}>
-                    <span className={'avatar sm ' + type}><Icon n={TYPE_ICON[type]} /></span>{t[type]}
-                  </button>
-                ))}
-                <span className="menu-label">{t.templates}</span>
-                {TEMPLATE_PRESETS.map(p => (
-                  <button key={p.id} role="menuitem" onClick={() => createItem(p.type, p.fields(t))}>
-                    <span className="avatar sm other"><Icon n={p.icon} /></span>{t[p.label]}
-                  </button>
-                ))}
-                <hr />
-                <button role="menuitem" onClick={() => { setShowGen(true); setNewMenu(false); }}>
-                  <span className="avatar sm pin"><Icon n="password" /></span>{t.password}
-                </button>
-                <button role="menuitem" onClick={() => { setFolderDialog({ mode: 'create', vault: targetVault }); setNewMenu(false); }}>
-                  <span className="avatar sm other"><Icon n="create_new_folder" /></span>{t.folder}
-                </button>
-                <button role="menuitem" onClick={() => { setImportFor(targetVault); setNewMenu(false); }}>
-                  <span className="avatar sm note"><Icon n="upload_file" /></span>{t.importItems}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        <NewMenu t={t} onCreate={createItem} onGenerator={() => setShowGen(true)}
+          onFolder={() => setFolderDialog({ mode: 'create', vault: targetVault })} onImport={() => setImportFor(targetVault)} />
         <nav className="nav">
           <span className="label">{t.vaults}</span>
           <NavItem active={vault === ALL} onClick={() => selectVault(ALL)} icon="stacks" bg="--surface-highest"
