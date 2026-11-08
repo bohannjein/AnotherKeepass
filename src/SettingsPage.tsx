@@ -29,11 +29,11 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
   }, [sshShown, prefs.sshAuthSock]);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  // planned (not built) options stay hidden unless asked for; sections without visible options disappear
-  const visible = (it: Setting) => onThisPlatform(it) && (!('planned' in it && it.planned) || prefs.showPlanned);
+  // planned (not built) options never show; sections without visible options disappear
+  const visible = (it: Setting) => onThisPlatform(it) && !('planned' in it && it.planned);
   const sections = useMemo(() => SECTIONS
     .map(sec => ({ ...sec, groups: sec.groups.map(g => ({ ...g, items: g.items.filter(visible) })).filter(g => g.items.length) }))
-    .filter(sec => sec.groups.length), [prefs.showPlanned]); // eslint-disable-line react-hooks/exhaustive-deps
+    .filter(sec => sec.groups.length), []); // eslint-disable-line react-hooks/exhaustive-deps
   const current = sections.find(s => s.id === section) ?? sections[0];
 
   // search over labels, explanations and group names in all sections
@@ -107,10 +107,6 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
             </button>
           ))}
         </nav>
-        <label className="planned-toggle">
-          <span><b>{ts.labels.showPlanned}</b><small>{ts.hints.showPlanned}</small></span>
-          <input className="switch" type="checkbox" checked={prefs.showPlanned} onChange={e => set('showPlanned', e.target.checked)} />
-        </label>
       </aside>
 
       <main className="pane settings-body" key={q ? 'search' : current.id}>
@@ -196,11 +192,6 @@ function Row({ s, ts, prefs, disabled, set, onAction, t, ssh, button }: {
   const hint = ts.hints[s.key as keyof SettingsStrings['hints']];
   const id = 'set-' + s.key;
   const indent = 'dependsOn' in s && s.dependsOn;
-  const badges = (
-    <>
-      {'planned' in s && s.planned && <span className="pill desk" title={ts.ui.plannedHint}><Icon n="schedule" />{ts.ui.planned}</span>}
-    </>
-  );
 
   if (s.key === 'theme' || s.key === 'accent') {
     return (
@@ -214,7 +205,7 @@ function Row({ s, ts, prefs, disabled, set, onAction, t, ssh, button }: {
   if (s.type === 'action') {
     return (
       <div className={'set-row' + (s.wip ? ' wip' : '')}>
-        <div className="set-text"><span className="set-label">{label}</span>{hint && <span className="set-hint">{hint}</span>}<span className="set-badges">{badges}</span></div>
+        <div className="set-text"><span className="set-label">{label}</span>{hint && <span className="set-hint">{hint}</span>}</div>
         {s.wip ? (
           <button className='wip-btn' disabled><Icon n={s.key === 'bwConnect' ? 'cloud' : 'dns'} />{label}<span className='pill'>{ts.ui.wip}</span></button>
         ) : (
@@ -274,7 +265,7 @@ function Row({ s, ts, prefs, disabled, set, onAction, t, ssh, button }: {
       <label className="set-text" htmlFor={id}>
         <span className="set-label">{label}</span>
         {hint && <span className="set-hint">{hint}</span>}
-        <span className="set-badges">{badges}</span>
+        
       </label>
       {control}
     </div>

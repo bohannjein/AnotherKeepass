@@ -5,7 +5,6 @@ import type { Lang } from './i18n';
 
 export const DEFAULTS = {
   lang: 'en' as Lang,
-  showPlanned: false,
   theme: 'dark' as 'system' | 'dark' | 'light' | 'oled',
   /** what "dark" means while following the system */
   systemDark: 'dark' as 'dark' | 'oled',

@@ -885,10 +885,6 @@ kbd {
 
 /* settings: search + planned toggle */
 .settings-search { margin: 0 4px 12px; height: 48px; }
-.planned-toggle { display: flex; align-items: center; gap: 12px; margin: 8px 4px 0; padding: 12px 14px; border-radius: var(--r-l); background: var(--surface-c); cursor: pointer; }
-.planned-toggle > span { flex: 1; display: grid; gap: 2px; min-width: 0; }
-.planned-toggle b { font-size: 13px; }
-.planned-toggle small { font-size: 12px; color: var(--on-surface-var); line-height: 1.35; }
 
 /* ---------- import ---------- */
 .import-dialog { width: min(480px, calc(100vw - 32px)); }
@@ -1185,7 +1181,6 @@ input, textarea { caret-color: var(--primary); }
 /* settings sidebar: back arrow, title icon, search icon and tiles centred on x = 35 */
 .settings-title { padding-left: 9px; }
 .settings-search { margin: 0 0 12px; padding-left: 12px; }
-.planned-toggle { margin: 8px 0 0; }
 
 /* dropdown lists in the app's look instead of the grey Windows list (customizable select, Chromium 135+) */
 select, ::picker(select) { appearance: base-select; }

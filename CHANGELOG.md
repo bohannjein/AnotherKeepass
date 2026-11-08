@@ -4,6 +4,8 @@
 
 - **New program icon:** a dark round seal with a ring and the shield with keyhole, for the
   taskbar, Start menu, installer and website. The logo inside the app stays as it is.
+- **Settings:** the "show planned options" switch is gone; options that are not built yet no
+  longer show up anywhere.
 
 ## 0.3.1
 
