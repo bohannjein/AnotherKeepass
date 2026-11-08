@@ -262,7 +262,7 @@ function Row({ s, ts, prefs, disabled, set, onAction, t, ssh, button }: {
         <input id={id} className="set-input" value={value as string} disabled={disabled}
           onChange={e => set(s.key, e.target.value)} spellCheck={false} />
         {s.type === 'path' && (
-          // ponytail: browsers cannot return file paths; Tauri dialog plugin fills this in the desktop app
+          // Note: browsers cannot return file paths; Tauri dialog plugin fills this in the desktop app
           <button className="icon-btn" disabled title={ts.ui.desktopHint} aria-label={ts.ui.browse}><Icon n="folder_open" /></button>
         )}
       </span>

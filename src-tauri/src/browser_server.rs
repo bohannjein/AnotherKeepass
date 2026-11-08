@@ -427,7 +427,7 @@ pub fn sync_manifests(p: &desktop::DesktopPrefs) -> Vec<String> {
     problems
 }
 
-// ponytail: macOS manifest files (~/Library/Application Support/…/NativeMessagingHosts) not written yet
+// TODO(macOS): manifest files (~/Library/Application Support/…/NativeMessagingHosts) not written yet
 #[cfg(not(any(windows, target_os = "linux")))]
 pub fn sync_manifests(_p: &desktop::DesktopPrefs) -> Vec<String> {
     Vec::new()

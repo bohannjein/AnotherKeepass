@@ -838,7 +838,7 @@ pub fn watch_session(app: AppHandle) {
     });
 }
 
-// ponytail: macOS screen-lock signals (NSWorkspace) not wired yet
+// TODO(macOS): screen-lock signals (NSWorkspace) not wired yet
 #[cfg(not(any(windows, target_os = "linux")))]
 pub fn watch_session(_app: AppHandle) {}
 

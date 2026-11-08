@@ -238,7 +238,7 @@ fn focus(h: isize) {
     let _ = xdotool(&["windowactivate", "--sync", &h.to_string()]);
 }
 
-// ponytail: active-window title on macOS not wired (NSWorkspace)
+// TODO(macOS): active-window title not wired (NSWorkspace)
 #[cfg(not(any(windows, target_os = "linux")))]
 fn foreground() -> (Option<isize>, String) {
     (None, String::new())

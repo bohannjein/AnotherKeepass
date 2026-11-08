@@ -234,7 +234,7 @@ pub fn vault_lock_all(state: tauri::State<'_, Vaults>) -> R<()> {
 
 /// Set from the settings ("Quick unlock").
 pub static QUICK_UNLOCK: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-/// ponytail: keys of locked vaults stay in this process (zeroized on drop/quit) and Windows Hello
+/// Note: keys of locked vaults stay in this process (zeroized on drop/quit) and Windows Hello
 /// only gates their use — like KeePassXC's quick unlock; a TPM-bound key would need KeyCredentialManager.
 pub(super) static QUICK_KEYS: Mutex<Option<HashMap<String, DatabaseKey>>> = Mutex::new(None);
 

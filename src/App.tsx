@@ -67,7 +67,7 @@ const DESKTOP_KEYS = [
 ] as const;
 const KNOWN_KEY = 'anotherkeepass.vaults';
 
-// ponytail: localStorage (WebView storage); a Tauri store plugin is only needed if settings must be shared across profiles
+// Note: localStorage (WebView storage); a Tauri store plugin is only needed if settings must be shared across profiles
 // null = first run → setup wizard
 function loadSettings(): Settings | null {
   try {
