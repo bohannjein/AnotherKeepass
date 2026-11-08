@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Tray icon:** a thin shield outline with a keyhole and some space around it, drawn at the
+  exact tray size, so it matches the other Windows tray icons.
+
 ## 0.2.3
 
 - **Autostart:** with "start minimized" and the tray icon, the window could open white and

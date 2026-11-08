@@ -95,6 +95,26 @@ const items: DemoItem[] = [
   },
 ];
 
+// ?big=5000 adds a vault with that many generated entries (to measure large vaults)
+const BIG = Math.min(50_000, Math.max(0, Number(new URLSearchParams(globalThis.location?.search ?? '').get('big')) || 0));
+if (BIG) {
+  vaults.push({ id: 'big', name: `Large (${BIG})`, file: 'large.kdbx', color: '--v-sea', icon: 'database' } as typeof vaults[number]);
+  const words = ['Mail', 'Bank', 'Shop', 'Cloud', 'Forum', 'Router', 'Server', 'Game', 'News', 'Travel', 'Health', 'School'];
+  for (let n = 0; n < BIG; n++) {
+    const w = words[n % words.length];
+    items.push({
+      id: 'big-' + n, vault: 'big', type: 'login', title: `${w} ${n}`, subtitle: `user${n}@example.org`,
+      modified: `2026-${String(1 + n % 12).padStart(2, '0')}-${String(1 + n % 28).padStart(2, '0')}`,
+      fields: [
+        { key: 'username', value: `user${n}@example.org` },
+        { key: 'password', value: `pw-${n}-secret`, kind: 'hidden' },
+        { key: 'website', value: `https://${w.toLowerCase()}${n}.example.org`, kind: 'url' },
+      ],
+      note: n % 7 ? undefined : `Note for entry ${n}`,
+    });
+  }
+}
+
 export const DEMO_VAULTS = vaults.map(v => ({ path: 'demo:' + v.file, name: v.name, color: v.color, icon: v.icon }));
 
 registerDemoSeed(path => {

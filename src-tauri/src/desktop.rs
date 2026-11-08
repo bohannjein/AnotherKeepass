@@ -446,40 +446,72 @@ pub fn tray_state(app: AppHandle, unlocked: bool, tooltip: String) {
 }
 
 fn tray_shape<R: Runtime>(app: &AppHandle<R>, style: &str) -> Option<tauri::image::Image<'static>> {
-    let icon = app.default_window_icon()?;
-    let (w, h, px) = (icon.width() as usize, icon.height() as usize, icon.rgba());
     let color: u8 = match style {
         "monoLight" => 255,
         "monoDark" => 0,
-        _ => return Some(icon.clone().to_owned()),
+        _ => return app.default_window_icon().map(|i| i.clone().to_owned()),
     };
-    let dark = |x: usize, y: usize| {
-        let p = &px[(y * w + x) * 4..][..4];
-        p[3] > 128 && (p[0] as u32 + p[1] as u32 + p[2] as u32) < 3 * 110
+    let size = tray_size();
+    Some(tauri::image::Image::new_owned(tray_glyph(size, color), size, size))
+}
+
+/// Pixel size of a tray icon at the current scaling (16 at 100 %, 24 at 150 %, ...): drawing at
+/// exactly that size keeps the thin lines sharp instead of letting Windows shrink a big image.
+fn tray_size() -> u32 {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSMICON};
+        let s = unsafe { GetSystemMetrics(SM_CXSMICON) };
+        if (12..=128).contains(&s) {
+            return s as u32;
+        }
+    }
+    22
+}
+
+/// Shield outline with a keyhole, drawn like the Windows tray glyphs: thin strokes and some
+/// air around it, so it doesn't look heavier than the clock, volume and network icons.
+fn tray_glyph(size: u32, color: u8) -> Vec<u8> {
+    let s = size as f32;
+    // outline in unit coordinates; the lower sides are sampled quadratic curves
+    let mut pts = vec![(0.5, 0.09), (0.83, 0.2), (0.83, 0.47)];
+    let curve = |p0: (f32, f32), c: (f32, f32), p1: (f32, f32), t: f32| {
+        let u = 1.0 - t;
+        (u * u * p0.0 + 2.0 * u * t * c.0 + t * t * p1.0, u * u * p0.1 + 2.0 * u * t * c.1 + t * t * p1.1)
     };
-    let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
-    for y in 0..h {
-        for x in 0..w {
-            if dark(x, y) {
-                (x0, y0, x1, y1) = (x0.min(x), y0.min(y), x1.max(x), y1.max(y));
+    for i in 1..=12 {
+        pts.push(curve((0.83, 0.47), (0.81, 0.77), (0.5, 0.91), i as f32 / 12.0));
+    }
+    for i in 1..=12 {
+        pts.push(curve((0.5, 0.91), (0.19, 0.77), (0.17, 0.47), i as f32 / 12.0));
+    }
+    pts.extend([(0.17, 0.2), (0.5, 0.09)]);
+    let pts: Vec<(f32, f32)> = pts.iter().map(|(x, y)| (x * s, y * s)).collect();
+    let stroke = (s / 16.0).max(1.0);
+    let seg = |p: (f32, f32), a: (f32, f32), b: (f32, f32)| {
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let t = (((p.0 - a.0) * dx + (p.1 - a.1) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0);
+        ((p.0 - a.0 - t * dx).powi(2) + (p.1 - a.1 - t * dy).powi(2)).sqrt()
+    };
+    // keyhole: round head plus a short stem
+    let head = (0.5 * s, 0.44 * s);
+    let (stem_a, stem_b) = ((0.5 * s, 0.47 * s), (0.5 * s, 0.66 * s));
+    let mut out = vec![0u8; (size * size * 4) as usize];
+    for y in 0..size {
+        for x in 0..size {
+            let p = (x as f32 + 0.5, y as f32 + 0.5);
+            let edge = pts.windows(2).map(|w| seg(p, w[0], w[1])).fold(f32::MAX, f32::min);
+            let line = stroke / 2.0 + 0.5 - edge;
+            let ring = ((p.0 - head.0).powi(2) + (p.1 - head.1).powi(2)).sqrt();
+            let hole = (0.085 * s + 0.5 - ring).max(0.04 * s + 0.5 - seg(p, stem_a, stem_b));
+            let a = line.max(hole).clamp(0.0, 1.0);
+            if a > 0.0 {
+                let i = ((y * size + x) * 4) as usize;
+                out[i..i + 4].copy_from_slice(&[color, color, color, (a * 255.0).round() as u8]);
             }
         }
     }
-    if x0 > x1 {
-        return Some(icon.clone().to_owned());
-    }
-    let side = (x1 - x0).max(y1 - y0) + 1;
-    let (ox, oy) = ((side - (x1 - x0 + 1)) / 2, (side - (y1 - y0 + 1)) / 2);
-    let mut out = vec![0u8; side * side * 4];
-    for y in y0..=y1 {
-        for x in x0..=x1 {
-            if dark(x, y) {
-                let i = ((y - y0 + oy) * side + (x - x0 + ox)) * 4;
-                out[i..i + 4].copy_from_slice(&[color, color, color, 255]);
-            }
-        }
-    }
-    Some(tauri::image::Image::new_owned(out, side as u32, side as u32))
+    out
 }
 
 pub fn create_tray<R: Runtime>(app: &AppHandle<R>, p: &DesktopPrefs) -> tauri::Result<()> {
