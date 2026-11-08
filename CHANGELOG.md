@@ -18,6 +18,7 @@
   the browser manifests for Chrome, Chromium, Brave, Vivaldi, Edge and Firefox are written (an
   existing KeePassXC one is kept and restored); vaults lock when the screen locks (D-Bus screen
   saver signal). CI now also builds on Linux.
+- **Website:** English version of the homepage (`/en/`) with a language switch; the guide stays German for now.
 - **Reset column widths:** button in the settings (double-clicking a column border still works).
 - **Tray icon:** a thin shield outline with a keyhole and some space around it, drawn at the
   exact tray size, so it matches the other Windows tray icons.

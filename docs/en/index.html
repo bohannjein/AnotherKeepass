@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AnotherKeepass – KeePass-compatible password manager</title>
+<meta name="description" content="Password manager for Windows and Linux. Vaults are plain KDBX 4 files that KeePassXC, KeePass2 and KeePassDX open as well. Open source (GPL-3.0), no account, no telemetry.">
+<meta name="theme-color" content="#fff8f3">
+<link rel="icon" href="../img/logo.svg" type="image/svg+xml">
+<link rel="preload" href="../fonts/roboto-flex.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<link rel="alternate" hreflang="de" href="../">
+<link rel="alternate" hreflang="en" href="./">
+<meta property="og:title" content="AnotherKeepass">
+<meta property="og:description" content="KeePass-compatible password manager for Windows and Linux.">
+<meta property="og:image" content="../img/app-dark.webp">
+</head>
+<body class="home">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-gh" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2z"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./" aria-label="AnotherKeepass, home"><img src="../img/logo.svg" alt="" width="42" height="42"><span>Another<b>Keepass</b></span></a>
+    <nav class="nav" aria-label="Main navigation">
+      <a href="#features">Features</a>
+      <a href="#themes">Themes</a>
+      <a href="#security">Security</a>
+      <a href="../anleitung.html" hreflang="de">Guide (German)</a>
+      <a href="https://github.com/bohannjein/AnotherKeepass"><svg aria-hidden="true"><use href="#i-gh"/></svg> GitHub</a>
+      <a href="../" lang="de" hreflang="de">Deutsch</a>
+      <a class="nav-dl" href="#download">Download</a>
+    </nav>
+    <details class="menu">
+      <summary>Menu</summary>
+      <nav class="menu-panel" aria-label="Main navigation">
+        <a href="#features">Features</a>
+        <a href="#themes">Themes</a>
+        <a href="#security">Security</a>
+        <a href="#download">Download</a>
+        <a href="../anleitung.html" hreflang="de">Guide (German)</a>
+        <a href="https://github.com/bohannjein/AnotherKeepass">GitHub</a>
+        <a href="../" lang="de" hreflang="de">Deutsch</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ============ overview ============ -->
+  <section class="intro" aria-labelledby="intro-title">
+    <div class="wrap intro-grid">
+      <div>
+        <h1 id="intro-title" class="h-page">AnotherKeepass</h1>
+        <p class="lead-plain">A password manager for Windows and Linux that reads and writes vaults in the KeePass format (KDBX&nbsp;4). The files stay compatible with KeePassXC, KeePass2 and KeePassDX.</p>
+        <div class="intro-actions">
+          <a class="btn btn-primary" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-dl="primary">
+            <svg aria-hidden="true"><use href="#i-down"/></svg>
+            <span><span data-dl-label>Download for Windows</span><small data-dl-sub>Installer, 64-bit</small></span>
+          </a>
+          <a class="btn btn-ghost" href="../anleitung.html" hreflang="de">Guide (German)</a>
+        </div>
+        <p class="dl-meta"><span data-version-line>Free and open source (GPL-3.0)</span> · <a href="#download" data-dl-other>Linux and other options</a></p>
+        <p class="mobile-note">There is no app for phones. Your <code>.kdbx</code> file opens there in KeePassDX, for example.</p>
+      </div>
+      <figure class="intro-shot">
+        <img class="shot" src="../img/app-dark.webp" width="1280" height="800" fetchpriority="high"
+             alt="Main window of AnotherKeepass in the dark theme: three open vaults on the left, the entry list in the middle, an entry with user name, hidden password and website on the right.">
+        <figcaption>Main window: vaults and folders, entry list, details. The column widths can be dragged.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="facts-title">
+    <div class="wrap">
+      <h2 id="facts-title" class="h-sec">Key facts</h2>
+      <dl class="facttable">
+        <div><dt>File format</dt><dd>KDBX 4 (read and write). KDBX 3.1 is read and upgraded to KDBX 4 on the first save; the original stays next to it as <code>.kdbx3-backup</code>.</dd></div>
+        <div><dt>Compatible with</dt><dd>KeePassXC, KeePass2, KeePassDX and every other program that opens KDBX 4</dd></div>
+        <div><dt>Platforms</dt><dd>Windows 10/11 (x64). Linux as an AppImage (preview). No macOS, no mobile app.</dd></div>
+        <div><dt>Account / cloud</dt><dd>Not needed. Vaults are files wherever you keep them. Optional: connect a Vaultwarden account.</dd></div>
+        <div><dt>Telemetry</dt><dd>None. Network access only for the update check, favicons, the optional breach check and Vaultwarden – each can be switched off.</dd></div>
+        <div><dt>Languages</dt><dd>English, German, French, Spanish</dd></div>
+        <div><dt>Technology</dt><dd>Tauri 2, Rust (vault logic), React (interface), WebView2 on Windows</dd></div>
+        <div><dt>License</dt><dd>GPL-3.0-or-later, source code on <a href="https://github.com/bohannjein/AnotherKeepass">GitHub</a></dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ============ features ============ -->
+  <section id="features" class="sec sec-tint" aria-labelledby="feat-title">
+    <div class="wrap">
+      <h2 id="feat-title" class="h-sec">Features</h2>
+      <div class="featgrid">
+        <div>
+          <h3>Vaults and entries</h3>
+          <ul>
+            <li>Several vaults open at once, search across all of them</li>
+            <li>Color and icon per vault</li>
+            <li>Folders (KeePass groups), tags, pinned entries</li>
+            <li>Entry types: login, card, identity, PIN, note, other, templates</li>
+            <li>Custom fields, attachments with preview, expiry date, history of earlier versions</li>
+            <li>TOTP one-time codes in KeePassXC's format</li>
+            <li>Recycle bin (KeePass recycle bin), multi-select to move and delete</li>
+            <li>Sort by last use, title, modified or created date; group by letter, type, folder, vault, domain, tag or date</li>
+            <li>Search across all plain-text fields, with operators like in KeePassXC: <code>user:</code>, <code>url:</code>, <code>tag:</code>, <code>is:weak</code>, <code>is:expired</code>, <code>-exclude</code></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Passwords</h3>
+          <ul>
+            <li>Generator for character strings and passphrases (EFF word list)</li>
+            <li>Strength meter with zxcvbn that takes the entry's own data into account</li>
+            <li>Password health: weak, reused, old and expired passwords</li>
+            <li>Optional: check against haveibeenpwned.com (k-anonymity, the password never leaves the computer)</li>
+            <li>The clipboard is cleared after a set time and stays out of the Windows clipboard history</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Integrations</h3>
+          <ul>
+            <li>Browser through the KeePassXC-Browser extension, passkeys included</li>
+            <li>Open a Vaultwarden account as a vault or keep it in sync with a <code>.kdbx</code></li>
+            <li>Import from Bitwarden, 1Password, Proton Pass and KeePassXC (CSV)</li>
+            <li>Hand SSH keys to the SSH agent (KeeAgent-compatible)</li>
+            <li>KeeShare to share folders through their own files</li>
+            <li>Auto-Type: type logins into other programs</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Interface</h3>
+          <ul>
+            <li>8 color schemes plus your own colors, each light, dark and OLED black; can follow the system (<a href="#themes">overview</a>)</li>
+            <li>Drag the column widths; the menu folds into an icon rail</li>
+            <li>Command palette (<kbd>Ctrl</kbd> <kbd>K</kbd>) and global quick access</li>
+            <li>Tray icon, start with Windows, start minimized</li>
+            <li>Font size 80–150 %, compact list view</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="keys-title">
+    <div class="wrap two">
+      <div>
+        <h2 id="keys-title" class="h-sec">Keyboard shortcuts</h2>
+        <p class="muted">Modelled on KeePassXC. <kbd>F1</kbd> shows the full list in the app.</p>
+      </div>
+      <table class="map keys-table">
+        <thead><tr><th scope="col">Shortcut</th><th scope="col">Action</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>K</kbd></td><td>Quick access on top of any program (global). Enter copies the password, Shift+Enter the user name, Ctrl+Enter types the login.</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>K</kbd></td><td>Command palette: search entries and actions</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>F</kbd></td><td>Search</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>N</kbd></td><td>New entry</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>E</kbd></td><td>Edit entry</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>B</kbd> / <kbd>C</kbd> / <kbd>T</kbd></td><td>Copy user name / password / one-time code</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>U</kbd></td><td>Open website</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>V</kbd></td><td>Auto-Type the selected entry</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>D</kbd></td><td>Duplicate entry</td></tr>
+          <tr><td><kbd>Del</kbd></td><td>Move to the recycle bin</td></tr>
+          <tr><td><kbd>Ctrl</kbd> <kbd>L</kbd></td><td>Lock all vaults</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="platforms" class="sec sec-tint" aria-labelledby="plat-title">
+    <div class="wrap">
+      <h2 id="plat-title" class="h-sec">Windows and Linux compared</h2>
+      <p class="muted measure">The Linux version is a preview. Some features rely on Windows interfaces; their Linux counterparts are new and untested.</p>
+      <div class="table-scroll">
+        <table class="map matrix">
+          <thead><tr><th scope="col">Feature</th><th scope="col">Windows</th><th scope="col">Linux</th></tr></thead>
+          <tbody>
+            <tr><td>Vaults, entries, generator, health, import</td><td class="y">yes</td><td class="y">yes</td></tr>
+            <tr><td>Browser extension (KeePassXC-Browser)</td><td class="y">yes</td><td class="p">yes, untested</td></tr>
+            <tr><td>Auto-Type with window matching</td><td class="y">yes</td><td class="p">X11 with <code>xdotool</code>, untested; not on Wayland</td></tr>
+            <tr><td>Lock when the screen locks</td><td class="y">yes</td><td class="p">through D-Bus (<code>dbus-monitor</code>), untested</td></tr>
+            <tr><td>Windows Hello to unlock</td><td class="y">yes</td><td class="n">–</td></tr>
+            <tr><td>Protection from screen capture</td><td class="y">yes</td><td class="n">–</td></tr>
+            <tr><td>Automatic updates</td><td class="y">yes</td><td class="y">yes (AppImage)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ themes ============ -->
+  <section id="themes" class="sec" aria-labelledby="themes-title">
+    <div class="wrap">
+      <div class="two themes-head">
+        <div>
+          <h2 id="themes-title" class="h-sec">Themes</h2>
+          <p class="muted measure">Eight color schemes, each with a light and a dark variant. OLED mode puts the dark variant on pure black, “System” switches between light and dark with Windows. You can also set your own background, text and accent colors. All under <em>Settings → Appearance</em>.</p>
+        </div>
+        <fieldset class="modes">
+          <legend class="visually-hidden">Preview mode</legend>
+          <input type="radio" name="mode" id="m-dark" value="dark" checked><label for="m-dark">Dark</label>
+          <input type="radio" name="mode" id="m-light" value="light"><label for="m-light">Light</label>
+          <input type="radio" name="mode" id="m-oled" value="oled"><label for="m-oled">OLED</label>
+        </fieldset>
+      </div>
+      <ul class="tgrid">
+        <li class="tcard" data-s="terracotta"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Terracotta</b><span>Default. Earthy tones made for the app.</span></p></li>
+        <li class="tcard" data-s="nord"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Nord</b><span>Cool blue-grey from the Nord palette.</span></p></li>
+        <li class="tcard" data-s="gruvbox"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Gruvbox</b><span>Warm retro contrast with orange.</span></p></li>
+        <li class="tcard" data-s="solarized"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Solarized</b><span>Classic teal and cream with blue.</span></p></li>
+        <li class="tcard" data-s="rosepine"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Rosé Pine</b><span>Muted violet with rosé (light: “Dawn”).</span></p></li>
+        <li class="tcard" data-s="everforest"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Everforest</b><span>Soft forest green, easy on the eyes.</span></p></li>
+        <li class="tcard" data-s="tokyonight"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Tokyo Night</b><span>Night blue with bright blue (light: “Day”).</span></p></li>
+        <li class="tcard" data-s="dracula"><div class="mock" aria-hidden="true"><i class="m-side"><b></b><b></b><b></b></i><i class="m-list"><b></b><b></b><b></b></i><i class="m-det"><b class="m-title"></b><b class="m-field"></b><b class="m-field"></b><b class="m-btn"></b></i></div><p><b>Dracula</b><span>Dark grey with violet and pink (light: “Alucard”).</span></p></li>
+      </ul>
+      <p class="muted small">Simplified preview from the same color values as in the app. The schemes are based on the free palettes of the same names.</p>
+    </div>
+  </section>
+
+  <!-- ============ security ============ -->
+  <section id="security" class="sec sec-dark on-dark" aria-labelledby="secure-title">
+    <div class="wrap">
+      <h2 id="secure-title" class="h-sec">Security</h2>
+      <dl class="facttable on-dark-table">
+        <div><dt>Encryption</dt><dd>That of KDBX 4: AES-256 or ChaCha20, key derivation with Argon2 or AES-KDF. The app warns about weak derivation settings. Master password, optionally a key file and a YubiKey (challenge-response, compatible with KeePassXC).</dd></div>
+        <div><dt>Separation</dt><dd>The open vault lives in the Rust process. The interface only receives a password when you show, copy or edit it.</dd></div>
+        <div><dt>Locking</dt><dd>Locking overwrites keys and protected values in memory. Automatically on inactivity, screen lock or user switch (configurable).</dd></div>
+        <div><dt>Hardening</dt><dd>Other processes of the same user cannot read the app's memory. The browser and SSH connections are reachable only for your own user. Vaultwarden account data is protected with Windows DPAPI.</dd></div>
+        <div><dt>Never stored</dt><dd>The master password. For unlocking with Windows Hello, only a key stays in memory after locking, never on disk; closing a vault drops it.</dd></div>
+        <div><dt>Updates</dt><dd>Only packages signed by the project are installed. Releases are built by GitHub Actions from the tagged source.</dd></div>
+        <div><dt>Limits</dt><dd>Whatever is on screen is also in the interface's memory. The Windows version is not code-signed yet. There has been no external security audit yet.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ============ download ============ -->
+  <section id="download" class="sec" aria-labelledby="dl-title">
+    <div class="wrap">
+      <div class="dl-head">
+        <div>
+          <h2 id="dl-title" class="h-sec">Download</h2>
+          <span class="version" data-version-big>Latest version on GitHub</span>
+        </div>
+        <p class="muted" style="max-width:48ch;margin:0">No account, no sign-up. The installed app looks for new versions every day and can install them on its own (can be switched off).</p>
+      </div>
+
+      <div class="platforms">
+        <div class="platform">
+          <h3>Windows<small>64-bit (x64)</small></h3>
+          <p>Installer with a Start menu entry and automatic updates. Needs the WebView2 runtime, which Windows 11 already includes.</p>
+          <a class="btn btn-primary" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-asset="win">
+            <svg aria-hidden="true"><use href="#i-down"/></svg><span>Installer (.exe)<small data-size="win">from GitHub</small></span>
+          </a>
+        </div>
+        <div class="platform">
+          <h3>Linux<small>64-bit, AppImage</small></h3>
+          <p><span class="tag">Preview</span><br>Built on Ubuntu 22.04; it should run on most current distributions but is barely tested. Limits: see the <a href="#platforms">comparison above</a>.</p>
+          <a class="btn btn-ghost" href="https://github.com/bohannjein/AnotherKeepass/releases/latest" data-asset="linux">
+            <svg aria-hidden="true"><use href="#i-down"/></svg><span>AppImage<small data-size="linux">from GitHub</small></span>
+          </a>
+        </div>
+        <div class="platform off">
+          <h3>macOS<small>not available</small></h3>
+          <p>There are no macOS builds at the moment.</p>
+          <span></span>
+        </div>
+      </div>
+
+      <div class="dl-more">
+        <div>
+          <h3>Known issues</h3>
+          <ul>
+            <li>The installer is not code-signed yet, so Windows SmartScreen warns about an unknown publisher.</li>
+            <li>Microsoft Defender occasionally flags fresh, unsigned builds by mistake.</li>
+            <li>From 0.2.2 or older: update once by hand with the installer. After that, updates come from the app.</li>
+            <li>Updating from 0.1.0: uninstall once by hand and keep the app data.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Build it yourself</h3>
+          <p>Requirements: Node.js, Rust and Tauri's dependencies.</p>
+<pre><code>git clone https://github.com/bohannjein/AnotherKeepass.git
+cd AnotherKeepass && npm ci
+npx tauri build</code></pre>
+        </div>
+        <div>
+          <h3>More</h3>
+          <ul>
+            <li><a href="https://github.com/bohannjein/AnotherKeepass/releases">All versions and update signatures</a></li>
+            <li><a href="https://github.com/bohannjein/AnotherKeepass/blob/main/CHANGELOG.md">Changelog</a></li>
+            <li><a href="../anleitung.html#installieren" hreflang="de">Installation guide (German)</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer on-dark">
+  <div class="wrap">
+    <div>
+      <a class="brand" href="./"><img src="../img/logo.svg" alt="" width="36" height="36"><span>Another<b>Keepass</b></span></a>
+      <p style="margin-top:14px;max-width:36ch">KeePass-compatible password manager. Tauri 2, Rust and React.</p>
+    </div>
+    <div>
+      <h2>Project</h2>
+      <ul>
+        <li><a href="https://github.com/bohannjein/AnotherKeepass">Source code</a></li>
+        <li><a href="https://github.com/bohannjein/AnotherKeepass/releases">Releases</a></li>
+        <li><a href="https://github.com/bohannjein/AnotherKeepass/issues">Report a bug</a></li>
+        <li><a href="https://github.com/bohannjein/AnotherKeepass/blob/main/CONTRIBUTING.md">Contribute</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Legal</h2>
+      <ul>
+        <li><a href="https://github.com/bohannjein/AnotherKeepass/blob/main/LICENSE">License: GPL-3.0-or-later</a></li>
+        <li><a href="https://github.com/googlefonts/roboto-flex">Font: Roboto Flex (OFL)</a></li>
+      </ul>
+    </div>
+    <p class="fine">© 2026 bohannjein. Independent project, not affiliated with KeePass, KeePassXC or Bitwarden. This page loads no trackers and no third-party fonts; only the version is fetched from the GitHub API.</p>
+  </div>
+</footer>
+
+<script src="../site.js" defer></script>
+</body>
+</html>

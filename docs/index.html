@@ -9,6 +9,8 @@
 <link rel="icon" href="img/logo.svg" type="image/svg+xml">
 <link rel="preload" href="fonts/roboto-flex.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
+<link rel="alternate" hreflang="de" href="./">
+<link rel="alternate" hreflang="en" href="en/">
 <meta property="og:title" content="AnotherKeepass">
 <meta property="og:description" content="KeePass-kompatibler Passwortmanager für Windows und Linux.">
 <meta property="og:image" content="img/app-dark.webp">
@@ -30,6 +32,7 @@
       <a href="#sicherheit">Sicherheit</a>
       <a href="anleitung.html">Dokumentation</a>
       <a href="https://github.com/bohannjein/AnotherKeepass"><svg aria-hidden="true"><use href="#i-gh"/></svg> GitHub</a>
+      <a href="en/" lang="en" hreflang="en">English</a>
       <a class="nav-dl" href="#download">Download</a>
     </nav>
     <details class="menu">
@@ -41,6 +44,7 @@
         <a href="#download">Download</a>
         <a href="anleitung.html">Dokumentation</a>
         <a href="https://github.com/bohannjein/AnotherKeepass">GitHub</a>
+        <a href="en/" lang="en" hreflang="en">English</a>
       </nav>
     </details>
   </div>
@@ -104,6 +108,7 @@
             <li>TOTP-Einmalcodes im KeePassXC-Format</li>
             <li>Papierkorb (KeePass-Papierkorb), Mehrfachauswahl zum Verschieben und Löschen</li>
             <li>Sortieren nach letzter Nutzung, Titel, Änderungs- oder Erstelldatum; Gruppieren nach Buchstabe, Typ, Ordner, Tresor, Domain, Tag oder Datum</li>
+            <li>Suche über alle Klartextfelder, mit Operatoren wie in KeePassXC: <code>user:</code>, <code>url:</code>, <code>tag:</code>, <code>is:weak</code>, <code>is:expired</code>, <code>-ausschließen</code></li>
           </ul>
         </div>
         <div>
@@ -130,7 +135,7 @@
         <div>
           <h3>Oberfläche</h3>
           <ul>
-            <li>8 Farbschemata, jeweils hell, dunkel und OLED-Schwarz (<a href="#designs">Übersicht</a>)</li>
+            <li>8 Farbschemata plus eigene Farben, jeweils hell, dunkel und OLED-Schwarz; auf Wunsch dem System folgend (<a href="#designs">Übersicht</a>)</li>
             <li>Spaltenbreiten per Ziehen anpassbar, Menü klappt zur Symbolleiste ein</li>
             <li>Befehlspalette (<kbd>Strg</kbd> <kbd>K</kbd>) und globaler Schnellzugriff</li>
             <li>Symbol im Infobereich, Start mit Windows, minimiert starten</li>
@@ -193,7 +198,7 @@
       <div class="two themes-head">
         <div>
           <h2 id="themes-title" class="h-sec">Designs</h2>
-          <p class="muted measure">Acht Farbschemata, jedes mit einer hellen und einer dunklen Variante. Der OLED-Modus legt die dunkle Variante auf reines Schwarz. Einstellbar unter <em>Einstellungen → Darstellung</em>.</p>
+          <p class="muted measure">Acht Farbschemata, jedes mit einer hellen und einer dunklen Variante. Der OLED-Modus legt die dunkle Variante auf reines Schwarz, „System“ wechselt mit Windows zwischen hell und dunkel. Wer will, stellt eigene Farben für Hintergrund, Text und Akzent ein. Einstellbar unter <em>Einstellungen → Darstellung</em>.</p>
         </div>
         <fieldset class="modes">
           <legend class="visually-hidden">Modus der Vorschau</legend>
@@ -221,7 +226,7 @@
     <div class="wrap">
       <h2 id="secure-title" class="h-sec">Sicherheit</h2>
       <dl class="facttable on-dark-table">
-        <div><dt>Verschlüsselung</dt><dd>Die von KDBX 4: AES-256 oder ChaCha20, Schlüsselableitung mit Argon2 oder AES-KDF. Die App warnt bei schwachen Ableitungs-Einstellungen. Master-Passwort, optional Schlüsseldatei.</dd></div>
+        <div><dt>Verschlüsselung</dt><dd>Die von KDBX 4: AES-256 oder ChaCha20, Schlüsselableitung mit Argon2 oder AES-KDF. Die App warnt bei schwachen Ableitungs-Einstellungen. Master-Passwort, optional Schlüsseldatei und YubiKey (Challenge-Response, kompatibel mit KeePassXC).</dd></div>
         <div><dt>Trennung</dt><dd>Der geöffnete Tresor liegt im Rust-Prozess. Die Oberfläche erhält ein Passwort nur, wenn du es anzeigst, kopierst oder bearbeitest.</dd></div>
         <div><dt>Sperren</dt><dd>Beim Sperren werden Schlüssel und geschützte Werte im Speicher überschrieben. Automatisch bei Inaktivität, Bildschirmsperre oder Benutzerwechsel (einstellbar).</dd></div>
         <div><dt>Härtung</dt><dd>Andere Prozesse des Benutzers können den Speicher der App nicht auslesen. Browser- und SSH-Verbindung sind nur für den eigenen Benutzer erreichbar. Kontodaten für Vaultwarden schützt Windows DPAPI.</dd></div>
@@ -240,7 +245,7 @@
           <h2 id="dl-title" class="h-sec">Download</h2>
           <span class="version" data-version-big>Neueste Version auf GitHub</span>
         </div>
-        <p class="muted" style="max-width:48ch;margin:0">Ohne Konto und ohne Registrierung. Die installierte App prüft selbst auf neue Versionen (abschaltbar).</p>
+        <p class="muted" style="max-width:48ch;margin:0">Ohne Konto und ohne Registrierung. Die installierte App sucht täglich nach neuen Versionen und installiert sie auf Wunsch selbst (abschaltbar).</p>
       </div>
 
       <div class="platforms">
@@ -271,6 +276,7 @@
           <ul>
             <li>Weil der Installer noch nicht code-signiert ist, warnt Windows SmartScreen vor einem unbekannten Herausgeber.</li>
             <li>Microsoft Defender meldet frische, unsignierte Builds gelegentlich fälschlich.</li>
+            <li>Von 0.2.2 oder älter: einmal von Hand mit dem Installer auf die neue Version aktualisieren. Danach kommen Updates aus der App.</li>
             <li>Beim Update von 0.1.0: einmal von Hand deinstallieren, App-Daten behalten.</li>
           </ul>
         </div>
