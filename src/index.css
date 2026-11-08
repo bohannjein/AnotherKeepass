@@ -1277,15 +1277,29 @@ option::checkmark { display: none; }
 .search-ops code { white-space: normal; line-height: 1.5; }
 
 /* ---------- settings: phone-style controls ---------- */
-.seg-wrap { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
-.seg { display: inline-flex; flex-wrap: nowrap; max-width: 100%; overflow-x: auto; border: 1px solid var(--outline-var); border-radius: var(--r-full); overflow: hidden; }
-.seg button { padding: 6px 12px; font-size: 13px; font-weight: 500; color: var(--on-surface-var); transition: background .15s var(--ease), color .15s var(--ease); }
-.seg button + button { border-left: 1px solid var(--outline-var); }
-.seg button:hover:not(:disabled) { background: var(--surface-high); }
-.seg button.on { background: var(--primary-container); color: var(--on-primary-container); }
-.seg button:disabled { opacity: .5; }
-.set-row.set-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
-.set-row.set-stack .seg-wrap { justify-content: flex-start; }
+.set-row.set-pick { flex-wrap: wrap; }
+.set-row.set-pick .set-text { flex: 1; }
+.pick-value {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px 8px 16px; border-radius: var(--r-full);
+  background: var(--secondary-container); color: var(--on-secondary-container); font-size: 14px; font-weight: 600;
+  transition: border-radius .35s var(--spring), background .2s var(--ease);
+}
+.pick-value:hover:not(:disabled) { background: color-mix(in srgb, var(--on-secondary-container) 10%, var(--secondary-container)); }
+.pick-value[aria-expanded='true'] { border-radius: var(--r-s); }
+/* the choices: a Material 3 Expressive menu inside the row; the chosen one is a filled pill */
+.pick-list {
+  flex-basis: 100%; display: grid; gap: 2px; margin: 4px 0 2px; padding: 6px;
+  border-radius: var(--r-m); background: var(--surface-highest);
+  animation: pop .35s var(--spring); transform-origin: top right;
+}
+.pick-list > button {
+  display: flex; align-items: center; justify-content: space-between; padding: 10px 16px;
+  border-radius: var(--r-s); font-size: 14px; text-align: left;
+  transition: border-radius .35s var(--spring), background .2s var(--ease);
+}
+.pick-list > button:hover { background: color-mix(in srgb, var(--on-surface) 8%, transparent); }
+.pick-list > button.on { background: var(--secondary-container); color: var(--on-secondary-container); font-weight: 600; border-radius: var(--r-full); }
+.pick-custom { padding: 8px 10px 6px; }
 .set-foot { margin: 8px 18px 0; font-size: 12.5px; line-height: 1.45; color: var(--on-surface-var); }
 .set-adv { margin-top: 8px; }
 .set-adv-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 760px; padding: 14px 18px; border-radius: var(--r-l); background: var(--surface-c); color: var(--on-surface-var); font-size: 14px; font-weight: 600; }

@@ -276,14 +276,8 @@ function Row({ s, ts, prefs, disabled, set, patch, onAction, t, ssh, button, qui
       : <NumberField id={id} s={s} value={value as number} disabled={disabled} unit={s.unit === 'd' ? ts.ui.days : s.unit}
         onCommit={n => set(s.key, n)} />;
   } else if (s.type === 'select' && s.options.length <= 4 && s.key !== 'lang') {
-    control = (
-      <span className="seg" role="radiogroup" aria-label={label}>
-        {s.options.map(o => (
-          <button key={o} role="radio" aria-checked={value === o} className={value === o ? 'on' : ''} disabled={disabled}
-            onClick={() => set(s.key, o)}>{ts.options[o as keyof SettingsStrings['options']]}</button>
-        ))}
-      </span>
-    );
+    control = <Choice options={s.options.map(o => [o, ts.options[o as keyof SettingsStrings['options']]])} value={value as string}
+      disabled={disabled} onPick={o => set(s.key, o)} />;
   } else if (s.type === 'select') {
     control = (
       <select id={id} className="set-select" value={value as string} disabled={disabled} onChange={e => set(s.key, e.target.value)}>
@@ -310,8 +304,8 @@ function Row({ s, ts, prefs, disabled, set, patch, onAction, t, ssh, button, qui
   }
 
   return (
-    // time choices sit under their title, like a phone's settings
-    <div className={'set-row' + (s.type === 'number' && s.presets ? ' set-stack' : '') + (indent ? ' indent' : '') + (disabled ? ' off' : '')}>
+    // time choices: value on the right, the list opens below (phone style)
+    <div className={'set-row' + ((s.type === 'number' && s.presets) || (s.type === 'select' && s.options.length <= 4 && s.key !== 'lang') ? ' set-pick' : '') + (indent ? ' indent' : '') + (disabled ? ' off' : '')}>
       <label className="set-text" htmlFor={id}>
         <span className="set-label">{label}</span>
         {hint && <span className="set-hint">{hint}</span>}
@@ -446,16 +440,18 @@ function CustomColorsEditor({ ts, prefs, set }: LookProps) {
   );
 }
 
-/** a time or size as people say it: 300 s → "5 min" */
-function amount(n: number, unit: string, ts: SettingsStrings) {
-  if (unit === 's') return n < 60 ? `${n} s` : n < 3600 ? `${Math.round(n / 60)} min` : `${Math.round(n / 360) / 10} h`;
-  if (unit === 'min') return n < 60 ? `${n} min` : `${Math.round(n / 6) / 10} h`;
-  if (unit === 'd') return `${n} ${ts.ui.days}`;
+/** a time or size as people say it, in the UI language: 300 s → "5 Minuten" */
+function amount(n: number, unit: string, lang: string) {
+  const fmt = (v: number, u: string) => new Intl.NumberFormat(lang, { style: 'unit', unit: u, unitDisplay: 'long', maximumFractionDigits: 1 }).format(v);
+  if (unit === 's') return n < 60 ? fmt(n, 'second') : n < 3600 ? fmt(Math.round(n / 60), 'minute') : fmt(n / 3600, 'hour');
+  if (unit === 'min') return n < 60 ? fmt(n, 'minute') : fmt(n / 60, 'hour');
+  if (unit === 'd') return fmt(n, 'day');
+  if (unit === '%') return `${n} %`;
   return unit ? `${n} ${unit}` : String(n);
 }
 
-/** One-tap choices (like a phone's settings) instead of typing a number. "Never" switches the
- *  feature off; a stored value that is no preset shows as its own choice and stays editable. */
+/** Like a phone's settings: the row shows the current value; a click opens the choices below
+ *  with a check mark. "Never" switches the feature off; "Custom" takes any number. */
 function Presets({ s, ts, prefs, disabled, patch }: {
   s: Extract<Setting, { type: 'number' }>; ts: SettingsStrings; prefs: Prefs; disabled: boolean; patch: (p: Partial<Prefs>) => void;
 }) {
@@ -464,24 +460,53 @@ function Presets({ s, ts, prefs, disabled, patch }: {
   const never = s.never;
   const isNever = typeof never === 'string' ? !prefs[never] : never !== undefined && value === never;
   const custom = !isNever && !presets.includes(value);
+  const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
-  const choose = (n: number) => { patch({ [s.key]: n, ...(typeof never === 'string' ? { [never]: true } : {}) } as Partial<Prefs>); setEditing(false); };
-  const off = () => { patch((typeof never === 'string' ? { [never]: false } : { [s.key]: never }) as Partial<Prefs>); setEditing(false); };
+  const say = (n: number) => amount(n, s.unit, prefs.lang);
+  const choose = (n: number) => { patch({ [s.key]: n, ...(typeof never === 'string' ? { [never]: true } : {}) } as Partial<Prefs>); setOpen(false); setEditing(false); };
+  const off = () => { patch((typeof never === 'string' ? { [never]: false } : { [s.key]: never }) as Partial<Prefs>); setOpen(false); };
+  const item = (label: string, on: boolean, act: () => void) => (
+    <button key={label} role="menuitemradio" aria-checked={on} className={on ? 'on' : ''} onClick={act}>
+      <span>{label}</span>{on && <Icon n="check" />}
+    </button>
+  );
   return (
-    <span className="seg-wrap">
-      <span className="seg" role="radiogroup">
-        {presets.map(n => (
-          <button key={n} role="radio" aria-checked={!isNever && value === n} className={!isNever && value === n ? 'on' : ''} disabled={disabled}
-            onClick={() => choose(n)}>{amount(n, s.unit, ts)}</button>
-        ))}
-        {never !== undefined && (
-          <button role="radio" aria-checked={isNever} className={isNever ? 'on' : ''} disabled={disabled} onClick={off}>{ts.ui.never}</button>
-        )}
-        <button role="radio" aria-checked={custom} className={custom ? 'on' : ''} disabled={disabled} onClick={() => setEditing(e => !e)}>
-          {custom ? amount(value, s.unit, ts) : ts.ui.custom}
-        </button>
-      </span>
-      {editing && <NumberField id={'set-' + s.key} s={s} value={value} disabled={disabled} unit={s.unit === 'd' ? ts.ui.days : s.unit} onCommit={choose} />}
-    </span>
+    <>
+      <button className="pick-value" disabled={disabled} aria-expanded={open} onClick={() => setOpen(o => !o)}>
+        {isNever ? ts.ui.never : say(value)}<Icon n={open ? 'expand_less' : 'expand_more'} />
+      </button>
+      {open && (
+        <div className="pick-list" role="menu">
+          {presets.map(n => item(say(n), !isNever && value === n, () => choose(n)))}
+          {never !== undefined && item(ts.ui.never, isNever, off)}
+          {item(custom ? `${ts.ui.custom}: ${say(value)}` : ts.ui.custom, custom, () => setEditing(e => !e))}
+          {editing && (
+            <span className="pick-custom">
+              <NumberField id={'set-' + s.key} s={s} value={value} disabled={disabled} unit={s.unit === 'd' ? ts.ui.days : s.unit} onCommit={choose} />
+            </span>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Short lists (2–4 options) work like the time choices: value on the right, menu below. */
+function Choice({ options, value, disabled, onPick }: { options: [string, string][]; value: string; disabled: boolean; onPick: (o: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button className="pick-value" disabled={disabled} aria-expanded={open} onClick={() => setOpen(o => !o)}>
+        {options.find(([o]) => o === value)?.[1] ?? value}<Icon n={open ? 'expand_less' : 'expand_more'} />
+      </button>
+      {open && (
+        <div className="pick-list" role="menu">
+          {options.map(([o, label]) => (
+            <button key={o} role="menuitemradio" aria-checked={o === value} className={o === value ? 'on' : ''}
+              onClick={() => { onPick(o); setOpen(false); }}><span>{label}</span>{o === value && <Icon n="check" />}</button>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
