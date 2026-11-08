@@ -16,7 +16,8 @@ export const DEFAULTS = {
   recentCount: 5,
   reopenLast: true,
   rememberKeyfiles: true,
-  updateCheck: false,
+  updateAuto: true,
+  updateNotify: true,
   updateBeta: false,
   showExpiring: true,
   expiryDays: 7,
@@ -160,8 +161,9 @@ export const SECTIONS: Section[] = [
       },
       {
         id: 'updates', items: [
-          { key: 'updateCheck', type: 'toggle' },
-          { key: 'updateBeta', type: 'toggle', dependsOn: 'updateCheck' },
+          { key: 'updateAuto', type: 'toggle' },
+          { key: 'updateNotify', type: 'toggle' },
+          { key: 'updateBeta', type: 'toggle' },
           { key: 'updateNow', type: 'action' },
         ],
       },

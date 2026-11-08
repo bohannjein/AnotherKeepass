@@ -56,7 +56,11 @@ export interface Health { vault: string; id: string; bits: number; weak: boolean
 export interface KeeAgent { allow: boolean; addAtOpen: boolean; removeAtClose: boolean; confirm: boolean; lifetime: number; attachment: string }
 /** KeeShare setting of a folder */
 export interface Share { kind: 'sync' | 'export' | 'import'; path: string; password: string }
-export interface Update { version: string; url: string; notes: string }
+export interface Update {
+  version: string; url: string; notes: string;
+  /** signed package for the in-app updater; false = only a beta on GitHub (open the page) */
+  installable: boolean;
+}
 export interface VaultSettings {
   name: string; description: string; recycleBin: boolean; historyMax: number;
   kdf: 'aes' | 'argon2d' | 'argon2id' | 'other'; memoryMib: number; iterations: number; parallelism: number; weak: boolean;
@@ -137,8 +141,10 @@ export interface Backend {
   /** desktop options mirrored to Rust; returns problems (e.g. invalid shortcut) */
   desktopApply(prefs: Record<string, unknown>): Promise<string[]>;
   windowMinimize(): Promise<void>;
-  /** newer GitHub release than this build, if any */
+  /** newer release than this build, if any */
   updateCheck(beta: boolean): Promise<Update | null>;
+  /** download in the background; with auto, install on its own while the app is unused. Returns the ready version. */
+  updateDownload(auto: boolean): Promise<string | null>;
   /** false: not installable through the updater (open the release page) */
   updateInstall(): Promise<boolean>;
   /** minimizes only if the browser/Auto-Type asked for the unlock */
@@ -218,6 +224,7 @@ const desktop: Backend = {
   windowMinimize: () => invoke('window_minimize'),
   updateCheck: beta => invoke('update_check', { beta }),
   updateInstall: () => invoke('update_install'),
+  updateDownload: auto => invoke('update_download', { auto }),
   windowAfterUnlock: () => invoke('window_after_unlock'),
   autotypePerform: (vault, id, sequence) => invoke('autotype_perform', { vault, id, sequence }),
   autotypeEntry: (vault, id) => invoke('autotype_entry', { vault, id }),
@@ -413,6 +420,7 @@ const demo: Backend = {
   windowMinimize: async () => {},
   updateCheck: async () => null,
   updateInstall: async () => false,
+  updateDownload: async () => null,
   windowAfterUnlock: async () => {},
   autotypePerform: async () => {},
   autotypeEntry: async () => {},

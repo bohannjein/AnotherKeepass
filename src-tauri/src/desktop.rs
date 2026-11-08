@@ -179,6 +179,24 @@ fn config_file() -> Option<PathBuf> {
     base.map(|b| b.join(IDENTIFIER).join("desktop.json"))
 }
 
+/// Marker: a background update restarted the app, which was unused in the tray; it goes back
+/// there instead of popping up.
+fn hidden_restart_file() -> Option<PathBuf> {
+    config_file().map(|f| f.with_file_name("update-restart"))
+}
+
+pub fn mark_hidden_restart() {
+    if let Some(f) = hidden_restart_file() {
+        let _ = fs::write(f, b"");
+    }
+}
+
+pub fn clear_hidden_restart() {
+    if let Some(f) = hidden_restart_file() {
+        let _ = fs::remove_file(f);
+    }
+}
+
 pub fn load_prefs() -> DesktopPrefs {
     config_file().and_then(|p| fs::read(p).ok()).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
@@ -530,7 +548,11 @@ pub fn initial_show<R: Runtime>(app: &AppHandle<R>, p: &DesktopPrefs) {
     watch_webview(app);
     // "start minimized" is for the login autostart only; a manual start always shows the window
     let autostarted = std::env::args().any(|a| a == AUTOSTART_ARG);
-    if !(p.start_minimized && autostarted) {
+    let after_update = hidden_restart_file().is_some_and(|f| fs::remove_file(f).is_ok());
+    if after_update && p.tray_icon {
+        log::info!("restarted by a background update: back to the tray");
+        NEVER_SHOWN.store(true, Ordering::Relaxed);
+    } else if !(p.start_minimized && autostarted) {
         show_main(app);
     } else if !p.tray_icon {
         let _ = w.show();

@@ -6,6 +6,10 @@
   unresponsive after logging in to Windows. The first time it is shown, it is now built fresh.
 - **White window after a crash:** if WebView2 crashes (graphics driver, standby), the page
   reloads or the window is rebuilt instead of staying white. Open vaults are locked first.
+- **Updates:** on by default and checked at start and once a day (was weekly and off). The
+  update downloads in the background; one click installs it, and with "install automatically"
+  it installs on its own while the app sits unused in the tray, then goes back there.
+  "Check now" in the settings turns into "Install and restart". New switch for the notice.
 - **Columns:** drag the borders between menu, list and entry to resize them (arrow keys work
   too, a double-click restores the default). Dragging the menu narrow folds it into the icon
   rail. The widths are saved.

@@ -19,4 +19,12 @@ eq(mergePrefs({ drawerWidth: 9999, listWidth: 10 }).listWidth, 240, 'list min');
 eq(mergePrefs({ listWidth: 'wide' }).listWidth, DEFAULTS.listWidth, 'wrong type');
 eq(mergePrefs({ drawerWidth: Number.NaN }).drawerWidth, DEFAULTS.drawerWidth, 'NaN');
 
+// updates: on by default, also for settings saved before 0.2.3 (old "updateCheck: false")
+const upd = mergePrefs({ updateCheck: false, updateBeta: true }) as Record<string, unknown>;
+eq(upd.updateAuto, true, 'auto update default');
+eq(upd.updateNotify, true, 'update notice default');
+eq(upd.updateBeta, true, 'beta kept');
+eq('updateCheck' in upd, false, 'old key dropped');
+eq(mergePrefs({ updateAuto: false }).updateAuto, false, 'auto update off kept');
+
 console.log('settings ok');

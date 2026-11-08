@@ -6,11 +6,13 @@ import { LANGS, type Strings } from './i18n';
 
 import { Icon } from './Icon';
 import { backend } from './backend';
+import { type UpdateState } from './useUpdates';
 
 const SCHEMA = new Map(SECTIONS.flatMap(s => s.groups.flatMap(g => g.items)).map(i => [i.key, i] as const));
 
-export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
+export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, update, onCheckUpdate, onInstallUpdate }: {
   t: Strings; prefs: Prefs; onChange: (p: Prefs) => void; onBack: () => void; onSnack: (msg: string, error?: boolean) => void;
+  update: UpdateState | null; onCheckUpdate: (manual: boolean) => Promise<UpdateState | null>; onInstallUpdate: () => void;
 }) {
   const ts = settingsStrings[prefs.lang];
   const [section, setSection] = useState(SECTIONS[0].id);
@@ -77,8 +79,9 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
     if (key === 'export') exportPrefs();
     else if (key === 'import') fileInput.current?.click();
     else if (key === 'reset') setConfirmReset(true);
-    else if (key === 'updateNow') backend.updateCheck(prefs.updateBeta)
-      .then(u => onSnack(u ? t.updateAvailable.replace('{v}', u.version) : t.updateNone))
+    else if (key === 'updateNow' && update) onInstallUpdate();
+    else if (key === 'updateNow') onCheckUpdate(true)
+      .then(u => onSnack(u ? (u.ready ? t.updateReady : t.updateAvailable).replace('{v}', u.version) : t.updateNone))
       .catch(() => onSnack(t.updateFailed, true));
   };
 
@@ -116,7 +119,8 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
               <section className="set-group" key={sec.id + g.id}>
                 <span className="label">{ts.sections[sec.id as keyof SettingsStrings['sections']]} · {ts.groups[g.id as keyof SettingsStrings['groups']]}</span>
                 <div className="set-card">
-                  {items.map(s => <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} onAction={runAction} t={t} ssh={ssh} />)}
+                  {items.map(s => <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} onAction={runAction} t={t} ssh={ssh}
+                    button={s.key === 'updateNow' && update ? (update.installable ? t.updateInstall : t.updateOpenPage) : undefined} />)}
                 </div>
               </section>
             ))}
@@ -132,7 +136,8 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
                 <span className="label">{ts.groups[g.id as keyof SettingsStrings['groups']]}</span>
                 <div className="set-card">
                   {g.items.filter(enabled).map(s => (
-                    <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} onAction={runAction} t={t} ssh={ssh} />
+                    <Row key={s.key} s={s} ts={ts} prefs={prefs} disabled={!enabled(s)} set={set} onAction={runAction} t={t} ssh={ssh}
+                    button={s.key === 'updateNow' && update ? (update.installable ? t.updateInstall : t.updateOpenPage) : undefined} />
                   ))}
                 </div>
               </section>
@@ -178,8 +183,10 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack }: {
   );
 }
 
-function Row({ s, ts, prefs, disabled, set, onAction, t, ssh }: {
+function Row({ s, ts, prefs, disabled, set, onAction, t, ssh, button }: {
   s: Setting; ts: SettingsStrings; prefs: Prefs; disabled: boolean; t: Strings; ssh: { path: string; reachable: boolean } | null;
+  /** replaces the action button's text ("check now" → "install and restart") */
+  button?: string;
   set: (key: PrefKey, value: Prefs[PrefKey]) => void; onAction: (key: string) => void;
 }) {
   const label = ts.labels[s.key as keyof SettingsStrings['labels']];
@@ -200,7 +207,7 @@ function Row({ s, ts, prefs, disabled, set, onAction, t, ssh }: {
           <button className='wip-btn' disabled><Icon n={s.key === 'bwConnect' ? 'cloud' : 'dns'} />{label}<span className='pill'>{ts.ui.wip}</span></button>
         ) : (
           <button className={'btn ' + (s.key === 'reset' ? 'outlined' : 'tonal')} onClick={() => onAction(s.key)}>
-            <Icon n={{ export: 'download', import: 'upload', reset: 'restart_alt', updateNow: 'system_update', ksGenerate: 'key', bwConnect: 'cloud', vwConnect: 'dns' }[s.key]} />{label}
+            <Icon n={{ export: 'download', import: 'upload', reset: 'restart_alt', updateNow: 'system_update', ksGenerate: 'key', bwConnect: 'cloud', vwConnect: 'dns' }[s.key]} />{button ?? label}
           </button>
         )}
       </div>

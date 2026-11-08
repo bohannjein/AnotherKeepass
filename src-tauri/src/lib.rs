@@ -41,6 +41,7 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![desktop::AUTOSTART_ARG])))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(vault::Vaults::default())
+        .manage(update::Pending::default())
         .manage(desktop::Desktop { prefs: std::sync::Mutex::new(prefs.clone()) })
         .manage(autotype::Target::default())
         .on_window_event(desktop::on_window_event)
@@ -70,6 +71,7 @@ pub fn run() {
             vault::kdf_benchmark,
             update::update_check,
             update::update_install,
+            update::update_download,
             vault::keeshare_get,
             vault::keeshare_set,
             ssh::ssh_settings,

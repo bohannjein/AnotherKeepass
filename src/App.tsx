@@ -8,6 +8,7 @@ import { clearHistory, generate } from './generator';
 import { type Strings, strings } from './i18n';
 import { type Prefs, mergePrefs, DEFAULTS, clamp } from './settings';
 import { Resizer } from './Resizer';
+import { useUpdates, type UpdateState } from './useUpdates';
 import { settingsStrings } from './i18n-settings';
 import VaultDialog, { type Known } from './VaultDialog';
 import { Icon } from './Icon';
@@ -130,6 +131,7 @@ export default function App() {
 
   useEffect(() => { openOptions.minimize = !!settings?.minimizeOnUrl; }, [settings?.minimizeOnUrl]);
   const update = (s: Settings) => { setSettings(s); saveSettings(s); };
+  const updates = useUpdates(settings);
 
   const opened = (data: VaultData, meta: Known) => {
     setOpen(o => ({ ...o, [data.id]: data }));
@@ -181,13 +183,15 @@ export default function App() {
             const next = 'forget' in patch ? list.filter(k => k.path !== path) : list.map(k => k.path === path ? { ...k, ...patch } : k);
             saveKnown(next); return next;
           })}
-          onOpened={opened} onUpdate={onUpdate} onClosed={onClosed} onLock={lock} desktopProblems={desktopProblems} />}
+          onOpened={opened} onUpdate={onUpdate} onClosed={onClosed} onLock={lock} desktopProblems={desktopProblems}
+          update={updates.update} checkUpdate={updates.checkUpdate} />}
     </ContextMenuProvider>
   );
 }
 
-function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpdate, onClosed, onLock, desktopProblems }: {
+function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpdate, onClosed, onLock, desktopProblems, update, checkUpdate }: {
   t: Strings; settings: Settings; onSettings: (s: Settings) => void;
+  update: UpdateState | null; checkUpdate: (manual: boolean) => Promise<UpdateState | null>;
   onKnown: (path: string, patch: Partial<Known>) => void;
   open: Record<string, VaultData>; known: Known[];
   onOpened: (d: VaultData, meta: Known) => void; onUpdate: (d: VaultData) => void; onClosed: (id: string) => void; onLock: () => void;
@@ -284,7 +288,24 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const allItems = useMemo(() => pending ? [...items, pending] : items, [items, pending]);
   const folders: Folder[] = useMemo(() => Object.values(open).flatMap(v =>
     v.folders.map(f => ({ id: f.id, vault: v.id, name: f.name, parent: f.parent, share: f.share }))), [open]);
-  const { update, ask, setAsk } = useDesktopEvents({ t, settings, notify, open, vault, items, desktopProblems, onLock });
+  const { ask, setAsk } = useDesktopEvents({ t, settings, notify, open, vault, items, desktopProblems, onLock });
+  const updateTitle = update && (update.ready ? t.updateReady
+    : update.progress != null ? `${t.updateInstalling} ${update.progress} %` : t.updateAvailable).replace('{v}', update.version);
+  // tell once per version (also when it was found while everything was locked)
+  const told = useRef('');
+  const notice = update && settings.updateNotify && (update.ready || !update.installable || !settings.updateAuto)
+    ? `${update.version}:${update.ready ? 1 : 0}` : '';
+  useEffect(() => {
+    if (!notice || told.current === notice || !update) return;
+    told.current = notice;
+    notify((update.ready ? t.updateReady : t.updateAvailable).replace('{v}', update.version));
+  }, [notice]); // eslint-disable-line react-hooks/exhaustive-deps -- once per version and state
+  const installUpdate = async () => {
+    if (!update) return;
+    if (!update.installable) { openExternal(update.url); return; }
+    notify(t.updateInstalling);
+    if ((await run(backend.updateInstall())) === false) openExternal(update.url);
+  };
   const vaultList: VaultInfo[] = useMemo(() => {
     const ids = [...known.map(k => k.path), ...Object.keys(open).filter(id => !known.some(k => k.path === id))];
     return ids.map(id => {
@@ -531,7 +552,8 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     return (
       <>
         <Suspense fallback={null}>
-          <SettingsPage t={t} prefs={settings} onChange={onSettings} onBack={() => setPage('vault')} onSnack={notify} />
+          <SettingsPage t={t} prefs={settings} onChange={onSettings} onBack={() => setPage('vault')} onSnack={notify}
+            update={update} onCheckUpdate={checkUpdate} onInstallUpdate={installUpdate} />
         </Suspense>
         {snackbar}
       </>
@@ -557,7 +579,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
             <Icon n={rail ? 'menu' : 'encrypted'} fill />
           </button>
           <h1>Another<span>Keepass</span><small>v{__APP_VERSION__} · {update
-            ? <b className="brand-update">{t.brandUpdate.replace('{v}', update.version)}</b>
+            ? <b className="brand-update">{(update.ready ? t.brandUpdate : t.brandUpdateNew).replace('{v}', update.version)}</b>
             : isDemo ? t.brandDemo
             : liveCount === 1 ? t.brandEntry : t.brandEntries.replace('{n}', liveCount.toLocaleString(settings.lang))}</small></h1>
         </div>
@@ -639,10 +661,10 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
             <Icon n="settings" />
           </button>
           {update && (
-            <button className="icon-btn update-btn" title={t.updateAvailable.replace('{v}', update.version)} aria-label={t.updateAvailable.replace('{v}', update.version)}
+            <button className="icon-btn update-btn" title={updateTitle!} aria-label={updateTitle!}
               onClick={() => setConfirm({
-                title: t.updateAvailable.replace('{v}', update.version), body: update.notes || t.updateBody, label: t.updateInstall, icon: 'system_update',
-                action: async () => { notify(t.updateInstalling); if ((await run(backend.updateInstall())) === false) openExternal(update.url); },
+                title: updateTitle!, body: update.notes || t.updateBody, icon: 'system_update',
+                label: update.installable ? t.updateInstall : t.updateOpenPage, action: installUpdate,
               })}><Icon n="system_update" /></button>
           )}
           <span className="foot-spacer" />

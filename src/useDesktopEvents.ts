@@ -1,8 +1,8 @@
 // Everything the main window reacts to without the user clicking: events from Rust (browser
-// requests, Auto-Type, sync problems, reloads), the weekly update check, auto-lock after
+// requests, Auto-Type, sync problems, reloads), auto-lock after
 // inactivity and one-time notices after unlocking.
 import { useEffect, useRef, useState } from 'react';
-import { backend, type BrowserAsk, type Update, type VaultData } from './backend';
+import { backend, type BrowserAsk, type VaultData } from './backend';
 import { type Item } from './model';
 import { type Strings } from './i18n';
 import { type Prefs } from './settings';
@@ -12,7 +12,6 @@ export function useDesktopEvents({ t, settings, notify, open, vault, items, desk
   t: Strings; settings: Prefs; notify: Notify; open: Record<string, VaultData>; vault: string; items: Item[];
   desktopProblems: string[]; onLock: () => void;
 }) {
-  const [update, setUpdate] = useState<Update | null>(null);
   const [ask, setAsk] = useState<BrowserAsk | null>(null);
 
   useEffect(() => backend.on<BrowserAsk>('akp-browser-ask', a => setAsk(a)), []);
@@ -21,19 +20,6 @@ export function useDesktopEvents({ t, settings, notify, open, vault, items, desk
 
   // auto-type errors come from Rust (the picker is the quick access window)
   useEffect(() => backend.on<string>('akp-autotype-error', e => notify(`${t.autoTypeError}: ${e}`, true)), [t.autoTypeError, notify]);
-
-  // update check: at most once a week, only when enabled
-  useEffect(() => {
-    if (!settings.updateCheck || !backend.desktop) return;
-    const KEY = 'anotherkeepass.updateChecked';
-    let last = 0;
-    try { last = Number(localStorage.getItem(KEY) ?? 0); } catch { /* no storage */ }
-    if (Date.now() - last < 7 * 86_400_000) return;
-    backend.updateCheck(settings.updateBeta).then(u => {
-      try { localStorage.setItem(KEY, String(Date.now())); } catch { /* no storage */ }
-      if (u) { setUpdate(u); notify(t.updateAvailable.replace('{v}', u.version)); }
-    }).catch(e => backend.log('warn', 'update check: ' + String(e)));
-  }, [settings.updateCheck, settings.updateBeta]); // eslint-disable-line react-hooks/exhaustive-deps -- once per setting change, not per language switch
 
   // auto-lock after inactivity
   useEffect(() => {
@@ -76,5 +62,5 @@ export function useDesktopEvents({ t, settings, notify, open, vault, items, desk
     if (n) notify(`${n} ${t.expiringSoon}`);
   }, [items, settings.showExpiring, settings.expiryDays, t.expiringSoon, notify]);
 
-  return { update, ask, setAsk };
+  return { ask, setAsk };
 }
