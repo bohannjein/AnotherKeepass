@@ -326,6 +326,7 @@ fn recreate_main<R: Runtime>(app: AppHandle<R>, why: &str, show: bool) {
 
 /// Recoveries in the last minute; more than a few means the webview keeps dying and
 /// reloading would only loop.
+#[cfg(windows)]
 static RECOVERIES: Mutex<Vec<std::time::Instant>> = Mutex::new(Vec::new());
 
 /// Recover from a crashed WebView2 instead of leaving a white, dead window behind (GPU
@@ -384,6 +385,7 @@ pub fn watch_webview<R: Runtime>(app: &AppHandle<R>) {
 #[cfg(not(windows))]
 pub fn watch_webview<R: Runtime>(_app: &AppHandle<R>) {}
 
+#[cfg(windows)]
 fn may_recover() -> bool {
     let now = std::time::Instant::now();
     let Ok(mut recent) = RECOVERIES.lock() else { return false };
