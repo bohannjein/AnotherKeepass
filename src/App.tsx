@@ -8,6 +8,7 @@ import { clearHistory, generate } from './generator';
 import { type Strings, strings } from './i18n';
 import { type Prefs, mergePrefs, DEFAULTS, clamp } from './settings';
 import { Resizer } from './Resizer';
+import { applyLook, prefersDark, resolveTheme, type Theme } from './schemes';
 import { VirtualList, type VRow, type VirtualApi } from './VirtualList';
 import { useUpdates, type UpdateState } from './useUpdates';
 import { settingsStrings } from './i18n-settings';
@@ -119,16 +120,23 @@ export default function App() {
     }).catch(() => { /* keep the list if the check fails */ });
   }, [forget]);
   const lang = settings?.lang ?? 'en';
-  const theme = settings?.theme ?? 'dark';
   const t = strings[lang];
 
   const zoom = (settings?.fontSize ?? 100) / 100;
+  // theme ("system" follows Windows live), color scheme and own colors
+  const [sysDark, setSysDark] = useState(prefersDark);
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.dataset.accent = settings?.accent ?? 'terracotta';
+    if (typeof matchMedia !== 'function') return;
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    const on = () => setSysDark(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  useEffect(() => { applyLook(settings ?? {}); }, [settings, sysDark]);
+  useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.style.setProperty('--zoom', String(zoom));
-  }, [theme, lang, zoom, settings?.accent]);
+  }, [lang, zoom]);
 
   useEffect(() => { openOptions.minimize = !!settings?.minimizeOnUrl; }, [settings?.minimizeOnUrl]);
   const update = (s: Settings) => { setSettings(s); saveSettings(s); };
@@ -512,8 +520,9 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
 
   // light <-> the dark variant used last (dark or OLED black)
   const toggleTheme = () => {
-    if (settings.theme !== 'light') {
-      try { localStorage.setItem('anotherkeepass.darkTheme', settings.theme); } catch { /* not essential */ }
+    const now: Theme = resolveTheme(settings.theme, settings.systemDark, prefersDark());
+    if (now !== 'light') {
+      try { localStorage.setItem('anotherkeepass.darkTheme', now); } catch { /* not essential */ }
       return onSettings({ ...settings, theme: 'light' });
     }
     let dark: 'dark' | 'oled' = 'dark';

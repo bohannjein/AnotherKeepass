@@ -27,4 +27,11 @@ eq(upd.updateBeta, true, 'beta kept');
 eq('updateCheck' in upd, false, 'old key dropped');
 eq(mergePrefs({ updateAuto: false }).updateAuto, false, 'auto update off kept');
 
+// follow the system, own colors
+eq(mergePrefs({ theme: 'system', systemDark: 'oled' }).theme, 'system', 'system theme kept');
+eq(mergePrefs({ systemDark: 'pink' }).systemDark, 'dark', 'unknown system dark');
+eq(mergePrefs({ accent: 'custom' }).accent, 'custom', 'own scheme kept');
+eq(mergePrefs({ customDarkBg: '#123456' }).customDarkBg, '#123456', 'hex color kept');
+eq(mergePrefs({ customDarkBg: 'red; x: url(evil)' }).customDarkBg, DEFAULTS.customDarkBg, 'no CSS injection');
+
 console.log('settings ok');

@@ -4,18 +4,8 @@ import { type Lang, strings, LANGS } from './i18n';
 import { settingsStrings } from './i18n-settings';
 import { Icon } from './Icon';
 import { type Theme } from './ui';
+import { SCHEMES } from './schemes';
 
-/** background + accent per scheme, dark and light (same values as src/index.css) */
-const SCHEMES: Record<string, { dark: [string, string]; light: [string, string] }> = {
-  terracotta: { dark: ['#17130f', '#ffb68b'], light: ['#fff8f3', '#8f4c21'] },
-  nord: { dark: ['#2e3440', '#88c0d0'], light: ['#eceff4', '#5e81ac'] },
-  gruvbox: { dark: ['#282828', '#fe8019'], light: ['#fbf1c7', '#af3a03'] },
-  solarized: { dark: ['#002b36', '#268bd2'], light: ['#fdf6e3', '#268bd2'] },
-  rosepine: { dark: ['#191724', '#ebbcba'], light: ['#faf4ed', '#b4637a'] },
-  everforest: { dark: ['#2d353b', '#a7c080'], light: ['#fdf6e3', '#687d00'] },
-  tokyonight: { dark: ['#1a1b26', '#7aa2f7'], light: ['#e1e2e7', '#2e7de9'] },
-  dracula: { dark: ['#282a36', '#bd93f9'], light: ['#fffbeb', '#644ac9'] },
-};
 const THEMES: { id: Theme; icon: string }[] = [
   { id: 'dark', icon: 'dark_mode' }, { id: 'light', icon: 'light_mode' }, { id: 'oled', icon: 'contrast' },
 ];
@@ -73,7 +63,7 @@ export function Setup({ onDone }: { onDone: (s: { lang: Lang; theme: Theme; acce
             <div className="scheme-picks" role="radiogroup" aria-label={ts.labels.accent}>
               {Object.entries(SCHEMES).map(([id, c]) => {
                 const name = ts.options[id as keyof typeof ts.options];
-                const [bg, acc] = c[mode];
+                const { bg, acc } = c[mode];
                 return (
                   <button key={id} role="radio" aria-checked={accent === id} title={name} aria-label={name}
                     className={'scheme-pick' + (accent === id ? ' on' : '')} onClick={() => setAccent(id)}

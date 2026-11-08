@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Settings, look:** theme and color scheme are picked from preview cards (a small app window
+  in each scheme) instead of drop-down lists.
+- **Follow the system:** new theme option that switches between light and dark with Windows,
+  live. A sub-option decides whether dark means the normal dark theme or OLED black.
+- **Own colors:** a ninth scheme with your own background, text and accent color for dark and
+  light; the app warns when the contrast is too low.
+- **Reset column widths:** button in the settings (double-clicking a column border still works).
 - **Tray icon:** a thin shield outline with a keyhole and some space around it, drawn at the
   exact tray size, so it matches the other Windows tray icons.
 - **Large vaults:** the entry list only draws the rows in view once it is long (over 300 rows).

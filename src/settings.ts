@@ -1,11 +1,14 @@
 // Application settings: one schema drives defaults, the settings page and import validation.
 // Defaults follow KeePassXC. `planned: true` = stored, but the feature is not built yet (hidden unless "show planned").
+import { CUSTOM_DEFAULTS, isHex } from './schemes.ts';
 import type { Lang } from './i18n';
 
 export const DEFAULTS = {
   lang: 'en' as Lang,
   showPlanned: false,
-  theme: 'dark' as 'dark' | 'light' | 'oled',
+  theme: 'dark' as 'system' | 'dark' | 'light' | 'oled',
+  /** what "dark" means while following the system */
+  systemDark: 'dark' as 'dark' | 'oled',
 
   // General · startup
   singleInstance: true,
@@ -38,6 +41,8 @@ export const DEFAULTS = {
   drawerWidth: 272,
   listWidth: 360,
   accent: 'terracotta',
+  // own color scheme (accent: 'custom')
+  ...CUSTOM_DEFAULTS,
   listDensity: 'comfortable',
   letterAvatars: true,
   colorizePasswords: true,
@@ -128,7 +133,7 @@ export type Setting =
   | { key: PrefKey; type: 'number'; min: number; max: number; unit: 's' | 'ms' | 'min' | 'd' | '%' | ''; step?: number; planned?: boolean; dependsOn?: PrefKey; platform?: Platform }
   | { key: PrefKey; type: 'select'; options: string[]; planned?: boolean; dependsOn?: PrefKey; platform?: Platform }
   | { key: 'sshStatus' | 'sshAuthSockCurrent' | 'skProviderCurrent' | 'ksFingerprint'; type: 'info'; value: string; platform?: Platform }
-  | { key: 'reset' | 'import' | 'export' | 'updateNow' | 'ksGenerate' | 'bwConnect' | 'vwConnect'; type: 'action'; planned?: boolean; wip?: boolean };
+  | { key: 'reset' | 'import' | 'export' | 'updateNow' | 'layoutReset' | 'ksGenerate' | 'bwConnect' | 'vwConnect'; type: 'action'; planned?: boolean; wip?: boolean };
 
 export type Platform = 'windows' | 'linux-mac';
 export interface Group { id: string; items: Setting[] }
@@ -180,9 +185,11 @@ export const SECTIONS: Section[] = [
       {
         id: 'look', items: [
           { key: 'lang', type: 'select', options: ['en', 'de', 'fr', 'es'] },
-          { key: 'theme', type: 'select', options: ['dark', 'light', 'oled'] },
-          { key: 'accent', type: 'select', options: ['terracotta', 'nord', 'gruvbox', 'solarized', 'rosepine', 'everforest', 'tokyonight', 'dracula'] },
+          { key: 'theme', type: 'select', options: ['system', 'dark', 'light', 'oled'] },
+          { key: 'systemDark', type: 'select', options: ['dark', 'oled'] },
+          { key: 'accent', type: 'select', options: ['terracotta', 'nord', 'gruvbox', 'solarized', 'rosepine', 'everforest', 'tokyonight', 'dracula', 'custom'] },
           { key: 'fontSize', type: 'number', min: 80, max: 150, step: 10, unit: '%' },
+          { key: 'layoutReset', type: 'action' },
         ],
       },
       {
@@ -397,6 +404,7 @@ export function mergePrefs(raw: unknown): Prefs {
     const s = SCHEMA.get(k as PrefKey);
     const layout = LAYOUT[k];
     if (layout) out[k] = Number.isFinite(v) ? clamp(v as number, layout[0], layout[1]) : out[k];
+    else if (k in CUSTOM_DEFAULTS) { if (isHex(v)) out[k] = v; }
     else if (s?.type === 'number') out[k] = Number.isFinite(v) ? clamp(v as number, s.min, s.max) : out[k];
     else if (s?.type === 'select') { if (s.options.includes(v as string)) out[k] = v; }
     else out[k] = v;

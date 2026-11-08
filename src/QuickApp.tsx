@@ -1,6 +1,7 @@
 // The quick access window (?quick=1): search all unlocked vaults, Enter copies the password,
 // Shift+Enter the username, Ctrl+Enter types the login via Auto-Type, Esc or a click outside closes.
 // The global Auto-Type opens it as picker: matching entries first, Enter types.
+import { applyLook } from './schemes';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { backend, type AutoTypePick, type VaultData } from './backend';
@@ -24,8 +25,7 @@ export default function QuickApp() {
 
   const reload = useCallback(() => {
     // same look as the main window
-    document.documentElement.dataset.theme = readSettings().theme ?? 'dark';
-    document.documentElement.dataset.accent = readSettings().accent ?? 'terracotta';
+    applyLook(readSettings());
     backend.vaultsListing().then(setVaults).catch(() => setVaults([]));
     backend.quickPick().then(setPick).catch(() => setPick(null));
   }, []);

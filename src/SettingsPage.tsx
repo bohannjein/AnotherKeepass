@@ -6,6 +6,7 @@ import { LANGS, type Strings } from './i18n';
 
 import { Icon } from './Icon';
 import { backend } from './backend';
+import { SCHEMES, colorsOf, contrast, prefersDark, resolveTheme, type Colors, type Mode } from './schemes';
 import { type UpdateState } from './useUpdates';
 
 const SCHEMA = new Map(SECTIONS.flatMap(s => s.groups.flatMap(g => g.items)).map(i => [i.key, i] as const));
@@ -51,6 +52,7 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
 
   // a setting is active only if its whole dependsOn chain is switched on
   const enabled = (s: Setting): boolean => {
+    if (s.key === 'systemDark') return prefs.theme === 'system';
     const dep = 'dependsOn' in s ? s.dependsOn : undefined;
     if (!dep) return true;
     const parent = SCHEMA.get(dep);
@@ -79,6 +81,7 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
     if (key === 'export') exportPrefs();
     else if (key === 'import') fileInput.current?.click();
     else if (key === 'reset') setConfirmReset(true);
+    else if (key === 'layoutReset') { onChange({ ...prefs, drawerWidth: DEFAULTS.drawerWidth, listWidth: DEFAULTS.listWidth }); onSnack(ts.ui.layoutDone); }
     else if (key === 'updateNow' && update) onInstallUpdate();
     else if (key === 'updateNow') onCheckUpdate(true)
       .then(u => onSnack(u ? (u.ready ? t.updateReady : t.updateAvailable).replace('{v}', u.version) : t.updateNone))
@@ -199,6 +202,15 @@ function Row({ s, ts, prefs, disabled, set, onAction, t, ssh, button }: {
     </>
   );
 
+  if (s.key === 'theme' || s.key === 'accent') {
+    return (
+      <div className="set-row set-wide">
+        <div className="set-text"><span className="set-label">{label}</span>{hint && <span className="set-hint">{hint}</span>}</div>
+        {s.key === 'theme' ? <ThemePicker ts={ts} prefs={prefs} set={set} /> : <SchemePicker ts={ts} prefs={prefs} set={set} />}
+      </div>
+    );
+  }
+
   if (s.type === 'action') {
     return (
       <div className={'set-row' + (s.wip ? ' wip' : '')}>
@@ -207,7 +219,7 @@ function Row({ s, ts, prefs, disabled, set, onAction, t, ssh, button }: {
           <button className='wip-btn' disabled><Icon n={s.key === 'bwConnect' ? 'cloud' : 'dns'} />{label}<span className='pill'>{ts.ui.wip}</span></button>
         ) : (
           <button className={'btn ' + (s.key === 'reset' ? 'outlined' : 'tonal')} onClick={() => onAction(s.key)}>
-            <Icon n={{ export: 'download', import: 'upload', reset: 'restart_alt', updateNow: 'system_update', ksGenerate: 'key', bwConnect: 'cloud', vwConnect: 'dns' }[s.key]} />{button ?? label}
+            <Icon n={{ export: 'download', import: 'upload', reset: 'restart_alt', updateNow: 'system_update', layoutReset: 'view_column', ksGenerate: 'key', bwConnect: 'cloud', vwConnect: 'dns' }[s.key]} />{button ?? label}
           </button>
         )}
       </div>
@@ -309,5 +321,86 @@ function ShortcutField({ id, value, disabled, ts, onChange }: {
         }} />
       {value && <button className="icon-btn" disabled={disabled} onClick={() => onChange('')} aria-label={ts.ui.clearShortcut}><Icon n="close" /></button>}
     </span>
+  );
+}
+
+// ---------------------------------------------------------------- look: preview cards
+
+/** A tiny app window in the given colors: menu, list rows, accent button. */
+function MiniApp({ c, oled }: { c: Colors; oled?: boolean }) {
+  return (
+    <span className="mini-app" aria-hidden style={{ '--mb': oled ? '#000' : c.bg, '--mf': c.fg, '--ma': c.acc } as React.CSSProperties}>
+      <i className="mini-side"><b /><b /><b /></i>
+      <i className="mini-list"><b /><b /><b /></i>
+      <i className="mini-btn" />
+    </span>
+  );
+}
+
+type LookProps = { ts: SettingsStrings; prefs: Prefs; set: (key: PrefKey, value: Prefs[PrefKey]) => void };
+
+function ThemePicker({ ts, prefs, set }: LookProps) {
+  const dark = colorsOf(prefs.accent, 'dark', prefs), light = colorsOf(prefs.accent, 'light', prefs);
+  const options = ['system', 'dark', 'light', 'oled'] as const;
+  return (
+    <div className="look-picks" role="radiogroup" aria-label={ts.labels.theme}>
+      {options.map(o => (
+        <button key={o} role="radio" aria-checked={prefs.theme === o} className={'look-pick' + (prefs.theme === o ? ' on' : '')} onClick={() => set('theme', o)}>
+          {o === 'system'
+            ? <span className="mini-split"><MiniApp c={light} /><MiniApp c={dark} oled={prefs.systemDark === 'oled'} /></span>
+            : <MiniApp c={o === 'light' ? light : dark} oled={o === 'oled'} />}
+          <span className="look-name">{ts.options[o]}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SchemePicker({ ts, prefs, set }: LookProps) {
+  const theme = resolveTheme(prefs.theme, prefs.systemDark, prefersDark());
+  const mode: Mode = theme === 'light' ? 'light' : 'dark';
+  const ids = [...Object.keys(SCHEMES), 'custom'];
+  return (
+    <>
+      <div className="look-picks schemes" role="radiogroup" aria-label={ts.labels.accent}>
+        {ids.map(id => (
+          <button key={id} role="radio" aria-checked={prefs.accent === id} className={'look-pick' + (prefs.accent === id ? ' on' : '')} onClick={() => set('accent', id)}>
+            <MiniApp c={colorsOf(id, mode, prefs)} oled={theme === 'oled'} />
+            <span className="look-name">{ts.options[id as keyof SettingsStrings['options']]}</span>
+          </button>
+        ))}
+      </div>
+      {prefs.accent === 'custom' && <CustomColorsEditor ts={ts} prefs={prefs} set={set} />}
+    </>
+  );
+}
+
+function CustomColorsEditor({ ts, prefs, set }: LookProps) {
+  const ratio = (r: number) => r.toLocaleString(prefs.lang, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const modes: [Mode, string, PrefKey, PrefKey, PrefKey][] = [
+    ['dark', ts.ui.ownDark, 'customDarkBg', 'customDarkFg', 'customDarkAcc'],
+    ['light', ts.ui.ownLight, 'customLightBg', 'customLightFg', 'customLightAcc'],
+  ];
+  return (
+    <div className="own-colors">
+      {modes.map(([mode, title, bg, fg, acc]) => {
+        const c = colorsOf('custom', mode, prefs);
+        const text = contrast(c.fg, c.bg), accent = contrast(c.acc, c.bg);
+        return (
+          <fieldset key={mode} className="own-mode">
+            <legend>{title}</legend>
+            {([[bg, ts.ui.bg], [fg, ts.ui.fg], [acc, ts.ui.acc]] as const).map(([key, name]) => (
+              <label key={key} className="own-color">
+                <input type="color" value={prefs[key] as string} onChange={e => set(key, e.target.value)} />
+                <span>{name}</span>
+                <code>{prefs[key] as string}</code>
+              </label>
+            ))}
+            {text < 4.5 && <p className="own-warn">{ts.ui.contrastText.replace('{r}', ratio(text))}</p>}
+            {accent < 3 && <p className="own-warn">{ts.ui.contrastAcc.replace('{r}', ratio(accent))}</p>}
+          </fieldset>
+        );
+      })}
+    </div>
   );
 }
