@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.3
 
 - **Autostart:** with "start minimized" and the tray icon, the window could open white and
   unresponsive after logging in to Windows. The first time it is shown, it is now built fresh.
