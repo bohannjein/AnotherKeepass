@@ -205,7 +205,8 @@ button { cursor: pointer; border: 0; background: none; }
 .nav-item small { display: block; font-size: 11px; font-weight: 400; opacity: .75; }
 .nav-item .count { font-size: 12px; font-weight: 600; }
 .nav hr { border: 0; border-top: 1px solid var(--outline-var); margin: 8px 16px; }
-.drawer-foot { display: flex; gap: 4px; padding: 12px 4px; border-top: 1px solid var(--outline-var); }
+.drawer-foot { display: flex; align-items: center; gap: 4px; padding: 12px 4px; border-top: 1px solid var(--outline-var); }
+.drawer-foot .foot-spacer { flex: 1; }
 
 /* ---------- list pane ---------- */
 .pane {
@@ -691,7 +692,7 @@ textarea.val.edit { resize: vertical; display: block; }
 .app.rail .nav-item { grid-template-columns: 1fr; justify-items: center; padding: 6px 0; min-height: 52px; border-radius: var(--r-l); }
 .app.rail .nav hr { margin: 8px 12px; }
 .app.rail .drawer-foot { flex-direction: column; align-items: center; border-top: 1px solid var(--outline-var); width: 100%; }
-.app.rail .drawer-foot .icon-btn[style] { margin-left: 0 !important; }
+.app.rail .drawer-foot .foot-spacer { display: none; }
 
 /* settings page on narrow windows */
 @media (max-width: 1199px) {
@@ -1284,7 +1285,7 @@ option::checkmark { display: none; }
 /* shows only after a short rest on the border (not when the mouse just passes by); hides at once */
 .resizer:hover::after { opacity: 1; transition-delay: .35s; }
 .resizer:focus-visible::after { opacity: 1; }
-.app.resizing .resizer::after, .resizer:active::after { opacity: 1; background: var(--primary); height: 96px; margin-top: -48px; transition-delay: 0s; }
+.resizer.active::after { opacity: 1; background: var(--primary); height: 96px; margin-top: -48px; transition-delay: 0s; }
 .resizer:focus-visible { outline: none; }
 .app.resizing { transition: none; cursor: col-resize; user-select: none; }
 .app.narrow:not(.rail) ~ .resizer, .app.narrow:not(.rail) > .resizer { display: none; }

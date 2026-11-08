@@ -14,6 +14,8 @@
   Everforest, Tokyo Night and Dracula.
 - **OLED black:** a new theme with pure black surfaces; it works with every color scheme.
 - **Search:** also finds user names, websites, notes and custom fields (not passwords).
+- **Menu footer:** settings on the left, lock on the right. The light/dark button is gone;
+  the theme is in the settings and the command palette.
 - **Menu header:** shows the app version and the number of entries, or a waiting update,
   instead of the "KeePass compatible" tagline.
 

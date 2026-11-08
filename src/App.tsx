@@ -638,10 +638,6 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
           <button className="icon-btn" title={ts.ui.settings} aria-label={ts.ui.settings} onClick={() => setPage('settings')}>
             <Icon n="settings" />
           </button>
-          <button className="icon-btn" title={t.theme} aria-label={t.theme}
-            onClick={toggleTheme}>
-            <Icon n={settings.theme === 'light' ? 'dark_mode' : 'light_mode'} />
-          </button>
           {update && (
             <button className="icon-btn update-btn" title={t.updateAvailable.replace('{v}', update.version)} aria-label={t.updateAvailable.replace('{v}', update.version)}
               onClick={() => setConfirm({
@@ -649,7 +645,8 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
                 action: async () => { notify(t.updateInstalling); if ((await run(backend.updateInstall())) === false) openExternal(update.url); },
               })}><Icon n="system_update" /></button>
           )}
-          <button className="icon-btn" title={t.lock} aria-label={t.lock} onClick={onLock} style={{ marginLeft: 'auto' }}><Icon n="lock" /></button>
+          <span className="foot-spacer" />
+          <button className="icon-btn" title={t.lock} aria-label={t.lock} onClick={onLock}><Icon n="lock" /></button>
         </div>
       </aside>
 

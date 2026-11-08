@@ -1,5 +1,5 @@
 // Drag handle between two layout columns (pointer + arrow keys, double-click resets).
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
 type Props = {
   label: string;
@@ -15,9 +15,11 @@ type Props = {
 
 export function Resizer({ label, left, value, zoom, onDrag, onEnd, onReset }: Props) {
   const start = useRef<{ x: number; w: number } | null>(null);
+  // only the handle being dragged lights up, not its neighbour
+  const [active, setActive] = useState(false);
   return (
     <div
-      className="resizer"
+      className={'resizer' + (active ? ' active' : '')}
       role="separator"
       aria-orientation="vertical"
       aria-label={label}
@@ -30,16 +32,18 @@ export function Resizer({ label, left, value, zoom, onDrag, onEnd, onReset }: Pr
         e.preventDefault();
         e.currentTarget.setPointerCapture(e.pointerId);
         start.current = { x: e.clientX, w: value };
+        setActive(true);
       }}
       // the grid lives inside CSS zoom: pointer deltas are screen px, widths are CSS px
       onPointerMove={e => { if (start.current) onDrag(start.current.w + (e.clientX - start.current.x) / zoom); }}
       onPointerUp={e => {
         if (!start.current) return;
         start.current = null;
+        setActive(false);
         e.currentTarget.releasePointerCapture(e.pointerId);
         onEnd();
       }}
-      onLostPointerCapture={() => { if (start.current) { start.current = null; onEnd(); } }}
+      onLostPointerCapture={() => { setActive(false); if (start.current) { start.current = null; onEnd(); } }}
       onDoubleClick={onReset}
       onKeyDown={e => {
         if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
