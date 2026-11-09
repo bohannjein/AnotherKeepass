@@ -62,7 +62,8 @@ pub fn set_startup_task(enable: bool) {
 }
 
 /// The exe as other programs can start it: inside a package that is the app execution alias
-/// (the real path under WindowsApps is not accessible to them).
+/// (the real path under WindowsApps is not accessible to them). Only the Windows manifests use it.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn launch_path() -> std::path::PathBuf {
     #[cfg(windows)]
     if is_packaged()
