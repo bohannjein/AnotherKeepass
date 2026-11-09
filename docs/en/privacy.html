@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy and legal notice – AnotherKeepass</title>
+<meta name="description" content="Privacy policy and legal notice of AnotherKeepass: no telemetry, no account, which connections the app makes.">
+<meta name="theme-color" content="#fff8f3">
+<link rel="icon" href="../img/logo.svg" type="image/svg+xml">
+<link rel="preload" href="../fonts/roboto-flex.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../style.css">
+<meta property="og:title" content="AnotherKeepass">
+<meta property="og:description" content="KeePass-compatible password manager for Windows and Linux.">
+<meta property="og:image" content="../img/app-dark.webp">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-gh" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2z"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./" aria-label="AnotherKeepass, home"><img src="../img/logo.svg" alt="" width="42" height="42"><span>Another<b>Keepass</b></span></a>
+    <nav class="nav" aria-label="Main navigation">
+      <a href="./#features">Features</a>
+      <a href="./#themes">Themes</a>
+      <a href="./#security">Security</a>
+      <a href="../anleitung.html" hreflang="de">Guide (German)</a>
+      <a href="https://github.com/johann-beinsen/AnotherKeepass"><svg aria-hidden="true"><use href="#i-gh"/></svg> GitHub</a>
+      <a href="../datenschutz.html" lang="de" hreflang="de">Deutsch</a>
+      <a class="nav-dl" href="./#download">Download</a>
+    </nav>
+    <details class="menu">
+      <summary>Menu</summary>
+      <nav class="menu-panel" aria-label="Main navigation">
+        <a href="./#features">Features</a>
+        <a href="./#themes">Themes</a>
+        <a href="./#security">Security</a>
+        <a href="./#download">Download</a>
+        <a href="../anleitung.html" hreflang="de">Guide (German)</a>
+        <a href="https://github.com/johann-beinsen/AnotherKeepass">GitHub</a>
+        <a href="../datenschutz.html" lang="de" hreflang="de">Deutsch</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap guide-head">
+    <h1 class="h-page">Privacy and legal notice</h1>
+    <p class="lead-plain">As of 9 November 2026. Applies to the AnotherKeepass app (all editions, including the Microsoft Store) and to this website.</p>
+  </div>
+
+  <div class="wrap guide">
+    <nav class="toc" aria-label="Contents">
+      <ol>
+        <li><a href="#short">In short</a></li>
+        <li><a href="#app">The app</a></li>
+        <li><a href="#connections">Connections of the app</a></li>
+        <li><a href="#website">This website</a></li>
+        <li><a href="#store">Microsoft Store</a></li>
+        <li><a href="#rights">Your rights</a></li>
+        <li><a href="#imprint">Legal notice</a></li>
+      </ol>
+    </nav>
+
+    <article class="article">
+      <section id="short">
+        <h2>In short</h2>
+        <ul>
+          <li>AnotherKeepass has no account, no server of its own and no telemetry.</li>
+          <li>Your vaults are files on your device or wherever you put them. I, the developer, have no access to them.</li>
+          <li>The app only makes the connections described below. Almost all of them can be switched off.</li>
+        </ul>
+      </section>
+
+      <section id="app">
+        <h2>The app</h2>
+        <h3>What is stored on your device</h3>
+        <ul>
+          <li><strong>Vaults</strong> (<code>.kdbx</code>): encrypted with your master password and optionally a key file or YubiKey. They live wherever you save them.</li>
+          <li><strong>Settings</strong> and the list of recent vaults: in the app's profile on your device.</li>
+          <li><strong>Log file</strong>: events such as start, opening a vault and errors, without passwords or entry contents. It never leaves your device unless you send it with a bug report.</li>
+          <li><strong>Windows Hello</strong>: for quick unlock a key stays in memory only, never on disk.</li>
+        </ul>
+        <p>No data is sent to me or to third parties unless you trigger it yourself.</p>
+      </section>
+
+      <section id="connections">
+        <h2>Connections of the app</h2>
+        <div class="table-scroll">
+        <table class="map">
+          <thead><tr><th scope="col">When</th><th scope="col">Where to</th><th scope="col">What is sent</th></tr></thead>
+          <tbody>
+            <tr><td>Update check (can be switched off; off in the Store package, where the Store updates)</td><td>GitHub (github.com, api.github.com)</td><td>A request for the list of versions; GitHub sees your IP address.</td></tr>
+            <tr><td>Website icons, only on request</td><td>the website itself or, if chosen, DuckDuckGo (icons.duckduckgo.com)</td><td>The name of the website whose icon is loaded, and your IP address.</td></tr>
+            <tr><td>Breach check, only on request</td><td>Have I Been Pwned (api.pwnedpasswords.com)</td><td>Only the first 5 characters of a password's SHA-1 hash (k-anonymity). The password itself never leaves your device.</td></tr>
+            <tr><td>Vaultwarden account, only if you connect one</td><td>your own Vaultwarden server</td><td>What signing in and syncing needs, encrypted the way Bitwarden does.</td></tr>
+            <tr><td>Browser extension, if switched on</td><td>local on your device only</td><td>Logins go to the KeePassXC-Browser extension in your browser after you confirm.</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p>On Windows the interface runs in Microsoft Edge WebView2. Whether WebView2 sends diagnostic data to Microsoft depends on your Windows diagnostic data settings, not on AnotherKeepass.</p>
+      </section>
+
+      <section id="website">
+        <h2>This website</h2>
+        <ul>
+          <li><strong>Hosting:</strong> GitHub Pages (GitHub Inc., USA). GitHub processes data needed to deliver the page, such as your IP address; see <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>.</li>
+          <li><strong>Version shown:</strong> the page asks the GitHub API for the newest version and download links. GitHub sees your IP address.</li>
+          <li>No cookies, no analytics, no ads, no third-party fonts. The font is served by this website itself.</li>
+        </ul>
+      </section>
+
+      <section id="store">
+        <h2>Microsoft Store</h2>
+        <p>If you get AnotherKeepass from the Microsoft Store, Microsoft processes purchase, download and update data under the <a href="https://privacy.microsoft.com/en-us/privacystatement">Microsoft privacy statement</a>. I only receive aggregated figures such as the number of installs.</p>
+      </section>
+
+      <section id="rights">
+        <h2>Your rights</h2>
+        <p>As the app sends no personal data to me, I hold no data about you. If you email me or open a GitHub issue, I use what you send only to answer. Under the GDPR you have the right to access, correction, deletion and to complain to a data protection authority.</p>
+      </section>
+
+      <section id="imprint">
+        <h2>Legal notice</h2>
+        <p>Information according to § 5 DDG (German Digital Services Act)</p>
+        <p>[NAME]<br>[STREET AND NUMBER]<br>[POSTCODE CITY]<br>[COUNTRY]</p>
+        <p>Email: [EMAIL]</p>
+        <p>AnotherKeepass is a private, non-commercial open-source project, not affiliated with KeePass, KeePassXC or Bitwarden.</p>
+      </section>
+    </article>
+  </div>
+</main>
+
+<footer class="site-footer on-dark">
+  <div class="wrap">
+    <div>
+      <a class="brand" href="./"><img src="../img/logo.svg" alt="" width="36" height="36"><span>Another<b>Keepass</b></span></a>
+      <p style="margin-top:14px;max-width:36ch">KeePass-compatible password manager. Tauri 2, Rust and React.</p>
+    </div>
+    <div>
+      <h2>Project</h2>
+      <ul>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass">Source code</a></li>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass/releases">Releases</a></li>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass/issues">Report a bug</a></li>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass/blob/main/CONTRIBUTING.md">Contribute</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Legal</h2>
+      <ul>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass/blob/main/LICENSE">License: GPL-3.0-or-later</a></li>
+        <li><a href="https://github.com/googlefonts/roboto-flex">Font: Roboto Flex (OFL)</a></li>
+        <li><a href="privacy.html">Privacy and legal notice</a></li>
+      </ul>
+    </div>
+    <p class="fine">© 2026 johann-beinsen. Independent project, not affiliated with KeePass, KeePassXC or Bitwarden.</p>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Datenschutz und Impressum – AnotherKeepass</title>
+<meta name="description" content="Datenschutzerklärung und Impressum von AnotherKeepass: keine Telemetrie, kein Konto, welche Verbindungen die App aufbaut.">
+<meta name="theme-color" content="#fff8f3">
+<link rel="icon" href="img/logo.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/roboto-flex.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-gh" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2z"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Zum Inhalt springen</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./" aria-label="AnotherKeepass, Startseite"><img src="img/logo.svg" alt="" width="42" height="42"><span>Another<b>Keepass</b></span></a>
+    <nav class="nav" aria-label="Hauptnavigation">
+      <a href="./#funktionen">Funktionen</a>
+      <a href="./#designs">Designs</a>
+      <a href="./#sicherheit">Sicherheit</a>
+      <a href="anleitung.html">Dokumentation</a>
+      <a href="https://github.com/johann-beinsen/AnotherKeepass"><svg aria-hidden="true"><use href="#i-gh"/></svg> GitHub</a>
+      <a href="en/privacy.html" lang="en" hreflang="en">English</a>
+      <a class="nav-dl" href="./#download">Download</a>
+    </nav>
+    <details class="menu">
+      <summary>Menü</summary>
+      <nav class="menu-panel" aria-label="Hauptnavigation">
+        <a href="./#funktionen">Funktionen</a>
+        <a href="./#designs">Designs</a>
+        <a href="./#sicherheit">Sicherheit</a>
+        <a href="./#download">Download</a>
+        <a href="anleitung.html">Dokumentation</a>
+        <a href="https://github.com/johann-beinsen/AnotherKeepass">GitHub</a>
+        <a href="en/privacy.html" lang="en" hreflang="en">English</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap guide-head">
+    <h1 class="h-page">Datenschutz und Impressum</h1>
+    <p class="lead-plain">Stand: 9. November 2026. Gilt für die App AnotherKeepass (alle Ausgaben, auch aus dem Microsoft Store) und für diese Website.</p>
+  </div>
+
+  <div class="wrap guide">
+    <nav class="toc" aria-label="Inhalt">
+      <ol>
+        <li><a href="#kurz">Kurz gesagt</a></li>
+        <li><a href="#app">Die App</a></li>
+        <li><a href="#verbindungen">Verbindungen der App</a></li>
+        <li><a href="#website">Diese Website</a></li>
+        <li><a href="#store">Microsoft Store</a></li>
+        <li><a href="#rechte">Deine Rechte</a></li>
+        <li><a href="#impressum">Impressum</a></li>
+      </ol>
+    </nav>
+
+    <article class="article">
+      <section id="kurz">
+        <h2>Kurz gesagt</h2>
+        <ul>
+          <li>AnotherKeepass hat kein Konto, keinen eigenen Server und keine Telemetrie.</li>
+          <li>Deine Tresore sind Dateien auf deinem Gerät oder an einem Ort, den du wählst. Ich als Entwickler habe keinen Zugriff darauf.</li>
+          <li>Die App baut nur Verbindungen auf, die unten beschrieben sind. Fast alle davon lassen sich abschalten.</li>
+        </ul>
+      </section>
+
+      <section id="app">
+        <h2>Die App</h2>
+        <h3>Was auf deinem Gerät gespeichert wird</h3>
+        <ul>
+          <li><strong>Tresore</strong> (<code>.kdbx</code>): verschlüsselt mit deinem Master-Passwort und optional Schlüsseldatei oder YubiKey. Sie liegen dort, wo du sie speicherst.</li>
+          <li><strong>Einstellungen</strong> und die Liste der zuletzt geöffneten Tresore: im Profil der App auf deinem Gerät.</li>
+          <li><strong>Protokolldatei</strong>: Abläufe wie Start, Öffnen eines Tresors und Fehler, ohne Passwörter oder Eintragsinhalte. Sie verlässt dein Gerät nicht, außer du schickst sie selbst mit einer Fehlermeldung.</li>
+          <li><strong>Windows Hello</strong>: Für das schnelle Entsperren bleibt ein Schlüssel nur im Arbeitsspeicher, nie auf der Festplatte.</li>
+        </ul>
+        <p>Es werden keine Daten an mich oder an Dritte übertragen, die du nicht selbst auslöst.</p>
+      </section>
+
+      <section id="verbindungen">
+        <h2>Verbindungen der App</h2>
+        <div class="table-scroll">
+        <table class="map">
+          <thead><tr><th scope="col">Wann</th><th scope="col">Wohin</th><th scope="col">Was übertragen wird</th></tr></thead>
+          <tbody>
+            <tr><td>Update-Prüfung (abschaltbar; im Store-Paket aus, dort aktualisiert der Store)</td><td>GitHub (github.com, api.github.com)</td><td>Abruf der Versionsliste; GitHub sieht dabei deine IP-Adresse.</td></tr>
+            <tr><td>Website-Symbole, nur auf Knopfdruck</td><td>die jeweilige Website oder, wenn eingestellt, DuckDuckGo (icons.duckduckgo.com)</td><td>Der Name der Website, deren Symbol geladen wird, und deine IP-Adresse.</td></tr>
+            <tr><td>Prüfung auf Datenlecks, nur auf Knopfdruck</td><td>Have I Been Pwned (api.pwnedpasswords.com)</td><td>Nur die ersten 5 Zeichen des SHA-1-Werts eines Passworts (k-Anonymität). Das Passwort selbst verlässt dein Gerät nicht.</td></tr>
+            <tr><td>Vaultwarden-Konto, nur wenn du eines verbindest</td><td>dein eigener Vaultwarden-Server</td><td>Was zum Anmelden und Abgleichen nötig ist, verschlüsselt wie in Bitwarden üblich.</td></tr>
+            <tr><td>Browser-Erweiterung, wenn eingeschaltet</td><td>nur lokal auf deinem Gerät</td><td>Anmeldedaten gehen an die Erweiterung KeePassXC-Browser in deinem Browser, nach deiner Bestätigung.</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p>Die Oberfläche läuft unter Windows in Microsoft Edge WebView2. Ob WebView2 Diagnosedaten an Microsoft sendet, richtet sich nach deinen Windows-Einstellungen zu Diagnosedaten, nicht nach AnotherKeepass.</p>
+      </section>
+
+      <section id="website">
+        <h2>Diese Website</h2>
+        <ul>
+          <li><strong>Hosting:</strong> GitHub Pages (GitHub Inc., USA). GitHub verarbeitet beim Aufruf technisch nötige Daten wie deine IP-Adresse; siehe die <a href="https://docs.github.com/de/site-policy/privacy-policies/github-general-privacy-statement">Datenschutzerklärung von GitHub</a>.</li>
+          <li><strong>Versionsangabe:</strong> Die Seite fragt beim Laden die GitHub-API ab, um die neueste Version und die Download-Links anzuzeigen. Dabei sieht GitHub deine IP-Adresse.</li>
+          <li>Keine Cookies, keine Analyse, keine Werbung, keine fremden Schriften. Die Schrift wird von dieser Website selbst geladen.</li>
+        </ul>
+      </section>
+
+      <section id="store">
+        <h2>Microsoft Store</h2>
+        <p>Lädst du AnotherKeepass aus dem Microsoft Store, verarbeitet Microsoft die Daten zu Kauf, Download und Updates nach der <a href="https://privacy.microsoft.com/de-de/privacystatement">Datenschutzerklärung von Microsoft</a>. Ich erhalte darüber nur zusammengefasste Zahlen, etwa Anzahl der Installationen.</p>
+      </section>
+
+      <section id="rechte">
+        <h2>Deine Rechte</h2>
+        <p>Da die App keine personenbezogenen Daten an mich überträgt, habe ich keine Daten über dich gespeichert. Schreibst du mir eine E-Mail oder ein GitHub-Issue, verwende ich die Angaben nur zur Beantwortung. Du hast nach der DSGVO das Recht auf Auskunft, Berichtigung, Löschung und Beschwerde bei einer Datenschutz-Aufsichtsbehörde.</p>
+      </section>
+
+      <section id="impressum">
+        <h2>Impressum</h2>
+        <p>Angaben gemäß § 5 DDG</p>
+        <p>[NAME]<br>[STRASSE UND HAUSNUMMER]<br>[PLZ ORT]<br>[LAND]</p>
+        <p>E-Mail: [E-MAIL]</p>
+        <p>Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV: [NAME], Anschrift wie oben.</p>
+        <p>AnotherKeepass ist ein privates, nicht-kommerzielles Open-Source-Projekt und nicht mit KeePass, KeePassXC oder Bitwarden verbunden.</p>
+      </section>
+    </article>
+  </div>
+</main>
+
+<footer class="site-footer on-dark">
+  <div class="wrap">
+    <div>
+      <a class="brand" href="./"><img src="img/logo.svg" alt="" width="36" height="36"><span>Another<b>Keepass</b></span></a>
+      <p style="margin-top:14px;max-width:36ch">KeePass-kompatibler Passwortmanager. Tauri 2, Rust und React.</p>
+    </div>
+    <div>
+      <h2>Projekt</h2>
+      <ul>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass">Quellcode</a></li>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass/releases">Releases</a></li>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass/issues">Fehler melden</a></li>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass/blob/main/CONTRIBUTING.md">Mitmachen</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Rechtliches</h2>
+      <ul>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass/blob/main/LICENSE">Lizenz: GPL-3.0-or-later</a></li>
+        <li><a href="https://github.com/googlefonts/roboto-flex">Schrift: Roboto Flex (OFL)</a></li>
+        <li><a href="datenschutz.html">Datenschutz und Impressum</a></li>
+      </ul>
+    </div>
+    <p class="fine">© 2026 johann-beinsen. Unabhängiges Projekt, nicht verbunden mit KeePass, KeePassXC oder Bitwarden.</p>
+  </div>
+</footer>
+</body>
+</html>
