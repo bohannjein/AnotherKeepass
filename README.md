@@ -28,7 +28,7 @@ npx tauri dev        # desktop app with real .kdbx files
 
 ## Install and update
 
-Download the installer from the [releases](https://github.com/bohannjein/AnotherKeepass/releases).
+Download the installer from the [releases](https://github.com/johann-beinsen/AnotherKeepass/releases).
 The app updates itself: it checks at start and once a day, downloads in the background and
 installs on a click (or on its own while idle in the tray). An update is installed only if
 it carries the project's update signature (minisign, public key in `src-tauri/tauri.conf.json`).

@@ -54,7 +54,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE4OUY3NEFDMUY2QzRGN0IKUldSN1Qyd2ZySFNmR05YL0N5VjhxdGdYTHIrUXF6M1NncmYrTm83V0Naekg2SzlEeGl3YjhqVWwK",
       "endpoints": [
-        "https://github.com/bohannjein/AnotherKeepass/releases/latest/download/latest.json"
+        "https://github.com/johann-beinsen/AnotherKeepass/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

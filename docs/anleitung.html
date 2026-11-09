@@ -25,7 +25,7 @@
       <a href="./#designs">Designs</a>
       <a href="./#sicherheit">Sicherheit</a>
       <a href="anleitung.html" aria-current="page">Dokumentation</a>
-      <a href="https://github.com/bohannjein/AnotherKeepass"><svg aria-hidden="true"><use href="#i-gh"/></svg> GitHub</a>
+      <a href="https://github.com/johann-beinsen/AnotherKeepass"><svg aria-hidden="true"><use href="#i-gh"/></svg> GitHub</a>
       <a href="en/" lang="en" hreflang="en">English</a>
       <a class="nav-dl" href="./#download">Download</a>
     </nav>
@@ -37,7 +37,7 @@
         <a href="./#sicherheit">Sicherheit</a>
         <a href="./#download">Download</a>
         <a href="anleitung.html" aria-current="page">Dokumentation</a>
-        <a href="https://github.com/bohannjein/AnotherKeepass">GitHub</a>
+        <a href="https://github.com/johann-beinsen/AnotherKeepass">GitHub</a>
         <a href="en/" lang="en" hreflang="en">English</a>
       </nav>
     </details>
@@ -98,7 +98,7 @@
           <li><strong>Hinweis:</strong> <strong>Über neue Versionen benachrichtigen</strong> zeigt eine Meldung, sobald eine neue Version da ist. Sind beide Schalter aus, sucht die App nur noch, wenn du in den Einstellungen auf <strong>Jetzt nach Updates suchen</strong> klickst.</li>
           <li><strong>Beta-Versionen</strong> werden auf Wunsch gemeldet, aber nicht aus der App installiert; der Knopf öffnet die Release-Seite.</li>
         </ul>
-        <p>Installiert wird nur, was die Signatur des Projekts trägt (minisign, der öffentliche Schlüssel ist in die App eingebaut). Releases baut GitHub Actions aus dem getaggten Quellcode. Was sich geändert hat, steht im <a href="https://github.com/bohannjein/AnotherKeepass/blob/main/CHANGELOG.md">Changelog</a>.</p>
+        <p>Installiert wird nur, was die Signatur des Projekts trägt (minisign, der öffentliche Schlüssel ist in die App eingebaut). Releases baut GitHub Actions aus dem getaggten Quellcode. Was sich geändert hat, steht im <a href="https://github.com/johann-beinsen/AnotherKeepass/blob/main/CHANGELOG.md">Changelog</a>.</p>
         <div class="note warn"><p><strong>Ältere Versionen:</strong> Bis 0.2.2 ließ sich ein Update nicht zuverlässig aus der App installieren. Installiere 0.2.3 oder neuer deshalb einmal von Hand über den Installer; deine Tresore und Einstellungen bleiben erhalten. Wer noch 0.1.0 hat, deinstalliert sie vorher, weil sich mit 0.2.0 der Herausgeber geändert hat (App-Daten dabei <em>nicht</em> löschen).</p></div>
       </section>
 
@@ -197,14 +197,14 @@
       <section id="bauen">
         <h2>Selbst bauen</h2>
         <p>Du brauchst Git, Node.js 24, Rust (stable) und die <a href="https://tauri.app/start/prerequisites/">Voraussetzungen von Tauri</a> – unter Windows die Visual Studio Build Tools mit „Desktopentwicklung mit C++“.</p>
-<pre><code>git clone https://github.com/bohannjein/AnotherKeepass.git
+<pre><code>git clone https://github.com/johann-beinsen/AnotherKeepass.git
 cd AnotherKeepass
 npm ci
 npm run dev                          # Vorschau im Browser mit Demo-Tresoren
 npx tauri dev                        # Desktop-App mit echten .kdbx-Dateien
 npx tauri build --bundles nsis       # Windows-Installer
 npx tauri build --bundles appimage   # Linux</code></pre>
-        <p>In der Browser-Vorschau erzeugt <code>?big=5000</code> an der Adresse einen zusätzlichen Demo-Tresor mit so vielen Einträgen, etwa um große Tresore zu testen. Wie der Code aufgebaut ist, erklärt <a href="https://github.com/bohannjein/AnotherKeepass/blob/main/ARCHITECTURE.md">ARCHITECTURE.md</a>; wie du beitragen kannst, <a href="https://github.com/bohannjein/AnotherKeepass/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</p>
+        <p>In der Browser-Vorschau erzeugt <code>?big=5000</code> an der Adresse einen zusätzlichen Demo-Tresor mit so vielen Einträgen, etwa um große Tresore zu testen. Wie der Code aufgebaut ist, erklärt <a href="https://github.com/johann-beinsen/AnotherKeepass/blob/main/ARCHITECTURE.md">ARCHITECTURE.md</a>; wie du beitragen kannst, <a href="https://github.com/johann-beinsen/AnotherKeepass/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</p>
       </section>
 
       <section id="probleme">
@@ -222,7 +222,7 @@ npx tauri build --bundles appimage   # Linux</code></pre>
         <h3>Log-Datei</h3>
         <p>Die App schreibt nach <code>%LOCALAPPDATA%\app.anotherkeepass.desktop\logs\anotherkeepass.log</code>. Sie protokolliert Abläufe wie Start, Öffnen eines Tresors und Fehler, aber keine Passwörter. Schau sie trotzdem kurz durch, bevor du sie anhängst.</p>
         <h3>Noch offen?</h3>
-        <p><a href="https://github.com/bohannjein/AnotherKeepass/issues">Melde den Fehler auf GitHub</a> – mit Version (steht unter dem Logo in der App), Betriebssystem und den Schritten bis zum Fehler.</p>
+        <p><a href="https://github.com/johann-beinsen/AnotherKeepass/issues">Melde den Fehler auf GitHub</a> – mit Version (steht unter dem Logo in der App), Betriebssystem und den Schritten bis zum Fehler.</p>
       </section>
     </article>
   </div>
@@ -237,20 +237,20 @@ npx tauri build --bundles appimage   # Linux</code></pre>
     <div>
       <h2>Projekt</h2>
       <ul>
-        <li><a href="https://github.com/bohannjein/AnotherKeepass">Quellcode</a></li>
-        <li><a href="https://github.com/bohannjein/AnotherKeepass/releases">Releases</a></li>
-        <li><a href="https://github.com/bohannjein/AnotherKeepass/issues">Fehler melden</a></li>
-        <li><a href="https://github.com/bohannjein/AnotherKeepass/blob/main/CONTRIBUTING.md">Mitmachen</a></li>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass">Quellcode</a></li>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass/releases">Releases</a></li>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass/issues">Fehler melden</a></li>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass/blob/main/CONTRIBUTING.md">Mitmachen</a></li>
       </ul>
     </div>
     <div>
       <h2>Rechtliches</h2>
       <ul>
-        <li><a href="https://github.com/bohannjein/AnotherKeepass/blob/main/LICENSE">Lizenz: GPL-3.0-or-later</a></li>
+        <li><a href="https://github.com/johann-beinsen/AnotherKeepass/blob/main/LICENSE">Lizenz: GPL-3.0-or-later</a></li>
         <li><a href="https://github.com/googlefonts/roboto-flex">Schrift: Roboto Flex (OFL)</a></li>
       </ul>
     </div>
-    <p class="fine">© 2026 bohannjein. Unabhängiges Projekt, nicht verbunden mit KeePass, KeePassXC oder Bitwarden.</p>
+    <p class="fine">© 2026 johann-beinsen. Unabhängiges Projekt, nicht verbunden mit KeePass, KeePassXC oder Bitwarden.</p>
   </div>
 </footer>
 </body>

@@ -5,8 +5,8 @@
   <summary>KeePass-compatible password manager</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
-  <developer id="io.github.bohannjein">
-    <name>bohannjein</name>
+  <developer id="io.github.johann-beinsen">
+    <name>johann-beinsen</name>
   </developer>
   <description>
     <p>
@@ -21,13 +21,13 @@
     </ul>
   </description>
   <launchable type="desktop-id">app.anotherkeepass.desktop.desktop</launchable>
-  <url type="homepage">https://bohannjein.github.io/AnotherKeepass/en/</url>
-  <url type="bugtracker">https://github.com/bohannjein/AnotherKeepass/issues</url>
-  <url type="vcs-browser">https://github.com/bohannjein/AnotherKeepass</url>
+  <url type="homepage">https://johann-beinsen.github.io/AnotherKeepass/en/</url>
+  <url type="bugtracker">https://github.com/johann-beinsen/AnotherKeepass/issues</url>
+  <url type="vcs-browser">https://github.com/johann-beinsen/AnotherKeepass</url>
   <content_rating type="oars-1.1"/>
   <screenshots>
     <screenshot type="default">
-      <image>https://bohannjein.github.io/AnotherKeepass/img/app-dark.webp</image>
+      <image>https://johann-beinsen.github.io/AnotherKeepass/img/app-dark.webp</image>
       <caption>Vaults, entry list and entry details</caption>
     </screenshot>
   </screenshots>

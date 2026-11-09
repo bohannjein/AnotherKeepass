@@ -13,7 +13,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
-const RELEASES: &str = "https://api.github.com/repos/bohannjein/AnotherKeepass/releases?per_page=10";
+const RELEASES: &str = "https://api.github.com/repos/johann-beinsen/AnotherKeepass/releases?per_page=10";
 
 #[derive(Serialize, Clone)]
 pub struct Update {
@@ -88,7 +88,7 @@ async fn newest_beta() -> Result<Option<Update>, String> {
 #[tauri::command]
 pub async fn update_check(app: AppHandle, beta: bool) -> Result<Option<Update>, String> {
     let stable = app.updater().map_err(err)?.check().await.map_err(err)?.map(|u| Update {
-        url: format!("https://github.com/bohannjein/AnotherKeepass/releases/tag/v{}", u.version),
+        url: format!("https://github.com/johann-beinsen/AnotherKeepass/releases/tag/v{}", u.version),
         notes: u.body.clone().unwrap_or_default().chars().take(500).collect(),
         version: u.version,
         installable: self_update(),

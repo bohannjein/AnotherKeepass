@@ -15,7 +15,7 @@
   }
 
   const mb = n => (n / 1048576).toFixed(1).replace('.', en ? '.' : ',') + ' MB';
-  fetch('https://api.github.com/repos/bohannjein/AnotherKeepass/releases/latest')
+  fetch('https://api.github.com/repos/johann-beinsen/AnotherKeepass/releases/latest')
     .then(r => r.ok ? r.json() : Promise.reject(r.status))
     .then(rel => {
       const v = rel.tag_name.replace(/^v/, '');
