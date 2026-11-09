@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Microsoft Store:** releases also contain an MSIX package for the Store. Inside it the Store
+  installs updates, "Open at login" uses the package's startup task, and the browser
+  integration starts the app through its alias.
+- **New GitHub name:** links point to github.com/johann-beinsen; installed versions keep finding
+  updates through GitHub's redirect.
+
 ## 0.3.5
 
 - **Simpler settings:** six sections instead of ten, plain wording, times as one-tap choices

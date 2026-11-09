@@ -309,7 +309,7 @@ pub fn sync_manifests(p: &desktop::DesktopPrefs) -> Vec<String> {
     let exe = if p.b_custom_proxy && !p.b_proxy_path.trim().is_empty() {
         std::path::PathBuf::from(p.b_proxy_path.trim())
     } else {
-        std::env::current_exe().unwrap_or_default()
+        crate::packaged::launch_path()
     };
     let backup_file = dir.join("manifest-backup.json");
     let mut backup: HashMap<String, String> =

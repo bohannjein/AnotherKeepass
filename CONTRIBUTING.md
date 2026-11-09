@@ -58,6 +58,23 @@ hardening (`src-tauri/src/hardening.rs`) stays off. The log is in
 5. Check the draft: `.exe` and `.AppImage`, each with a `.sig`, and `latest.json`. Then publish
    it; installed apps only see the update after that.
 
+## Microsoft Store (MSIX)
+
+The release workflow also packs the Windows build as `AnotherKeepass_<version>_x64.msix`
+(`msix/AppxManifest.xml`, `scripts/build-msix.mjs`). It is unsigned; the Store signs it.
+
+1. In Partner Center reserve the name and open *Product management > Product identity*.
+2. Add three repository variables (Settings > Secrets and variables > Actions > Variables):
+   `MSIX_IDENTITY_NAME` (Package/Identity/Name), `MSIX_PUBLISHER` (Package/Identity/Publisher,
+   starts with `CN=`) and `MSIX_PUBLISHER_NAME` (Package/Properties/PublisherDisplayName).
+3. Make a release as above, then upload the `.msix` from the release to the Store submission.
+4. The package asks for two restricted capabilities. Explain them in the submission:
+   `runFullTrust` (a desktop app) and `unvirtualizedResources` (the browser integration writes
+   native messaging manifests and registry keys that Chrome, Edge and Firefox must see).
+
+Inside the package the app turns its own updater off (the Store updates it), uses the
+package's StartupTask for "Open at login" and points browsers to its app execution alias.
+
 ## License
 
 By contributing you agree that your work is published under the

@@ -1,6 +1,7 @@
 mod autotype;
 mod browser;
 mod browser_server;
+mod packaged;
 pub mod proxy;
 
 use tauri::Manager;
@@ -117,6 +118,7 @@ pub fn run() {
             browser_server::browser_answer,
             browser_server::browser_set_active,
             browser_server::browsers_detected,
+            packaged::app_packaged,
         ])
         .setup(move |app| {
             // log file in the app log dir (release too): actions, timings and errors, never secrets

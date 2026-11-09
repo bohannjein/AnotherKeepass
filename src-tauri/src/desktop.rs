@@ -634,9 +634,15 @@ pub fn desktop_apply(app: AppHandle, prefs: DesktopPrefs) -> Result<Vec<String>,
     }
     // Touch the Run key only when it has to change: an unsigned exe rewriting its autostart
     // entry on every start looks like malware persistence to Defender's behaviour model.
+    // inside an MSIX package autostart is the StartupTask from the package manifest
+    #[cfg(windows)]
+    // (set_startup_task only acts when the state differs; the task starts disabled)
+    if crate::packaged::is_packaged() {
+        crate::packaged::set_startup_task(prefs.autostart);
+    }
     let autolaunch = app.autolaunch();
-    let entry = autostart_entry();
-    let r = match (prefs.autostart, entry) {
+    let entry = if crate::packaged::is_packaged() { None } else { autostart_entry() };
+    let r = match (prefs.autostart && !crate::packaged::is_packaged(), entry) {
         // also rewrites entries from older versions that lack AUTOSTART_ARG
         (true, e) if !e.as_deref().is_some_and(|e| e.contains(AUTOSTART_ARG)) => autolaunch.enable(),
         (false, Some(_)) => autolaunch.disable(),

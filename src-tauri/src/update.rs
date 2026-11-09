@@ -61,6 +61,9 @@ fn newest(json: &serde_json::Value, current: &str, beta: bool) -> Option<Update>
 /// Only the Windows installer and the AppImage can replace themselves. A .deb, .rpm or Flatpak
 /// belongs to the package manager: the app only reports a new version there.
 fn self_update() -> bool {
+    if crate::packaged::is_packaged() {
+        return false; // the Microsoft Store updates the MSIX package
+    }
     !cfg!(target_os = "linux") || std::env::var_os("APPIMAGE").is_some()
 }
 
@@ -87,6 +90,9 @@ async fn newest_beta() -> Result<Option<Update>, String> {
 
 #[tauri::command]
 pub async fn update_check(app: AppHandle, beta: bool) -> Result<Option<Update>, String> {
+    if crate::packaged::is_packaged() {
+        return Ok(None);
+    }
     let stable = app.updater().map_err(err)?.check().await.map_err(err)?.map(|u| Update {
         url: format!("https://github.com/johann-beinsen/AnotherKeepass/releases/tag/v{}", u.version),
         notes: u.body.clone().unwrap_or_default().chars().take(500).collect(),

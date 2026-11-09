@@ -164,6 +164,8 @@ export interface Backend {
   trash(vault: string, id: string): Promise<VaultData>;
   /** installed browsers, as their settings keys (bChrome, bFirefox …) */
   browsersDetected(): Promise<string[]>;
+  /** running as an MSIX package (Microsoft Store): the Store does the updates */
+  packaged(): Promise<boolean>;
   /** only the pin changes */
   setPinned(vault: string, id: string, pinned: boolean): Promise<VaultData>;
   restore(vault: string, id: string): Promise<VaultData>;
@@ -240,6 +242,7 @@ const desktop: Backend = {
   on: (event, cb) => { const p = listen(event, e => cb(e.payload as never)); return () => { p.then(f => f()); }; },
   trash: (vault, id) => invoke('entry_trash', { vault, id }),
   browsersDetected: () => invoke('browsers_detected'),
+  packaged: () => invoke('app_packaged'),
   setPinned: (vault, id, pinned) => invoke('entry_set_pinned', { vault, id, pinned }),
   restore: (vault, id) => invoke('entry_restore', { vault, id }),
   remove: (vault, id) => invoke('entry_delete', { vault, id }),
@@ -441,6 +444,7 @@ const demo: Backend = {
   trayState: async () => {},
   log: (level, message) => console[level](message),
   browsersDetected: async () => ['bChrome', 'bFirefox'],
+  packaged: async () => false,
   async trash(vault, id) { const v = get(vault); item(v, id).trashed = true; return out(v); },
   async setPinned(vault, id, pinned) { const it = item(get(vault), id); it.tags = [...it.tags.filter(t => t !== 'pinned'), ...(pinned ? ['pinned'] : [])]; return out(get(vault)); },
   async restore(vault, id) { const v = get(vault); item(v, id).trashed = false; return out(v); },

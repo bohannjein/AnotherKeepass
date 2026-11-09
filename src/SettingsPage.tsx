@@ -29,11 +29,15 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
   }, [sshShown, prefs.sshAuthSock]);
   const fileInput = useRef<HTMLInputElement>(null);
 
+  // Store package: the Store installs updates, so the update options go
+  const [packaged, setPackaged] = useState(false);
+  useEffect(() => { backend.packaged().then(setPackaged).catch(() => {}); }, []);
+  const STORE_HIDDEN = ['updateAuto', 'updateNotify', 'updateBeta', 'updateNow'];
   // planned (not built) options never show; sections without visible options disappear
-  const visible = (it: Setting) => onThisPlatform(it) && !('planned' in it && it.planned);
+  const visible = (it: Setting) => onThisPlatform(it) && !('planned' in it && it.planned) && !(packaged && STORE_HIDDEN.includes(it.key));
   const sections = useMemo(() => SECTIONS
     .map(sec => ({ ...sec, groups: sec.groups.map(g => ({ ...g, items: g.items.filter(visible) })).filter(g => g.items.length) }))
-    .filter(sec => sec.groups.length), []); // eslint-disable-line react-hooks/exhaustive-deps
+    .filter(sec => sec.groups.length), [packaged]); // eslint-disable-line react-hooks/exhaustive-deps
   const current = sections.find(s => s.id === section) ?? sections[0];
 
   // search over labels, explanations and group names in all sections
