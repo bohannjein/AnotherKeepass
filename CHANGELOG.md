@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.6
 
 - **Microsoft Store:** releases also contain an MSIX package for the Store. Inside it the Store
   installs updates, "Open at login" uses the package's startup task, and the browser
