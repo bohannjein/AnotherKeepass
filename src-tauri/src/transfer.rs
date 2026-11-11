@@ -76,6 +76,7 @@ pub fn vault_export_csv(state: tauri::State<'_, Vaults>, vault: String, dest: St
 pub fn vault_save_copy(state: tauri::State<'_, Vaults>, vault: String, dest: String) -> Result<(), String> {
     let map = state.0.lock().map_err(|_| "lock")?;
     let v = map.get(&vault).ok_or("vault_closed")?;
+    crate::vault::writer::flush(v.path()); // a change still being saved must be in the copy
     fs::copy(v.path(), Path::new(&dest)).map(|_| ()).map_err(|e| format!("io:{e}"))
 }
 

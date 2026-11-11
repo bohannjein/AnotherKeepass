@@ -204,10 +204,16 @@ pub fn sync(a: &mut Database, b: &mut Database) -> (bool, bool) {
     let mut next = Vec::new();
     let (mut used_a, mut used_b) = (HashSet::new(), HashSet::new());
 
+    // items the account holds but this device could not decrypt: not there for us, yet not deleted
+    let skipped: HashSet<String> = cd(b, crate::bitwarden::CD_SKIPPED).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
     for p in &state {
         let (ea, eb) = (live(a, &p.a), live(b, &p.b));
         used_a.insert(p.a.clone());
         used_b.insert(p.b.clone());
+        if skipped.contains(&p.b) {
+            next.push(p.clone());
+            continue;
+        }
         match (ea, eb) {
             (Some(ia), Some(ib)) => {
                 let fa = fingerprint(a, &a.entry(ia).expect("live"));
@@ -432,6 +438,21 @@ mod tests {
         trash(&mut a, id);
         sync(&mut a, &mut b);
         assert_eq!(titles(&b), ["Mail", "Shared"]);
+    }
+
+    #[test]
+    fn undecryptable_server_item_is_not_deleted_in_the_file() {
+        let (mut a, mut b) = (Database::new(), Database::new());
+        add(&mut a, &[], "Shared", "x", "pw");
+        add(&mut b, &[], "Shared", "x", "pw");
+        sync(&mut a, &mut b);
+        // the account entry vanishes because this device could not decrypt it, and says so
+        let bid = b.iter_all_entries().next().unwrap().id();
+        let skipped = serde_json::json!([bid.to_string()]).to_string();
+        b.entry_mut(bid).unwrap().remove();
+        set_cd(&mut b, crate::bitwarden::CD_SKIPPED, Some(skipped));
+        sync(&mut a, &mut b);
+        assert_eq!(titles(&a), ["Shared"], "the file keeps its entry");
     }
 
     #[test]

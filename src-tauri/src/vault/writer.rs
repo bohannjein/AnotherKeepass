@@ -55,15 +55,51 @@ pub fn queue(path: &Path, db: &Database, key: &DatabaseKey) {
     }
 }
 
+/// Clears `busy` however the thread ends (also on a panic), so `flush` never waits forever.
+struct Done(PathBuf);
+impl Drop for Done {
+    fn drop(&mut self) {
+        with(|q| q.busy.remove(&self.0));
+        DONE.notify_all();
+    }
+}
+
+/// Write one snapshot; a failure is retried a few times (file briefly locked by a sync client).
+/// If it still fails, the snapshot goes to `<file>.unsaved.kdbx` so the change is not lost.
+fn save_with_retry(path: &Path, job: &Job) -> R<()> {
+    let mut last = String::new();
+    for wait in [0u64, 300, 1500] {
+        std::thread::sleep(std::time::Duration::from_millis(wait));
+        let attempt = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| super::write_file(path, &job.db, job.key.clone())));
+        match attempt {
+            Ok(Ok(())) => return Ok(()),
+            Ok(Err(e)) => last = e,
+            Err(_) => last = "save:internal error".into(),
+        }
+        if last.starts_with("conflict:") {
+            break; // retrying cannot fix a file we could not read
+        }
+    }
+    let rescue = path.with_extension("unsaved.kdbx");
+    let rescued = super::write_plain(&rescue, &job.db, job.key.clone()).is_ok();
+    Err(if rescued { format!("{last} (copy: {})", rescue.display()) } else { last })
+}
+
 fn run(path: PathBuf) {
-    loop {
-        let Some(job) = with(|q| q.pending.remove(&path)) else {
-            with(|q| q.busy.remove(&path));
-            DONE.notify_all();
-            return;
-        };
+    let _done = Done(path.clone());
+    // taking the next job and leaving are one step, so a job queued meanwhile is never stranded
+    let next = |path: &PathBuf| {
+        with(|q| {
+            let job = q.pending.remove(path);
+            if job.is_none() {
+                q.busy.remove(path);
+            }
+            job
+        })
+    };
+    while let Some(job) = next(&path) {
         let t = std::time::Instant::now();
-        match super::write_file(&path, &job.db, job.key) {
+        match save_with_retry(&path, &job) {
             Ok(()) => log::info!("saved in the background ({} ms)", t.elapsed().as_millis()),
             Err(e) => {
                 log::error!("background save failed: {e}");

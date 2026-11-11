@@ -64,14 +64,15 @@ pub fn watch_files(app: tauri::AppHandle) {
                     .collect()
             };
             for (id, path, key) in changed {
-                stamp(&path); // also on failure: don't retry a broken file every 2 s
                 // key derivation outside the lock, the UI keeps working meanwhile
+                let seen = mtime(&path);
                 let db = fs::File::open(&path)
                     .map_err(|e| e.to_string())
                     .and_then(|mut f| Database::open(&mut f, key).map_err(|e| e.to_string()));
                 let db = match db {
                     Ok(db) => db,
                     Err(e) => {
+                        stamp(&path); // don't retry a broken file every 2 s
                         log::warn!("reload after external change failed: {e}");
                         continue;
                     }
@@ -79,6 +80,12 @@ pub fn watch_files(app: tauri::AppHandle) {
                 let state = app.state::<Vaults>();
                 let Ok(mut map) = state.0.lock() else { continue };
                 let Some(v) = map.get_mut(&id) else { continue };
+                // A local change is being saved (it is queued under this lock, so it shows here):
+                // keep it. The stamp stays old, so that save merges the file and we look again.
+                if super::writer::busy(&v.path) || mtime(&path) != seen {
+                    continue;
+                }
+                stamp(&path);
                 v.db = db;
                 forget_used(&path); // the times were in the replaced database
                 log::info!("vault reloaded after external change");

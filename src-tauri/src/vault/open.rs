@@ -299,9 +299,13 @@ pub async fn vault_change_key(
 ) -> R<()> {
     let key = make_key(password.as_deref(), keyfile.as_deref(), yubikey.as_deref())?;
     with_vault(&state, &id, |v| {
-        v.key = key;
+        let (old_key, old_changed) = (std::mem::replace(&mut v.key, key), v.db.meta.master_key_changed);
         v.db.meta.master_key_changed = Some(Times::now());
-        write_db(v)
+        write_db(v).inspect_err(|_| {
+            // the file still has the old key: so must we, or the next save would lock the user out
+            v.key = old_key;
+            v.db.meta.master_key_changed = old_changed;
+        })
     })
 }
 

@@ -807,8 +807,15 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
           onClose={() => setVaultDialog(null)}
           onOpened={(d, meta) => { onOpened(d, meta); setVaultDialog(null); setVault(d.id); setFolder(null); }} />
       )}
-      {keyDialog && <KeyDialog t={t} onClose={() => setKeyDialog(null)}
-        onSubmit={async pw => { if ((await run(backend.changeKey(keyDialog, pw, undefined, known.find(k => k.path === keyDialog)?.yubikey))) !== undefined) { setKeyDialog(null); notify(t.masterKeyChanged); } }} />}
+      {keyDialog && <KeyDialog t={t} keyfile={known.find(k => k.path === keyDialog)?.keyfile} yubikey={known.find(k => k.path === keyDialog)?.yubikey}
+        onClose={() => setKeyDialog(null)}
+        onSubmit={async (pw, keyfile) => {
+          const yubikey = known.find(k => k.path === keyDialog)?.yubikey;
+          if ((await run(backend.changeKey(keyDialog, pw, keyfile, yubikey))) === undefined) return;
+          // remember the key file for the next unlock (only when the user keeps key files remembered)
+          if (settings.rememberKeyfiles) onKnown(keyDialog, { keyfile });
+          setKeyDialog(null); notify(t.masterKeyChanged);
+        }} />}
       {confirm && <ConfirmDialog t={t} confirm={confirm} onClose={() => setConfirm(null)} />}
       {snackbar}
     </div>

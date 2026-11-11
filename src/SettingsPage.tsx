@@ -101,7 +101,8 @@ export default function SettingsPage({ t, prefs, onChange, onBack, onSnack, upda
     try {
       const raw = JSON.parse(await file.text());
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('not an object');
-      onChange(mergePrefs(raw));
+      // paths that end up in the browser manifest, backups or the SSH agent are not taken from a file
+      onChange({ ...mergePrefs(raw), bCustomProxy: prefs.bCustomProxy, bProxyPath: prefs.bProxyPath, backupPath: prefs.backupPath, sshAuthSock: prefs.sshAuthSock });
       onSnack(ts.ui.imported);
     } catch {
       onSnack(ts.ui.importError, true);

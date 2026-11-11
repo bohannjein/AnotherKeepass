@@ -380,6 +380,33 @@ pub fn cipher_body(p: &Plain, meta: &Meta, folder: Option<&str>, key: &SymKey, u
     body
 }
 
+/// What the server stores on a login that the entry cannot hold (Bitwarden passkeys, password
+/// revision date, per-URI match rule): copied from the cipher as the server sent it, so an
+/// update does not wipe it.
+pub fn keep_server_fields(body: &mut Value, raw: &Value, key: &SymKey) {
+    let (Some(new), Some(old)) = (body.get_mut("login").and_then(Value::as_object_mut), Some(field(raw, "login"))) else { return };
+    for k in ["fido2Credentials", "passwordRevisionDate"] {
+        let v = field(old, k);
+        if !v.is_null() {
+            new.insert(k.into(), v.clone());
+        }
+    }
+    let old_uris: Vec<(String, Value)> = field(old, "uris")
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|u| Some((dec(field(u, "uri"), key).ok()?, field(u, "match").clone())))
+        .collect();
+    if let Some(uris) = new.get_mut("uris").and_then(Value::as_array_mut) {
+        for u in uris {
+            let Some(text) = u.get("uri").and_then(Value::as_str).and_then(|s| decrypt_str(s, key).ok()) else { continue };
+            if let Some((_, m)) = old_uris.iter().find(|(t, _)| *t == text) {
+                u["match"] = m.clone();
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -435,6 +462,23 @@ mod tests {
         .unwrap();
         assert_eq!(again, p);
         assert_eq!(body["encryptedFor"], "user");
+    }
+
+    #[test]
+    fn update_keeps_server_only_login_fields() {
+        let k = key();
+        let mut raw = server_cipher(&k);
+        raw["login"]["fido2Credentials"] = json!([{ "credentialId": "x" }]);
+        raw["login"]["passwordRevisionDate"] = json!("2026-01-01T00:00:00Z");
+        raw["login"]["uris"][1]["match"] = json!(3);
+        let (p, meta) = decrypt_cipher(&raw, &k).unwrap();
+        let mut body = cipher_body(&p, &meta, None, &k, "user");
+        assert!(body["login"]["fido2Credentials"].is_null(), "the mapping alone drops it");
+        keep_server_fields(&mut body, &raw, &k);
+        assert_eq!(body["login"]["fido2Credentials"], json!([{ "credentialId": "x" }]));
+        assert_eq!(body["login"]["passwordRevisionDate"], "2026-01-01T00:00:00Z");
+        assert_eq!(body["login"]["uris"][1]["match"], 3);
+        assert!(body["login"]["uris"][0]["match"].is_null());
     }
 
     #[test]

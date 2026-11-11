@@ -95,7 +95,13 @@ pub fn match_entry(e: &Entry, window: &str, by_title: bool, by_url: bool) -> Opt
     let w = window.to_lowercase();
     let title = e.get_title().unwrap_or_default().trim().to_lowercase();
     let title_hit = by_title && title.len() >= 3 && w.contains(&title);
-    let url_hit = by_url && e.get_url().and_then(host).is_some_and(|h| w.contains(&h) || w.contains(h.split('.').next().unwrap_or("~")));
+    // the full host, or the name of the registrable domain ("github" of "login.github.com"), never
+    // a subdomain label such as "login" or "mail", which half of all window titles contain
+    let url_hit = by_url
+        && e.get_url().and_then(host).is_some_and(|h| {
+            let name = psl::domain_str(&h).and_then(|d| d.split('.').next()).filter(|n| n.len() >= 3);
+            w.contains(&h) || name.is_some_and(|n| w.contains(n))
+        });
     (title_hit || url_hit).then_some(default_seq)
 }
 
@@ -172,8 +178,14 @@ pub fn compile(seq: &str, e: &Entry) -> Result<Vec<Action>, String> {
     Ok(out)
 }
 
-fn type_actions(actions: Vec<Action>, start_delay: u64, mut char_delay: u64) -> Result<(), String> {
+fn type_actions(actions: Vec<Action>, start_delay: u64, mut char_delay: u64, expect: Option<isize>) -> Result<(), String> {
     thread::sleep(Duration::from_millis(start_delay));
+    // the focus switch can fail (another window grabbed it): then nothing is typed, not even a password
+    if let Some(h) = expect
+        && foreground().0 != Some(h)
+    {
+        return Err("autotype_target".into());
+    }
     let mut kb = Enigo::new(&Settings::default()).map_err(|e| format!("autotype:{e}"))?;
     for a in actions {
         match a {
@@ -352,10 +364,11 @@ pub fn perform<R: Runtime>(app: &AppHandle<R>, vault: &str, id: &str, sequence: 
     if let Some(w) = desktop::main_window(app) {
         let _ = w.minimize();
     }
-    if to_target && let Some(h) = app.state::<Target>().0.lock().ok().and_then(|t| *t) {
+    let target = if to_target { app.state::<Target>().0.lock().ok().and_then(|t| *t) } else { None };
+    if let Some(h) = target {
         focus(h);
     }
-    type_actions(actions, p.at_start_delay.max(100), p.at_char_delay)?;
+    type_actions(actions, p.at_start_delay.max(100), p.at_char_delay, target)?;
     if let (Ok(mut map), Ok(uuid)) = (app.state::<Vaults>().0.lock(), Uuid::parse_str(id))
         && let Some(v) = map.get_mut(vault)
     {
@@ -430,6 +443,11 @@ mod tests {
         assert!(match_entry(&e, "Sign in to GitHub · GitHub — Mozilla Firefox", true, false).is_some());
         assert!(match_entry(&e, "github.com/login - Chrome", false, true).is_some());
         assert!(match_entry(&e, "Editor", true, true).is_none());
+        // a subdomain label alone ("login", "mail") is not a match
+        let (db2, id2) = entry("Work", "https://login.example.co.uk");
+        let e2 = db2.entry(id2).unwrap();
+        assert!(match_entry(&e2, "Login - some other site", false, true).is_none());
+        assert!(match_entry(&e2, "Example portal", false, true).is_some());
         assert!(match_entry(&e, "Sign in to GitHub", false, false).is_none());
 
         // association with its own sequence wins

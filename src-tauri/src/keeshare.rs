@@ -214,12 +214,8 @@ fn export_one(db: &Database, g: GroupId, vault: &Path, share: &Share) -> Result<
     out.root_mut().name = db.group(g).map(|x| x.name.clone()).unwrap_or_default();
     copy_tree(db, g, &mut out, root, false)?;
     // the share setting itself is not part of the share
-    let mut buf = Vec::new();
-    out.save(&mut buf, key(share)).map_err(|e| format!("save:{e}"))?;
     let path = container_path(vault, share);
-    let tmp = path.with_extension("kdbx.tmp");
-    fs::write(&tmp, &buf).map_err(|e| format!("io:{e}"))?;
-    fs::rename(&tmp, &path).map_err(|e| format!("io:{e}"))?;
+    crate::vault::write_plain(&path, &out, key(share))?;
     crate::vault::stamp(&path);
     Ok(())
 }

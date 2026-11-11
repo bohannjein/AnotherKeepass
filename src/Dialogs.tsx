@@ -1,12 +1,13 @@
 // Small dialogs of the main window: folders, shortcuts, browser requests, key file, vault look.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { type BrowserAsk } from './backend';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { backend, type BrowserAsk } from './backend';
 import { type VaultInfo, type Folder } from './model';
 import { type Strings } from './i18n';
 import { Icon } from './Icon';
 import { PasswordStrength } from './PasswordStrength';
-import { isRemote } from './ui';
+import { fileName, isRemote } from './ui';
 import { type Confirm } from './useItemActions';
 
 export function FolderDialog({ t, mode, name: initialName, vault: initialVault, vaults, folders, parent: initialParent, onClose, onSubmit }: {
@@ -84,7 +85,11 @@ export function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
 }) {
   const [name, setName] = useState(() => 'browser-' + new Date().toISOString().slice(0, 10));
   const [allow, setAllow] = useState<string[]>(ask.kind === 'access' ? ask.entries.map(e => e.uuid) : []);
-  const [remember, setRemember] = useState(true);
+  const [remember, setRemember] = useState(false);
+  // The window jumps to the front when a page asks. A key press meant for another window must not
+  // approve anything: the approving buttons wake up a moment later, and focus starts on "deny".
+  const [armed, setArmed] = useState(false);
+  useEffect(() => { const id = setTimeout(() => setArmed(true), 600); return () => clearTimeout(id); }, []);
   const [target, setTarget] = useState<string | null>(null); // passkey: entry to update / to sign in with
   const deny = () => onAnswer(null);
   return createPortal(
@@ -96,11 +101,11 @@ export function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
             <h3><Icon n="extension" />{t.brAssocTitle}</h3>
             <p className="dialog-body">{t.brAssocBody}</p>
             <label className="textfield"><Icon n="badge" />
-              <input autoFocus value={name} onChange={e => setName(e.target.value)} aria-label={t.brAssocName} placeholder={t.brAssocName} />
+              <input value={name} onChange={e => setName(e.target.value)} aria-label={t.brAssocName} placeholder={t.brAssocName} />
             </label>
             <div className="row">
-              <button type="button" className="btn text" onClick={deny}>{t.brDeny}</button>
-              <button type="submit" className="btn filled" disabled={!name.trim()}><Icon n="link" />{t.brAllowSave}</button>
+              <button type="button" className="btn text" autoFocus onClick={deny}>{t.brDeny}</button>
+              <button type="submit" className="btn filled" disabled={!armed || !name.trim()}><Icon n="link" />{t.brAllowSave}</button>
             </div>
           </form>
         )}
@@ -119,8 +124,8 @@ export function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
             </div>
             <label className="opt">{t.brRemember}<input className="switch" type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /></label>
             <div className="row">
-              <button className="btn text" onClick={() => onAnswer({ allow: [], remember })}>{t.brDeny}</button>
-              <button className="btn filled" autoFocus onClick={() => onAnswer({ allow, remember })}><Icon n="check" />{t.brAllow}</button>
+              <button className="btn text" autoFocus onClick={() => onAnswer({ allow: [], remember })}>{t.brDeny}</button>
+              <button className="btn filled" disabled={!armed} onClick={() => onAnswer({ allow, remember })}><Icon n="check" />{t.brAllow}</button>
             </div>
           </>
         )}
@@ -140,8 +145,8 @@ export function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
               </div>
             )}
             <div className="row">
-              <button className="btn text" onClick={deny}>{t.cancel}</button>
-              <button className="btn filled" autoFocus onClick={() => onAnswer({ ok: true, uuid: target || null })}><Icon n="check" />{t.pkSave}</button>
+              <button className="btn text" autoFocus onClick={deny}>{t.cancel}</button>
+              <button className="btn filled" disabled={!armed} onClick={() => onAnswer({ ok: true, uuid: target || null })}><Icon n="check" />{t.pkSave}</button>
             </div>
           </>
         )}
@@ -158,8 +163,8 @@ export function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
               ))}
             </div>
             <div className="row">
-              <button className="btn text" onClick={deny}>{t.cancel}</button>
-              <button className="btn filled" autoFocus onClick={() => onAnswer({ uuid: target ?? ask.entries[0]?.uuid })}><Icon n="login" />{t.pkUse}</button>
+              <button className="btn text" autoFocus onClick={deny}>{t.cancel}</button>
+              <button className="btn filled" disabled={!armed} onClick={() => onAnswer({ uuid: target ?? ask.entries[0]?.uuid })}><Icon n="login" />{t.pkUse}</button>
             </div>
           </>
         )}
@@ -169,7 +174,7 @@ export function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
             <p className="dialog-body">{t.brDeleteBody}: <b>{ask.title || t.untitled}</b>{ask.username && <> ({ask.username})</>}</p>
             <div className="row">
               <button className="btn filled" autoFocus onClick={deny}>{t.cancel}</button>
-              <button className="btn text danger" onClick={() => onAnswer({ ok: true })}><Icon n="delete" />{t.remove}</button>
+              <button className="btn text danger" disabled={!armed} onClick={() => onAnswer({ ok: true })}><Icon n="delete" />{t.remove}</button>
             </div>
           </>
         )}
@@ -178,8 +183,8 @@ export function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
             <h3><Icon n="sync_lock" />{t.brUpdateTitle}</h3>
             <p className="dialog-body">{t.brUpdateBody}: <b>{ask.title || t.untitled}</b>{ask.username && <> ({ask.username})</>}</p>
             <div className="row">
-              <button className="btn text" onClick={deny}>{t.cancel}</button>
-              <button className="btn filled" autoFocus onClick={() => onAnswer({ ok: true })}><Icon n="check" />{t.brUpdate}</button>
+              <button className="btn text" autoFocus onClick={deny}>{t.cancel}</button>
+              <button className="btn filled" disabled={!armed} onClick={() => onAnswer({ ok: true })}><Icon n="check" />{t.brUpdate}</button>
             </div>
           </>
         )}
@@ -187,14 +192,23 @@ export function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
     </div>, document.body);
 }
 
-export function KeyDialog({ t, onClose, onSubmit }: { t: Strings; onClose: () => void; onSubmit: (pw: string) => void }) {
+/** New master key. The key file (and YubiKey slot) the vault uses now are kept unless changed here:
+ *  leaving them out would silently weaken the vault. */
+export function KeyDialog({ t, keyfile: initialKeyfile, yubikey, onClose, onSubmit }: {
+  t: Strings; keyfile?: string; yubikey?: string; onClose: () => void; onSubmit: (pw: string, keyfile?: string) => void;
+}) {
   const [pw, setPw] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [keyfile, setKeyfile] = useState(initialKeyfile ?? '');
   const mismatch = confirm.length > 0 && pw !== confirm;
+  const pickKeyfile = async () => {
+    const p = await openDialog({ multiple: false, directory: false });
+    if (typeof p === 'string') setKeyfile(p);
+  };
   return (
     <div className="scrim" onClick={onClose}>
       <form className="dialog" role="dialog" aria-label={t.changeMasterKey} onClick={e => e.stopPropagation()}
-        onSubmit={e => { e.preventDefault(); if (pw && pw === confirm) onSubmit(pw); }}>
+        onSubmit={e => { e.preventDefault(); if (pw && pw === confirm) onSubmit(pw, keyfile || undefined); }}>
         <h3><Icon n="key" />{t.changeMasterKey}</h3>
         <label className="textfield"><Icon n="key" />
           <input type="password" autoFocus placeholder={t.masterPassword} aria-label={t.masterPassword} value={pw} onChange={e => setPw(e.target.value)} />
@@ -204,6 +218,13 @@ export function KeyDialog({ t, onClose, onSubmit }: { t: Strings; onClose: () =>
           <input type="password" placeholder={t.confirmPassword} aria-label={t.confirmPassword} value={confirm} onChange={e => setConfirm(e.target.value)} />
         </label>
         {mismatch && <p className="form-error" role="alert"><Icon n="error" />{t.passwordsDontMatch}</p>}
+        {backend.desktop && (
+          <div className="keyfile-row">
+            <button type="button" className="btn text" onClick={pickKeyfile}><Icon n="key_vertical" />{keyfile ? fileName(keyfile) : t.keyfile}</button>
+            {keyfile && <button type="button" className="icon-btn" onClick={() => setKeyfile('')} aria-label={t.remove}><Icon n="close" /></button>}
+            {yubikey && <small className="label"><Icon n="usb" />{t.yubikey} · {t.yubikeySlot} {yubikey}</small>}
+          </div>
+        )}
         <div className="row">
           <button type="button" className="btn text" onClick={onClose}>{t.cancel}</button>
           <button type="submit" className="btn filled" disabled={!pw || pw !== confirm}><Icon n="check" />{t.save}</button>

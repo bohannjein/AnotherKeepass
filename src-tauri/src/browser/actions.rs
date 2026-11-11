@@ -318,6 +318,10 @@ pub(super) fn set_login(host: &dyn Host, s: &mut Session, p: &Value) -> ActionRe
     let password = p["password"].as_str().unwrap_or_default().to_string();
     let vid = active_id(host).ok_or(E_DB_NOT_OPENED)?;
     let existing = p["uuid"].as_str().filter(|u| !u.is_empty());
+    // a new login goes into the active vault: only if this client was associated with that one
+    if existing.is_none() && !s.vaults.contains(&vid) {
+        return Err(E_ASSOCIATION_FAILED);
+    }
 
     if let Some(u) = existing {
         let uuid = parse_uuid_hex(u).ok_or(E_NO_VALID_UUID)?;
@@ -403,6 +407,9 @@ pub(super) fn database_groups(host: &dyn Host, s: &mut Session) -> ActionResult 
         return Err(E_ASSOCIATION_FAILED);
     }
     let vid = active_id(host).ok_or(E_DB_NOT_OPENED)?;
+    if !s.vaults.contains(&vid) {
+        return Err(E_ASSOCIATION_FAILED);
+    }
     let map = host.vaults().0.lock().map_err(|_| E_NO_GROUPS)?;
     let db = map.get(&vid).ok_or(E_NO_GROUPS)?.db();
     let tree = group_tree(db, db.root().id(), db.recycle_bin().map(|g| g.id()));
@@ -415,6 +422,9 @@ pub(super) fn create_group(host: &dyn Host, s: &mut Session, p: &Value) -> Actio
     }
     let path = p["groupName"].as_str().map(str::trim).filter(|n| !n.is_empty()).ok_or(E_CANNOT_CREATE_GROUP)?;
     let vid = active_id(host).ok_or(E_DB_NOT_OPENED)?;
+    if !s.vaults.contains(&vid) {
+        return Err(E_ASSOCIATION_FAILED);
+    }
     let mut map = host.vaults().0.lock().map_err(|_| E_CANNOT_CREATE_GROUP)?;
     let v = map.get_mut(&vid).ok_or(E_CANNOT_CREATE_GROUP)?;
     let db = v.db_mut();

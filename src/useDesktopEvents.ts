@@ -1,7 +1,7 @@
 // Everything the main window reacts to without the user clicking: events from Rust (browser
 // requests, Auto-Type, sync problems, reloads), auto-lock after
 // inactivity and one-time notices after unlocking.
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { backend, type BrowserAsk, type VaultData } from './backend';
 import { type Item } from './model';
 import { type Strings } from './i18n';
@@ -12,9 +12,12 @@ export function useDesktopEvents({ t, settings, notify, open, vault, items, desk
   t: Strings; settings: Prefs; notify: Notify; open: Record<string, VaultData>; vault: string; items: Item[];
   desktopProblems: string[]; onLock: () => void;
 }) {
-  const [ask, setAsk] = useState<BrowserAsk | null>(null);
+  // requests queue up: a second one must not replace the first (the extension waits for each answer)
+  const [asks, setAsks] = useState<BrowserAsk[]>([]);
+  const setAsk = useCallback((a: BrowserAsk | null) => setAsks(q => a ? [...q, a] : q.slice(1)), []);
+  const ask = asks[0] ?? null;
 
-  useEffect(() => backend.on<BrowserAsk>('akp-browser-ask', a => setAsk(a)), []);
+  useEffect(() => backend.on<BrowserAsk>('akp-browser-ask', a => setAsk(a)), [setAsk]);
   useEffect(() => backend.on<string>('akp-sync-problem', e => notify(`${t.syncProblem}: ${e}`, true)), [t.syncProblem, notify]);
   useEffect(() => backend.on('akp-vault-reloaded', () => notify(t.vaultReloaded)), [t.vaultReloaded, notify]);
   // saving runs in the background (Rust); a failed save still has to reach the user

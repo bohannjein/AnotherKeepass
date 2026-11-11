@@ -304,15 +304,46 @@ fn write_file(path: &Path, db: &Database, key: DatabaseKey) -> R<()> {
     {
         log::warn!("backup before save failed: {e}");
     }
+    // The file changed on disk since we read or wrote it (cloud sync, KeePassXC): never overwrite
+    // that. Merge our state into what is there and save the result instead.
+    let mut merged: Option<Database> = None;
+    if path.is_file() && changed_on_disk(path) {
+        let mut f = fs::File::open(path).map_err(|e| format!("conflict:{e}"))?;
+        let mut ext = Database::open(&mut f, key.clone()).map_err(|e| format!("conflict:{e}"))?;
+        ext.merge(db).map_err(|e| format!("conflict:{e}"))?;
+        log::info!("save: file changed on disk, merged both versions");
+        merged = Some(ext);
+    }
+    write_plain(path, merged.as_ref().unwrap_or(db), key)?;
+    // after a merge the stamp stays old, so the file watcher loads the merged state
+    if merged.is_none() {
+        stamp(path);
+    }
+    forget_used(path); // any save carries the "last access" times along
+    crate::keeshare::export_all(merged.as_ref().unwrap_or(db), path);
+    Ok(())
+}
+
+/// Our last stamp of the file differs from its modification time now.
+fn changed_on_disk(path: &Path) -> bool {
+    let seen = watch::STAMPS.lock().ok().and_then(|s| s.as_ref().and_then(|s| s.get(path).copied()));
+    matches!((seen, watch::mtime(path)), (Some(seen), Some(now)) if seen != now)
+}
+
+/// Encrypt and write: temp file, flushed to disk, then renamed over the target.
+pub(crate) fn write_plain(path: &Path, db: &Database, key: DatabaseKey) -> R<()> {
+    use std::io::Write;
     let mut buf = Vec::new();
     db.save(&mut buf, key).map_err(|e| format!("save:{e}"))?;
-    let tmp = path.with_extension("kdbx.tmp");
-    fs::write(&tmp, &buf).map_err(|e| format!("io:{e}"))?;
-    fs::rename(&tmp, path).map_err(|e| format!("io:{e}"))?;
-    stamp(path);
-    forget_used(path); // any save carries the "last access" times along
-    crate::keeshare::export_all(db, path);
-    Ok(())
+    // own temp name per write: two writers of the same file never share (and corrupt) one
+    let tmp = path.with_extension(format!("{}.tmp", Uuid::new_v4().simple()));
+    let mut f = fs::File::create(&tmp).map_err(|e| format!("io:{e}"))?;
+    f.write_all(&buf).and_then(|_| f.sync_all()).map_err(|e| format!("io:{e}"))?;
+    drop(f);
+    fs::rename(&tmp, path).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        format!("io:{e}")
+    })
 }
 
 fn dto(id: &str, v: &OpenVault) -> VaultDto {

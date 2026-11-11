@@ -389,7 +389,7 @@ const demo: Backend = {
   sshRemove: async () => { throw new Error('ssh_agent'); },
   // demo: same idea as the Rust estimator (class pool × length)
   passwordBits: async pw => {
-    const pool = (/[a-z]/.test(pw) ? 26 : 0) + (/[A-Z]/.test(pw) ? 26 : 0) + (/d/.test(pw) ? 10 : 0) + (/[^a-zA-Zd]/.test(pw) ? 33 : 0);
+    const pool = (/[a-z]/.test(pw) ? 26 : 0) + (/[A-Z]/.test(pw) ? 26 : 0) + (/\d/.test(pw) ? 10 : 0) + (/[^a-zA-Z\d]/.test(pw) ? 33 : 0);
     return Math.round(pw.length * Math.log2(pool || 1));
   },
   passwordBreached: async () => 0,

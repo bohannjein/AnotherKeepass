@@ -313,6 +313,34 @@ fn save_for_test(state: &Vaults, vault: &str, item: ItemInput) -> String {
     out
 }
 
+/// Someone else (cloud sync, KeePassXC) changes the file; our next save must keep their entry.
+#[test]
+fn save_merges_external_change() {
+    let state = Vaults::default();
+    let (p, root) = open_temp(&state, "ext");
+    save_for_test(&state, &p, login(&root, "Mine"));
+    let path = PathBuf::from(&p);
+    writer::flush(&path);
+
+    // external edit: read the file, add an entry, write it back without telling us
+    let key = make_key(Some("pw"), None, None).unwrap();
+    let mut other = Database::open(&mut fs::File::open(&path).unwrap(), key.clone()).unwrap();
+    other.root_mut().add_entry().set_unprotected("Title", "Theirs");
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    let mut buf = Vec::new();
+    other.save(&mut buf, key.clone()).unwrap();
+    fs::write(&path, buf).unwrap();
+
+    save_for_test(&state, &p, login(&root, "Later"));
+    writer::flush(&path);
+    let disk = Database::open(&mut fs::File::open(&path).unwrap(), key).unwrap();
+    let titles: Vec<_> = disk.iter_all_entries().filter_map(|e| e.get_title().map(String::from)).collect();
+    for t in ["Mine", "Theirs", "Later"] {
+        assert!(titles.iter().any(|x| x == t), "{t} missing in {titles:?}");
+    }
+    let _ = fs::remove_file(path);
+}
+
 /// Challenge-response key (what a YubiKey slot computes): needed to open and kept on save.
 /// A software HMAC-SHA1 secret stands in for the hardware key.
 #[test]

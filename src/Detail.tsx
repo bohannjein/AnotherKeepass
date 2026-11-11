@@ -262,6 +262,8 @@ export function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, 
     return secrets.current;
   };
   const revealer = (raw: string) => () => getSecrets().then(s => s[raw] ?? '');
+  // the entry changed (other version restored, reload, browser update): cached secrets are stale
+  useEffect(() => { secrets.current = null; }, [item.modifiedAt]);
   const passwordBits = useCallback(() => backend.entryPasswordBits(item.vault, item.id), [item.vault, item.id, item.modified]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startEdit = async () => {
@@ -398,7 +400,7 @@ export function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, 
                 onRemove={f.key ? undefined : () => patch({ fields: d.fields.filter((_, i) => i !== idx) })} />
             ))
             : viewFields.map(f => (
-              <FieldRow key={f.raw ?? fieldName(t, f)} t={t} f={f} prefs={prefs} onEdit={startEdit}
+              <FieldRow key={(f.raw ?? fieldName(t, f)) + '|' + (item.modifiedAt ?? '')} t={t} f={f} prefs={prefs} onEdit={startEdit}
                 onCopy={() => onCopyField(f, fieldName(t, f))}
                 reveal={f.protected && f.raw && !isNew ? revealer(f.raw) : undefined}
                 strength={f.key === 'password' && !isNew ? passwordBits : undefined}

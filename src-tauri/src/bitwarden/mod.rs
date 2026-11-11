@@ -39,6 +39,8 @@ fn check_secure(server: &str) -> Result<(), String> {
 
 /// meta custom data: the account path (stable identity for the browser extension)
 pub const CD_ACCOUNT: &str = "AnotherKeepass.Account";
+/// meta custom data: ids of server items this device could not decrypt (JSON list)
+pub const CD_SKIPPED: &str = "AnotherKeepass.Skipped";
 
 pub fn is_remote(path: &str) -> bool {
     path.starts_with("bw:")
@@ -85,10 +87,23 @@ fn save_account(path: &str, a: &Account) {
         // the remember token and browser ids are secrets: only this Windows user can read the file
         let plain = serde_json::to_vec(a).unwrap_or_default();
         let data = crate::hardening::protect(&plain).unwrap_or(plain);
-        if let Err(e) = fs::write(&f, data) {
+        if let Err(e) = write_private(&f, &data) {
             log::warn!("vaultwarden cache: {e}");
         }
     }
+}
+
+/// Write a file only its owner can read (0600 where the system has such modes).
+fn write_private(path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut opts = fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut opts, 0o600);
+    let mut f = opts.open(path)?;
+    #[cfg(unix)]
+    std::fs::set_permissions(path, std::os::unix::fs::PermissionsExt::from_mode(0o600))?; // file existed with wider rights
+    f.write_all(data)
 }
 
 /// Forget device token and offline copy (sign out).
@@ -111,6 +126,10 @@ struct Snapshot {
     collections: HashMap<GroupId, (String, String, bool)>,
     /// ciphers the account may see but not change
     read_only: std::collections::HashSet<String>,
+    /// ciphers as the server sent them (to keep what an entry cannot hold, see `keep_server_fields`)
+    raw: HashMap<String, Value>,
+    /// ciphers that could not be decrypted: still on the server, so never "deleted" by a sync
+    skipped: std::collections::HashSet<String>,
 }
 
 pub struct Remote {
@@ -174,6 +193,8 @@ fn build(sync: &Value, title: &str, user: &SymKey, orgs: &HashMap<String, SymKey
         org_groups: HashMap::new(),
         collections: HashMap::new(),
         read_only: Default::default(),
+        raw: HashMap::new(),
+        skipped: Default::default(),
     };
 
     for f in field(sync, "folders").as_array().into_iter().flatten() {
@@ -222,9 +243,11 @@ fn build(sync: &Value, title: &str, user: &SymKey, orgs: &HashMap<String, SymKey
             Ok(x) => x,
             Err(e) => {
                 log::warn!("vaultwarden: skipped an item ({e})");
+                snap.skipped.insert(id.to_string());
                 continue;
             }
         };
+        snap.raw.insert(id.to_string(), c.clone());
         let deleted = !field(c, "deletedDate").is_null();
         let folder = field(c, "folderId").as_str().map(String::from);
         let parent = if deleted {
@@ -260,6 +283,16 @@ fn build(sync: &Value, title: &str, user: &SymKey, orgs: &HashMap<String, SymKey
         let entry = db.entry(eid).ok_or("bw_build")?;
         let (canon, meta) = mapping::read_entry(&entry);
         snap.ciphers.insert(id.to_string(), (canon, meta, deleted, folder));
+    }
+    if !snap.skipped.is_empty() {
+        let ids: Vec<&String> = snap.skipped.iter().collect();
+        db.meta.custom_data.insert(
+            CD_SKIPPED.into(),
+            keepass::db::CustomDataItem {
+                value: Some(keepass::db::CustomDataValue::String(json!(ids).to_string())),
+                last_modification_time: Some(Times::now()),
+            },
+        );
     }
     Ok((db, snap))
 }
@@ -516,7 +549,11 @@ pub fn push(r: &mut Remote, db: &Database) -> Result<Database, String> {
                     session.restore_cipher(&id)?;
                 }
                 if !trashed && (*old != plain || *old_folder != folder) {
-                    session.update_cipher(&id, &mapping::cipher_body(&plain, &meta, folder.as_deref(), &key, &r.user_id))?;
+                    let mut body = mapping::cipher_body(&plain, &meta, folder.as_deref(), &key, &r.user_id);
+                    if let Some(raw) = r.snapshot.raw.get(&id) {
+                        mapping::keep_server_fields(&mut body, raw, &key);
+                    }
+                    session.update_cipher(&id, &body)?;
                 }
             }
         }
