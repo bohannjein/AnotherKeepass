@@ -313,6 +313,24 @@ fn save_for_test(state: &Vaults, vault: &str, item: ItemInput) -> String {
     out
 }
 
+/// A change that fails after it touched the database leaves no trace in memory.
+#[test]
+fn failed_change_is_rolled_back() {
+    let state = Vaults::default();
+    let (p, root) = open_temp(&state, "rb");
+    save_for_test(&state, &p, login(&root, "Keep"));
+    let before = with_vault(&state, &p, |v| Ok(v.db.iter_all_entries().count())).unwrap();
+    let res = mutate(&state, &p, |db| {
+        db.root_mut().add_entry().set_unprotected("Title", "Half done");
+        Err("boom".into())
+    });
+    assert_eq!(res.err().as_deref(), Some("boom"));
+    let after = with_vault(&state, &p, |v| Ok(v.db.iter_all_entries().count())).unwrap();
+    assert_eq!(before, after);
+    writer::flush(Path::new(&p));
+    let _ = fs::remove_file(&p);
+}
+
 /// Someone else (cloud sync, KeePassXC) changes the file; our next save must keep their entry.
 #[test]
 fn save_merges_external_change() {

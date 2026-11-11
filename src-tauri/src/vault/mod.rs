@@ -514,7 +514,12 @@ pub fn mutate_entry(state: &Vaults, vault: &str, id: &str, f: impl FnOnce(&mut k
 fn mutate(state: &Vaults, id: &str, f: impl FnOnce(&mut Database) -> R<()>) -> R<VaultDto> {
     let mut map = state.0.lock().map_err(|_| "lock".to_string())?;
     let v = map.get_mut(id).ok_or("vault_closed")?;
-    f(&mut v.db)?;
+    // a change that fails halfway must not stay in memory: the next save would write it
+    let before = v.db.clone();
+    if let Err(e) = f(&mut v.db) {
+        v.db = before;
+        return Err(e);
+    }
     write_db_later(v)?;
     // a linked .kdbx / Vaultwarden partner gets the change too
     crate::sync::after_change(&mut map, id);

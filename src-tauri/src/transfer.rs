@@ -131,7 +131,14 @@ pub async fn vault_merge(
     .map_err(|e| e.to_string())??;
     let mut map = state.0.lock().map_err(|_| "lock")?;
     let v = map.get_mut(&vault).ok_or("vault_closed")?;
-    let summary = merge_into(v.db_mut(), &other)?;
+    let before = v.db().clone();
+    let summary = match merge_into(v.db_mut(), &other) {
+        Ok(s) => s,
+        Err(e) => {
+            *v.db_mut() = before; // a merge that failed halfway leaves nothing behind
+            return Err(e);
+        }
+    };
     v.persist()?;
     log::info!("merged: {summary:?}");
     Ok((summary, v.listing(&vault)))

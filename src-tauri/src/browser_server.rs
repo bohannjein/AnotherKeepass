@@ -35,10 +35,33 @@ pub fn pipe_name() -> String {
         .unwrap_or_else(|_| format!(r"\\.\pipe\org.keepassxc.KeePassXC.BrowserServer_{}", std::env::var("USERNAME").unwrap_or_default()))
 }
 
+/// Numeric id of the user running this process (Linux; None where /proc is missing).
+#[cfg(unix)]
+pub fn my_uid() -> Option<u32> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata("/proc/self").ok().map(|m| m.uid())
+}
+
+/// KeePassXC's place in the user's runtime dir. Without one the socket goes to a folder of our
+/// own in the temp dir (made private in `listen_first`), never straight into the shared /tmp.
 #[cfg(unix)]
 pub fn socket_path() -> std::path::PathBuf {
-    let base = std::env::var_os("XDG_RUNTIME_DIR").map(std::path::PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    let base = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join(format!("akp-{}", my_uid().unwrap_or(0))));
     base.join("app/org.keepassxc.KeePassXC/org.keepassxc.KeePassXC.BrowserServer")
+}
+
+/// A folder only this user can enter; refuses one that belongs to somebody else.
+#[cfg(unix)]
+fn private_dir(dir: &std::path::Path) -> std::io::Result<()> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    std::fs::create_dir_all(dir)?;
+    let owner = std::fs::metadata(dir)?.uid();
+    if my_uid().is_some_and(|me| owner != me) {
+        return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "socket folder belongs to another user"));
+    }
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
 }
 
 // ---------------------------------------------------------------- notifications
@@ -206,14 +229,23 @@ fn listen_first() -> std::io::Result<Listener> {
 #[cfg(unix)]
 fn listen_first() -> std::io::Result<Listener> {
     let path = socket_path();
+    if std::env::var_os("XDG_RUNTIME_DIR").is_none()
+        && let Some(base) = path.parent().and_then(|p| p.parent()).and_then(|p| p.parent())
+    {
+        private_dir(base)?; // our own folder in the shared temp dir
+    }
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
+        private_dir(dir)?;
     }
     if std::os::unix::net::UnixStream::connect(&path).is_ok() {
         return Err(std::io::Error::new(std::io::ErrorKind::AddrInUse, "socket in use"));
     }
     let _ = std::fs::remove_file(&path);
     let l = with_runtime(|| tokio::net::UnixListener::bind(&path))?;
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+    }
     // KeePassXC also links the classic path for older proxies
     if let Some(runtime) = path.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
         let legacy = runtime.join("org.keepassxc.KeePassXC.BrowserServer");
@@ -262,22 +294,21 @@ where
                 let n = match n { Ok(0) | Err(_) => return, Ok(n) => n };
                 buf.extend_from_slice(&chunk[..n]);
                 if buf.len() > 4 * 1024 * 1024 { buf.clear(); continue; } // garbage guard
-                let req: Value = match serde_json::from_slice(&buf) {
-                    Ok(v) => { buf.clear(); v }
-                    Err(e) if e.is_eof() => continue, // message split over reads
-                    Err(_) => { buf.clear(); continue; }
-                };
-                if !host.prefs().enabled {
-                    return; // integration switched off: behave like no app is listening
-                }
-                let (h, s) = (host.clone(), session.clone());
-                // handlers may wait for the user (association / access dialogs)
-                let reply = tokio::task::spawn_blocking(move || {
-                    let mut s = s.lock().unwrap_or_else(|p| p.into_inner());
-                    browser::handle(&*h, &mut s, &req)
-                }).await.unwrap_or_else(|_| json!({ "error": "internal" }));
-                if conn.write_all(reply.to_string().as_bytes()).await.is_err() {
-                    return;
+                // several requests may arrive in one read, one request over several reads
+                for msg in crate::proxy::split_messages(&mut buf) {
+                    let Ok(req) = serde_json::from_slice::<Value>(&msg) else { continue };
+                    if !host.prefs().enabled {
+                        return; // integration switched off: behave like no app is listening
+                    }
+                    let (h, s) = (host.clone(), session.clone());
+                    // handlers may wait for the user (association / access dialogs)
+                    let reply = tokio::task::spawn_blocking(move || {
+                        let mut s = s.lock().unwrap_or_else(|p| p.into_inner());
+                        browser::handle(&*h, &mut s, &req)
+                    }).await.unwrap_or_else(|_| json!({ "error": "internal" }));
+                    if conn.write_all(reply.to_string().as_bytes()).await.is_err() {
+                        return;
+                    }
                 }
             }
             note = notes.recv() => {

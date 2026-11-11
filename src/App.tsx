@@ -161,10 +161,12 @@ export default function App() {
     backend.desktopApply(prefs).then(setDesktopProblems).catch(e => { backend.log('error', 'desktopApply: ' + String(e)); setDesktopProblems([String(e)]); });
   }, [settings, t]);
   const onClosed = useCallback((id: string) => setOpen(o => { const n = { ...o }; delete n[id]; return n; }), []);
-  const lock = useCallback(async () => {
-    await backend.lockAll().catch(() => { /* nothing open */ });
+  // false: Rust could not lock, so the vaults are still open and the UI must not pretend otherwise
+  const lock = useCallback(async (): Promise<boolean> => {
+    try { await backend.lockAll(); } catch (e) { backend.log('error', 'lock: ' + String(e)); return false; }
     clearHistory();
     setOpen({});
+    return true;
   }, []);
 
   // Rust locked everything (tray menu, screen lock, minimize): drop the UI state too
@@ -198,7 +200,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   update: UpdateState | null; checkUpdate: (manual: boolean) => Promise<UpdateState | null>;
   onKnown: (path: string, patch: Partial<Known>) => void;
   open: Record<string, VaultData>; known: Known[];
-  onOpened: (d: VaultData, meta: Known) => void; onUpdate: (d: VaultData) => void; onClosed: (id: string) => void; onLock: () => void;
+  onOpened: (d: VaultData, meta: Known) => void; onUpdate: (d: VaultData) => void; onClosed: (id: string) => void; onLock: () => Promise<boolean>;
   desktopProblems: string[];
 }) {
   const [vault, setVault] = useState(ALL);
@@ -233,6 +235,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const [showKeys, setShowKeys] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const { notify, snackbar } = useSnack();
+  const lockNow = useCallback(async () => { if (!(await onLock())) notify(t.lockFailed, true); }, [onLock, notify, t.lockFailed]);
   const [page, setPage] = useState<'vault' | 'settings'>('vault');
   // the line above the footer only when the menu list actually scrolls
   const [navRef, navScrolls] = useScrolls();
@@ -251,7 +254,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const allItems = useMemo(() => pending ? [...items, pending] : items, [items, pending]);
   const folders: Folder[] = useMemo(() => Object.values(open).flatMap(v =>
     v.folders.map(f => ({ id: f.id, vault: v.id, name: f.name, parent: f.parent, share: f.share }))), [open]);
-  const { ask, setAsk } = useDesktopEvents({ t, settings, notify, open, vault, items, desktopProblems, onLock });
+  const { ask, setAsk } = useDesktopEvents({ t, settings, notify, open, vault, items, desktopProblems, onLock: lockNow });
   const updateTitle = update && (update.ready ? t.updateReady
     : update.progress != null ? `${t.updateInstalling} ${update.progress} %` : t.updateAvailable).replace('{v}', update.version);
   // tell once per version (also when it was found while everything was locked)
@@ -396,7 +399,8 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     ];
 
   const closeVault = async (id: string) => {
-    await run(backend.close(id));
+    // only forget the vault here when Rust really closed it (and wrote its pending changes)
+    try { await backend.close(id); } catch (e) { notify(`${t.saveError}: ${String(e)}`, true); return; }
     if (vault === id) { setVault(ALL); setFolder(null); }
     setSelected(null);
     onClosed(id);
@@ -446,7 +450,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       { id: 'import', icon: 'upload_file', label: t.importItems, run: close(() => setImportFor(targetVault)) },
       { id: 'theme', icon: 'contrast', label: t.actTheme, run: close(() => toggleTheme()) },
       { id: 'settings', icon: 'settings', label: t.actSettings, run: close(() => setPage('settings')) },
-      { id: 'lock', icon: 'lock', label: t.actLock, run: close(onLock) },
+      { id: 'lock', icon: 'lock', label: t.actLock, run: close(lockNow) },
     ];
     const entries: PaletteItem[] = allItems.filter(i => !i.trashed && !i.id.startsWith('new:')).map(i => ({
       id: 'e-' + i.vault + i.id, icon: TYPE_ICON[i.type], image: i.icon, label: i.title || t.untitled, sub: i.subtitle,
@@ -497,7 +501,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     if (e.key === 'Escape') { window.dispatchEvent(new Event('akp:cancel')); setShowKeys(false); setMulti([]); return; }
     if (mod && e.key.toLowerCase() === 'k') return run1(() => setPalette(p => !p));
     if (mod && e.key.toLowerCase() === 'f') return run1(() => searchRef.current?.focus());
-    if (mod && e.key.toLowerCase() === 'l') return run1(onLock);
+    if (mod && e.key.toLowerCase() === 'l') return run1(lockNow);
     if (mod && e.key.toLowerCase() === 'n' && targetVault) return run1(() => createItem('login'));
     if (!current || current.id.startsWith('new:')) return;
     if (mod && e.key.toLowerCase() === 'e') return run1(() => window.dispatchEvent(new Event('akp:edit')));
@@ -606,7 +610,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
           <button className="icon-btn" title={ts.ui.settings} aria-label={ts.ui.settings} onClick={() => setPage('settings')}>
             <Icon n="settings" />
           </button>
-          <button className="icon-btn" title={t.lock} aria-label={t.lock} onClick={onLock}><Icon n="lock" /></button>
+          <button className="icon-btn" title={t.lock} aria-label={t.lock} onClick={lockNow}><Icon n="lock" /></button>
           {update && (
             <button className="icon-btn update-btn" title={updateTitle!} aria-label={updateTitle!}
               onClick={() => setConfirm({

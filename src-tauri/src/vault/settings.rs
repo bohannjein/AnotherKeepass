@@ -133,13 +133,22 @@ pub fn keeshare_get(state: tauri::State<'_, Vaults>, vault: String, group: Strin
 pub fn keeshare_set(state: tauri::State<'_, Vaults>, vault: String, group: String, share: Option<crate::keeshare::Share>) -> R<VaultDto> {
     with_vault(&state, &vault, |v| {
         let g = crate::keeshare::parse_group(&group)?;
-        crate::keeshare::set_group_share(&mut v.db, g, share.as_ref())?;
-        if let Some(s) = share.as_ref().filter(|s| s.kind != "export") {
-            let path = crate::keeshare::container_path(&v.path, s);
-            if path.is_file() || s.kind == "import" {
-                crate::keeshare::import_one(&mut v.db, g, &v.path, s)?;
+        // a wrong password or a missing container must not leave the share half set up
+        let before = v.db.clone();
+        let applied = (|| {
+            crate::keeshare::set_group_share(&mut v.db, g, share.as_ref())?;
+            if let Some(s) = share.as_ref().filter(|s| s.kind != "export") {
+                let path = crate::keeshare::container_path(&v.path, s);
+                if path.is_file() || s.kind == "import" {
+                    crate::keeshare::import_one(&mut v.db, g, &v.path, s)?;
+                }
+                stamp(&path);
             }
-            stamp(&path);
+            Ok::<(), String>(())
+        })();
+        if let Err(e) = applied {
+            v.db = before;
+            return Err(e);
         }
         write_db(v)?;
         Ok(dto(&vault, v))
