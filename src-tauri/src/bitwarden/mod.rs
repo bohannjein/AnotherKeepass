@@ -863,7 +863,12 @@ mod tests {
         assert_eq!(open(&path, password, None).err().as_deref(), Some("twofactor:0"));
         assert_eq!(open(&path, "wrong", Some((0, "123456".into()))).err().as_deref(), Some("wrong_key"));
         let (mut db, mut remote) = open(&path, password, Some((0, "123456".into()))).unwrap();
-        assert!(open(&path, password, None).is_ok(), "remember token used");
+        // the remember token is only kept where the system protects the account file (Windows)
+        if crate::hardening::protect(b"probe").is_some() {
+            assert!(open(&path, password, None).is_ok(), "remember token used");
+        } else {
+            assert_eq!(open(&path, password, None).err().as_deref(), Some("twofactor:0"), "no token kept in the clear");
+        }
         assert_eq!(db.iter_all_entries().count(), 2);
 
         // nothing changed → no upload
