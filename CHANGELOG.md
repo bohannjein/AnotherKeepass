@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.7
+
+- **Vaultwarden SSO:** accounts can sign in through single sign-on (Vaultwarden 1.35+). The
+  browser opens for the identity provider; the master password still decrypts the vault. Servers
+  that only allow SSO switch the dialog to it.
+- **Safer saving:** a change made in another program meanwhile is merged instead of
+  overwritten; a failed save is retried, kept as `<file>.unsaved.kdbx` and reported when
+  closing; a change that fails halfway is rolled back instead of staying half applied.
+- **Master key change:** works with a key file and YubiKey; if writing fails, the old key stays.
+- **Vaultwarden:** saving no longer drops fields AnotherKeepass does not show (passkeys and
+  others); items this device cannot decrypt are no longer deleted from a linked file.
+- **Auto-Type:** matches by registrable domain instead of any part of the address, and types
+  only if the target window is still in front.
+- **Browser approvals:** buttons only respond after a short moment, "remember" is off by default,
+  several requests queue instead of replacing each other.
+- **Linux:** the browser socket sits in a private folder and is checked for its owner; the
+  "remember 2FA" token is not stored without system protection.
+- **Look:** focus rings are no longer cut off, theme previews have matching corners, and
+  interface text can no longer be selected by accident (text fields still can).
+
 ## 0.3.6
 
 - **Microsoft Store:** releases also contain an MSIX package for the Store. Inside it the Store
