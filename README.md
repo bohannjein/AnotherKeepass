@@ -100,5 +100,36 @@ cleared after the configured time only if unchanged).
 ## Roadmap
 
 Done: KDBX core, entry lifecycle, desktop integration, browser integration, Vaultwarden,
-import, hardening, auto-update, YubiKey. Next: Windows code signing, testing on Linux (the
-Linux integrations are new and untested), macOS, and an own browser extension (Manifest V3).
+import, hardening, auto-update, YubiKey.
+
+### Before 1.0 (Windows release)
+
+Priority order; these are real gaps.
+
+1. **Test the fixes in the real app** (MSIX): master key change with key file and with
+   YubiKey, browser approval dialogs (arming delay, queue), lock with a failed save, text
+   selection, focus ring and corner radii in the native window. A bug in the key change can
+   lock a vault, so this blocks everything else.
+2. **Signing and distribution:** the MSIX is unsigned and uses the test identity
+   `AnotherKeepass.Test`. Choose a route (Store or own certificate), set the real identity
+   and publisher in the build, and run the update path end to end once.
+3. **Verify Vaultwarden against a real server:** the fix for lost server-only fields is only
+   tested against the mock server. Edit items with passkeys, several URIs and attachments on
+   a test account and compare on the server.
+4. **Linux:** either test it (CI on the branch, then browser integration and Auto-Type on a
+   real Linux system; the new socket permission code has only been compiled in CI) or label
+   it a preview in 1.0.
+5. **Failed save on lock:** locking proceeds and the change stays in `<file>.unsaved.kdbx`.
+   Check that the app notices this file on the next open and offers to merge it; add that if
+   it is missing.
+6. **Release hygiene:** commit the open changes, add the fixes to the CHANGELOG, point
+   `origin` at `johann-beinsen`, bring the branch into `main`, bump the version.
+
+### Optional (can follow after 1.0)
+
+- macOS: active window for Auto-Type, native messaging manifests, screen lock signals.
+  For 1.0, "Windows only, Linux as preview" is enough if documented.
+- Secret Service on Linux for the "remember 2FA" token (without DPAPI it is not stored now).
+- An own browser extension (Manifest V3); the KeePassXC extension works today.
+- Settings marked "planned" (custom browser path on Linux/macOS): implement or hide them.
+- The exe (NSIS) installer stays as it is.
