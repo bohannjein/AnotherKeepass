@@ -19,7 +19,7 @@ if (!existsSync(exe)) throw new Error('build first: npx tauri build --no-bundle'
 const values = {
   IDENTITY_NAME: process.env.MSIX_IDENTITY_NAME || 'AnotherKeepass.Test',
   PUBLISHER: process.env.MSIX_PUBLISHER || 'CN=AnotherKeepass Test',
-  PUBLISHER_NAME: process.env.MSIX_PUBLISHER_NAME || 'johann-beinsen',
+  PUBLISHER_NAME: process.env.MSIX_PUBLISHER_NAME || 'Johann Beinsen',
   VERSION: version,
 };
 const xmlEscape = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
