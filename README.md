@@ -115,7 +115,10 @@ Priority order; these are real gaps.
    and publisher in the build, and run the update path end to end once.
 3. **Verify Vaultwarden against a real server:** the fix for lost server-only fields is only
    tested against the mock server. Edit items with passkeys, several URIs and attachments on
-   a test account and compare on the server.
+   a test account and compare on the server. Also test the new SSO sign-in (Vaultwarden 1.35+
+   with an identity provider such as Keycloak, `SSO_ENABLED` and `SSO_ONLY`): redirect to
+   `http://localhost:8065–8070`, organization identifier, 2FA on top of SSO, unlock and
+   offline open afterwards. It is only tested against the mock server so far.
 4. **Linux:** either test it (CI on the branch, then browser integration and Auto-Type on a
    real Linux system; the new socket permission code has only been compiled in CI) or label
    it a preview in 1.0.

@@ -7,6 +7,7 @@
 pub mod api;
 pub mod crypto;
 pub mod mapping;
+pub mod sso;
 
 use std::{collections::HashMap, fs, path::PathBuf};
 
@@ -59,6 +60,9 @@ struct Account {
     /// browser extension associations (KPXC_BROWSER_*: public ids, no secrets)
     #[serde(default)]
     browser: HashMap<String, String>,
+    /// signs in through SSO: organization identifier (may be empty)
+    #[serde(default)]
+    sso: Option<String>,
 }
 
 fn account_file(path: &str) -> Option<PathBuf> {
@@ -308,11 +312,22 @@ fn build(sync: &Value, title: &str, user: &SymKey, orgs: &HashMap<String, SymKey
 }
 
 /// Log in (or open the offline copy) and decrypt the account.
-/// Errors: "wrong_key", "twofactor:<ids>", "offline_no_cache", or a server message.
-pub fn open(path: &str, password: &str, second: Option<(u8, String)>) -> Result<(Database, Remote), String> {
+/// Errors: "wrong_key", "twofactor:<ids>", "offline_no_cache", "sso_…", or a server message.
+/// `sso`: sign in through SSO with this organization identifier (remembered for the next
+/// unlocks); `browse` opens the identity provider's page in the system browser.
+pub fn open(
+    path: &str,
+    password: &str,
+    second: Option<(u8, String)>,
+    sso: Option<String>,
+    browse: &dyn Fn(&str) -> Result<(), String>,
+) -> Result<(Database, Remote), String> {
     let (server, email) = parse_path(path).ok_or("bw_path")?;
     check_secure(&server)?;
     let mut acct = load_account(path);
+    if sso.is_some() {
+        acct.sso = sso;
+    }
     let title = format!("{email} · {}", server.trim_start_matches("https://").trim_start_matches("http://"));
 
     let mut unreachable = String::new();
@@ -338,17 +353,32 @@ pub fn open(path: &str, password: &str, second: Option<(u8, String)>) -> Result<
     let hash = crypto::server_hash(&master, password);
     acct.kdf = Some((kdf.kind, kdf.iterations, kdf.memory, kdf.parallelism));
 
+    let (device_id, via_sso) = (acct.device_id.clone(), acct.sso.clone());
+    let login = |second: Option<(u8, &str)>| -> Result<api::TokenResponse, LoginError> {
+        if !unreachable.is_empty() {
+            return Err(LoginError::Offline(unreachable.clone()));
+        }
+        let Some(org) = &via_sso else {
+            return api::login(&server, &email, &hash, &device_id, second);
+        };
+        // SSO: the identity provider in the browser, the code comes back to this machine
+        let (listener, port) = sso::listen().map_err(LoginError::Other)?;
+        let start = api::sso_start(&server, org, &email, port);
+        browse(&start.url).map_err(|e| LoginError::Other(format!("sso:{e}")))?;
+        let code = sso::wait_for_code(&listener, &start.state).map_err(LoginError::Other)?;
+        api::login_sso(&server, &start, &code, &device_id, second)
+    };
     let attempt = match &second {
-        Some((p, code)) => api::login(&server, &email, &hash, &acct.device_id, Some((*p, code.as_str()))),
+        Some((p, code)) => login(Some((*p, code.as_str()))),
         None => match acct.remember.clone() {
-            Some(token) => match api::login(&server, &email, &hash, &acct.device_id, Some((5, token.as_str()))) {
+            Some(token) => match login(Some((5, token.as_str()))) {
                 Err(LoginError::TwoFactor(p)) => {
                     acct.remember = None;
                     Err(LoginError::TwoFactor(p))
                 }
                 other => other,
             },
-            None => api::login(&server, &email, &hash, &acct.device_id, None),
+            None => login(None),
         },
     };
     let (session, sync, user, private) = match attempt {
@@ -375,6 +405,8 @@ pub fn open(path: &str, password: &str, second: Option<(u8, String)>) -> Result<
             let private = private_key(field(profile, "privateKey").as_str(), &user);
             (None, sync, user, private)
         }
+        // own codes (sso_cancel, sso_required:…, no_user_key) stay readable for the UI
+        Err(LoginError::Other(e)) if e.starts_with("sso") || e == "no_user_key" => return Err(e),
         Err(LoginError::Other(e)) => return Err(format!("bw:{e}")),
     };
     let orgs = org_keys(field(&sync, "profile"), private.as_ref());
@@ -635,6 +667,63 @@ mod tests {
         assert!(snap.ciphers.values().any(|c| c.2), "trashed item marked");
     }
 
+    /// Password login (no SSO, no browser).
+    fn open(path: &str, password: &str, second: Option<(u8, String)>) -> Result<(Database, Remote), String> {
+        super::open(path, password, second, None, &|_| Err("no browser".into()))
+    }
+
+    /// Plays the browser: goes to the authorize address and comes back with a code.
+    fn fake_browser(url: &str) -> Result<(), String> {
+        let u = url::Url::parse(url).map_err(|e| e.to_string())?;
+        let q: HashMap<String, String> = u.query_pairs().into_owned().collect();
+        assert_eq!(q["code_challenge_method"], "S256");
+        assert_eq!(q["domain_hint"], "acme");
+        let mut back = url::Url::parse(&q["redirect_uri"]).unwrap();
+        back.query_pairs_mut().append_pair("code", "sso-code").append_pair("state", &q["state"]);
+        let port = back.port().unwrap();
+        let target = format!("{}?{}", back.path(), back.query().unwrap());
+        std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+            write!(s, "GET {target} HTTP/1.1\r\nHost: localhost\r\n\r\n").unwrap();
+            let _ = s.read_to_string(&mut String::new());
+        });
+        Ok(())
+    }
+
+    #[test]
+    fn sso_login_against_mock_server() {
+        let password = "correct horse";
+        let email = format!("t{}@example.com", Uuid::new_v4().simple());
+        let kdf = Kdf { kind: 0, iterations: 5000, memory: 0, parallelism: 0 };
+        let master = crypto::master_key(password, &email, &kdf).unwrap();
+        let mut ub = [0u8; 64];
+        OsRng.fill_bytes(&mut ub);
+        let user = SymKey::from_bytes(&ub).unwrap();
+        let protected = encrypt(&ub, &crypto::stretch(&master));
+        let e = |s: &str| json!(encrypt(s.as_bytes(), &user));
+        let m = mock(
+            user.clone(),
+            protected,
+            vec![json!({ "id": "cccccccc-0000-0000-0000-000000000003", "type": 2, "name": e("Note"), "secureNote": { "type": 0 } })],
+            json!({}),
+        );
+        let path = format!("bw:{}#{}", m.url, email);
+        let (db, remote) = super::open(&path, password, None, Some("acme".into()), &fake_browser).unwrap();
+        assert!(remote.online());
+        assert_eq!(db.iter_all_entries().count(), 1);
+        // the next unlock remembers SSO; the master password still has to fit
+        assert_eq!(super::open(&path, "wrong", None, None, &fake_browser).err().as_deref(), Some("wrong_key"));
+        assert!(super::open(&path, password, None, None, &fake_browser).is_ok());
+        forget(&path);
+
+        // an SSO-only server refuses the password: the UI gets a code to offer SSO
+        let only = format!("bw:{}#ssoonly@example.com", m.url);
+        assert!(open(&only, password, None).err().unwrap().starts_with("sso_required:"));
+        forget(&only);
+    }
+
     /// Minimal Vaultwarden stand-in on 127.0.0.1: prelogin, token with 2FA, sync, cipher writes.
     struct Mock {
         url: String,
@@ -676,6 +765,20 @@ mod tests {
                 log2.lock().unwrap().push((method.clone(), path.clone(), body.clone()));
                 let (code, reply) = match (method.as_str(), path.split('?').next().unwrap()) {
                     ("POST", "/identity/accounts/prelogin") => (200, json!({ "kdf": 0, "kdfIterations": 5000 })),
+                    // SSO: the code the "identity provider" handed out, with a PKCE verifier
+                    ("POST", "/identity/connect/token") if body.contains("grant_type=authorization_code") => {
+                        if body.contains("code=sso-code") && body.contains("code_verifier=") {
+                            (
+                                200,
+                                json!({ "access_token": "acc", "refresh_token": "ref", "Key": protected_user_key, "PrivateKey": org["privateKey"] }),
+                            )
+                        } else {
+                            (400, json!({ "error": "invalid_grant", "error_description": "bad code" }))
+                        }
+                    }
+                    ("POST", "/identity/connect/token") if body.contains("username=ssoonly") => {
+                        (400, json!({ "error": "invalid_grant", "error_description": "SSO sign-in is required" }))
+                    }
                     ("POST", "/identity/connect/token")
                         if body.contains("twoFactorToken=123456") || body.contains("twoFactorToken=remember-me") =>
                     {

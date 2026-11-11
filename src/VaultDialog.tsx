@@ -62,6 +62,16 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
   const [tfProvider, setTfProvider] = useState(0);
   const [tfCode, setTfCode] = useState('');
   const [tfNote, setTfNote] = useState('');
+  // SSO: sign in at the identity provider in the browser, the master password still decrypts
+  const [sso, setSso] = useState(false);
+  const [ssoOrg, setSsoOrg] = useState('');
+  // a Vaultwarden login that takes a while is probably waiting for the browser (SSO)
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!busy) return;
+    const id = setTimeout(() => setSlow(true), 1500);
+    return () => { clearTimeout(id); setSlow(false); };
+  }, [busy]);
 
   const meta = (p: string, n: string): Known => known.find(k => k.path === p)
     ?? (isRemote(p) ? { path: p, name: n, color: '--v-sea', icon: 'cloud' }
@@ -87,6 +97,10 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
     if (String(e).includes('kdf_insecure')) return t.errKdfInsecure;
     if (String(e).includes('kdf_weakened')) return t.errKdfWeakened;
     if (code === 'offline_no_cache') { const why = String(e).split('offline_no_cache:')[1]?.trim(); return why ? `${t.vwOffline}: ${why}` : t.vwOffline; }
+    if (code === 'sso_required') return t.vwSsoRequired;
+    if (code === 'sso_timeout') return t.vwSsoTimeout;
+    if (code === 'no_user_key') return t.vwSsoNoKey;
+    if (code === 'sso') return `${t.vwSsoFailed}: ${String(e).replace(/^(Error: )?sso:/, '')}`;
     if (code === 'bw' || code === 'offline') return String(e).replace(/^(Error: )?(bw|offline):/, '');
     return code === 'hello_cancel' ? t.helloFailed : code === 'wrong_key' ? t.wrongKey : code === 'empty_key' ? t.masterPassword : `${t.fileError} (${String(e)})`;
   };
@@ -103,7 +117,8 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
     try {
       const second: [number, string] | undefined = twoFactor && tfCode.trim() ? [tfProvider, tfCode.trim()] : undefined;
       const data = mode !== 'create'
-        ? await backend.open(target, password, isRemote(target) ? undefined : keyfile || undefined, second, isRemote(target) ? undefined : yubikey || undefined)
+        ? await backend.open(target, password, isRemote(target) ? undefined : keyfile || undefined, second, isRemote(target) ? undefined : yubikey || undefined,
+          mode === 'server' && sso ? ssoOrg.trim() : undefined)
         : await backend.create(target, name.trim() || fileName(target).replace(/\.kdbx$/, ''), password, keyfile || undefined, yubikey || undefined);
       setPassword(''); setConfirm(''); setTwoFactor(null); setTfCode(''); setTfNote('');
       onOpened(data, { ...meta(target, data.name), name: data.name, keyfile: keyfile || undefined, yubikey: yubikey || undefined });
@@ -122,6 +137,8 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
         if (mode !== 'server') setPath(target);
         return;
       }
+      if (errorCode(err) === 'sso_cancel') return; // the user stopped it
+      if (errorCode(err) === 'sso_required') setSso(true); // the server only allows SSO
       setError(explain(err));
       // typo: select the password so retyping replaces it
       if (errorCode(err) === 'wrong_key') requestAnimationFrame(() => form.querySelector<HTMLInputElement>('.textfield.bad input')?.select());
@@ -177,6 +194,22 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
           <label className="textfield"><Icon n="mail" />
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder={t.vwEmail} aria-label={t.vwEmail} autoComplete="username" />
           </label>
+          <div className="seg">
+            <button type="button" className={'chip' + (sso ? '' : ' on')} aria-pressed={!sso} onClick={() => setSso(false)}>
+              <Icon n="key" />{t.vwPasswordLogin}
+            </button>
+            <button type="button" className={'chip' + (sso ? ' on' : '')} aria-pressed={sso} onClick={() => setSso(true)}>
+              <Icon n="badge" />{t.vwSso}
+            </button>
+          </div>
+          {sso && (
+            <>
+              <label className="textfield"><Icon n="corporate_fare" />
+                <input value={ssoOrg} onChange={e => setSsoOrg(e.target.value)} placeholder={t.vwSsoOrg} aria-label={t.vwSsoOrg} spellCheck={false} />
+              </label>
+              <p className="form-note"><Icon n="info" />{t.vwSsoHint}</p>
+            </>
+          )}
           {pwField(password, setPassword, t.masterPassword)}
         </>
       )}
@@ -257,6 +290,12 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
         </div>
       )}
 
+      {busy && slow && (mode === 'server' || isRemote(path)) && (
+        <div className="form-note" role="status">
+          <Icon n="open_in_browser" />{t.vwSsoWaiting}
+          <button type="button" className="btn text" onClick={() => backend.bwSsoCancel()}>{t.cancel}</button>
+        </div>
+      )}
       {error && <p className="form-error" role="alert"><Icon n="error" />{error}</p>}
       {!backend.desktop && <span className="label">{t.demoMode} · {t.masterHint}</span>}
 

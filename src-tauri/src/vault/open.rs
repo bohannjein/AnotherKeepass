@@ -76,9 +76,10 @@ pub async fn vault_open(
     yubikey: Option<String>,
     two_factor_provider: Option<u8>,
     two_factor_code: Option<String>,
+    sso: Option<String>,
 ) -> R<VaultDto> {
     if crate::bitwarden::is_remote(&path) {
-        return open_remote(state, path, password.unwrap_or_default(), two_factor_provider.zip(two_factor_code)).await;
+        return open_remote(app, state, path, password.unwrap_or_default(), two_factor_provider.zip(two_factor_code), sso).await;
     }
     // the YubiKey answers over USB and may wait for a touch: not on the async runtime
     let key = tauri::async_runtime::spawn_blocking(move || make_key(password.as_deref(), keyfile.as_deref(), yubikey.as_deref()))
@@ -89,16 +90,22 @@ pub async fn vault_open(
 
 /// Vaultwarden account: log in (network) and decrypt into an in-memory vault.
 pub(super) async fn open_remote(
+    app: tauri::AppHandle,
     state: tauri::State<'_, Vaults>,
     path: String,
     password: String,
     second: Option<(u8, String)>,
+    sso: Option<String>,
 ) -> R<VaultDto> {
     if password.is_empty() {
         return Err("empty_key".into());
     }
     let p = path.clone();
-    let (db, remote) = tauri::async_runtime::spawn_blocking(move || crate::bitwarden::open(&p, &password, second))
+    let browse = move |url: &str| {
+        use tauri_plugin_opener::OpenerExt;
+        app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+    };
+    let (db, remote) = tauri::async_runtime::spawn_blocking(move || crate::bitwarden::open(&p, &password, second, sso, &browse))
         .await
         .map_err(|e| format!("open:{e}"))??;
     let v = OpenVault { path: PathBuf::from(&path), db, key: DatabaseKey::new().with_password("remote"), remote: Some(Box::new(remote)) };
@@ -129,6 +136,12 @@ pub async fn vault_sync(state: tauri::State<'_, Vaults>, vault: String) -> R<Vau
 #[tauri::command]
 pub async fn bw_send_email(path: String, password: String) -> R<()> {
     tauri::async_runtime::spawn_blocking(move || crate::bitwarden::send_email_code(&path, &password)).await.map_err(|e| e.to_string())?
+}
+
+/// Vaultwarden SSO: stop waiting for the browser.
+#[tauri::command]
+pub fn bw_sso_cancel() {
+    crate::bitwarden::sso::cancel();
 }
 
 /// Vaultwarden: close and forget this device's token and offline copy.

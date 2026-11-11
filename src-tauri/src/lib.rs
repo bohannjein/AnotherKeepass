@@ -60,6 +60,7 @@ pub fn run() {
             vault::vault_sync,
             vault::sync_link,
             vault::bw_send_email,
+            vault::bw_sso_cancel,
             vault::bw_sign_out,
             quick::vaults_listing,
             quick::quick_hide,

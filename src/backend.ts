@@ -84,11 +84,14 @@ export interface Backend {
   create(path: string, name: string, password: string, keyfile?: string, yubikey?: string): Promise<VaultData>;
   /** twoFactor: [provider, code] for Vaultwarden accounts ("bw:<server>#<email>") */
   /** yubikey: challenge-response slot "1" or "2" (KeePassXC compatible) */
-  open(path: string, password: string, keyfile?: string, twoFactor?: [number, string], yubikey?: string): Promise<VaultData>;
+  /** sso: Vaultwarden sign-in through SSO with this organization identifier (remembered after) */
+  open(path: string, password: string, keyfile?: string, twoFactor?: [number, string], yubikey?: string, sso?: string): Promise<VaultData>;
   vaultSync(id: string): Promise<VaultData>;
   /** link a .kdbx with an open account (null = unlink); syncs right away */
   syncLink(vault: string, remote: string | null): Promise<VaultData>;
   bwSendEmail(path: string, password: string): Promise<void>;
+  /** stop waiting for the SSO sign-in in the browser */
+  bwSsoCancel(): Promise<void>;
   bwSignOut(path: string): Promise<void>;
   /** quick unlock: key kept since the last lock + Windows Hello available */
   quickAvailable(path: string): Promise<boolean>;
@@ -183,10 +186,11 @@ export interface Backend {
 const desktop: Backend = {
   desktop: true,
   create: (path, name, password, keyfile, yubikey) => invoke('vault_create', { path, name, password, keyfile, yubikey }),
-  open: (path, password, keyfile, twoFactor, yubikey) => invoke('vault_open', { path, password, keyfile, yubikey, twoFactorProvider: twoFactor?.[0], twoFactorCode: twoFactor?.[1] }),
+  open: (path, password, keyfile, twoFactor, yubikey, sso) => invoke('vault_open', { path, password, keyfile, yubikey, twoFactorProvider: twoFactor?.[0], twoFactorCode: twoFactor?.[1], sso }),
   vaultSync: vault => invoke('vault_sync', { vault }),
   syncLink: (vault, remote) => invoke('sync_link', { vault, remote }),
   bwSendEmail: (path, password) => invoke('bw_send_email', { path, password }),
+  bwSsoCancel: () => invoke('bw_sso_cancel'),
   bwSignOut: path => invoke('bw_sign_out', { path }),
   quickAvailable: path => invoke('quick_unlock_available', { path }),
   quickUnlock: (path, message) => invoke('vault_quick_unlock', { path, message }),
@@ -305,6 +309,7 @@ const demo: Backend = {
   vaultSync: async id => out(get(id)),
   syncLink: async id => out(get(id)),
   bwSendEmail: async () => {},
+  bwSsoCancel: async () => {},
   bwSignOut: async () => {},
   quickAvailable: async () => false,
   quickUnlock: async () => { throw new Error('no_quick'); },

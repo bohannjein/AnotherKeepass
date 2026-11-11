@@ -84,17 +84,73 @@ pub struct TokenResponse {
 
 /// Password grant. `second`: (provider, code); provider 5 = remember token.
 pub fn login(server: &str, email: &str, hash: &str, device_id: &str, second: Option<(u8, &str)>) -> Result<TokenResponse, LoginError> {
+    let form = vec![("grant_type", "password"), ("username", email.trim()), ("password", hash)];
+    token(server, form, device_id, second)
+}
+
+/// SSO (OpenID Connect through the server): the code the browser brought back, with the PKCE
+/// verifier of `sso_start`. The master password is still needed afterwards to decrypt.
+pub fn login_sso(server: &str, sso: &Sso, code: &str, device_id: &str, second: Option<(u8, &str)>) -> Result<TokenResponse, LoginError> {
+    let form = vec![
+        ("grant_type", "authorization_code"),
+        ("code", code),
+        ("code_verifier", sso.verifier.as_str()),
+        ("redirect_uri", sso.redirect.as_str()),
+    ];
+    token(server, form, device_id, second)
+}
+
+/// One SSO attempt: where the browser goes, and what has to come back.
+pub struct Sso {
+    pub url: String,
+    pub redirect: String,
+    pub state: String,
+    verifier: String,
+}
+
+fn random_b64(n: usize) -> String {
+    use base64::Engine;
+    use rand_core::RngCore;
+    let mut b = vec![0u8; n];
+    rand_core::OsRng.fill_bytes(&mut b);
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b)
+}
+
+/// PKCE (S256) and the authorize address. `org`: organization identifier (may be empty),
+/// `port`: the loopback port waiting for the answer.
+pub fn sso_start(server: &str, org: &str, email: &str, port: u16) -> Sso {
+    use base64::Engine;
+    use sha2::{Digest, Sha256};
+    let verifier = random_b64(48);
+    let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+    // like the Bitwarden clients: random part, then the organization
+    let state = format!("{}_identifier={}", random_b64(24), org.trim());
+    let redirect = format!("http://localhost:{port}");
+    let mut u = url::Url::parse(&format!("{}/identity/connect/authorize", base(server))).expect("checked server url");
+    u.query_pairs_mut()
+        .append_pair("client_id", CLIENT)
+        .append_pair("redirect_uri", &redirect)
+        .append_pair("response_type", "code")
+        .append_pair("scope", "api offline_access")
+        .append_pair("state", &state)
+        .append_pair("code_challenge", &challenge)
+        .append_pair("code_challenge_method", "S256")
+        .append_pair("response_mode", "query")
+        .append_pair("domain_hint", org.trim())
+        .append_pair("login_hint", email.trim());
+    Sso { url: u.to_string(), redirect, state, verifier }
+}
+
+fn token(server: &str, grant: Vec<(&str, &str)>, device_id: &str, second: Option<(u8, &str)>) -> Result<TokenResponse, LoginError> {
     let provider = second.map(|(p, _)| p.to_string());
-    let mut form: Vec<(&str, &str)> = vec![
-        ("grant_type", "password"),
-        ("username", email.trim()),
-        ("password", hash),
+    let mut form: Vec<(&str, &str)> = grant;
+    form.extend([
         ("scope", "api offline_access"),
         ("client_id", CLIENT),
         ("deviceType", DEVICE_TYPE),
         ("deviceIdentifier", device_id),
         ("deviceName", "AnotherKeepass"),
-    ];
+    ]);
     if let (Some((_, code)), Some(p)) = (second, provider.as_deref()) {
         form.extend([("twoFactorToken", code), ("twoFactorProvider", p), ("twoFactorRemember", "1")]);
     }
@@ -113,7 +169,15 @@ pub fn login(server: &str, email: &str, hash: &str, device_id: &str, second: Opt
                 return Err(LoginError::TwoFactor(ids));
             }
             let msg = field(&v, "error_description").as_str().or(field(&v, "message").as_str()).unwrap_or("login failed").to_string();
-            return Err(if msg.to_lowercase().contains("password") { LoginError::WrongPassword } else { LoginError::Other(msg) });
+            let low = msg.to_lowercase();
+            // SSO_ONLY servers refuse the password grant: the UI offers SSO then
+            return Err(if low.contains("sso") {
+                LoginError::Other(format!("sso_required:{msg}"))
+            } else if low.contains("password") {
+                LoginError::WrongPassword
+            } else {
+                LoginError::Other(msg)
+            });
         }
         Err(e) => return Err(transport(e)),
     };
@@ -124,7 +188,8 @@ pub fn login(server: &str, email: &str, hash: &str, device_id: &str, second: Opt
             access: s("access_token").unwrap_or_default(),
             refresh: s("refresh_token").unwrap_or_default(),
         },
-        key: s("Key").ok_or_else(|| LoginError::Other("no key in token response".into()))?,
+        // an SSO user who never set a master password has no key yet
+        key: s("Key").ok_or_else(|| LoginError::Other("no_user_key".into()))?,
         private_key: s("PrivateKey"),
         remember: s("TwoFactorToken"),
     })
