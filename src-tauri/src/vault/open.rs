@@ -212,8 +212,14 @@ pub fn paths_exist(paths: Vec<String>) -> Vec<bool> {
 #[tauri::command]
 pub fn vault_close(state: tauri::State<'_, Vaults>, id: String) -> R<()> {
     let mut map = state.0.lock().map_err(|_| "lock")?;
+    if let Some(v) = map.get_mut(&id)
+        && let Err(e) = writer::flush(&v.path)
+    {
+        // the last change is not on disk: keep the vault open (and try again) instead of losing it
+        let _ = write_db_later(v);
+        return Err(e);
+    }
     if let Some(v) = map.get_mut(&id) {
-        writer::flush(&v.path);
         save_used(v);
     }
     map.remove(&id); // drop zeroizes key + protected values
@@ -252,7 +258,11 @@ pub fn lock_vaults(map: &mut HashMap<String, OpenVault>) {
         }
     }
     for (id, v) in map.iter_mut() {
-        writer::flush(&v.path); // a change still being saved must reach the file before the key goes
+        // A change still being saved must reach the file before the key goes. If it cannot, locking
+        // still wins (a copy was written next to the file and the UI was told), a lock must not fail.
+        if let Err(e) = writer::flush(&v.path) {
+            log::warn!("locking with an unsaved change: {e}");
+        }
         save_used(v);
         crate::ssh::on_lock(id);
     }

@@ -64,7 +64,7 @@ fn roundtrip_create_edit_trash_reopen() {
     save_for_test(&state, &p, edit);
 
     // reopen from disk with the key (after the background save)
-    writer::flush(&path);
+    writer::flush(&path).unwrap();
     let mut f = fs::File::open(&path).unwrap();
     let db = Database::open(&mut f, key.clone()).unwrap();
     let e = db.entry(EntryId::from(Uuid::parse_str(&saved).unwrap())).unwrap();
@@ -327,8 +327,22 @@ fn failed_change_is_rolled_back() {
     assert_eq!(res.err().as_deref(), Some("boom"));
     let after = with_vault(&state, &p, |v| Ok(v.db.iter_all_entries().count())).unwrap();
     assert_eq!(before, after);
-    writer::flush(Path::new(&p));
+    writer::flush(Path::new(&p)).unwrap();
     let _ = fs::remove_file(&p);
+}
+
+/// A save that cannot be written is reported by `flush`, not silently dropped.
+#[test]
+fn failed_background_save_is_reported() {
+    let path = std::env::temp_dir().join(format!("akp-missing-{}", Uuid::new_v4())).join("v.kdbx");
+    let mut v = OpenVault::new_for_test(path.clone(), Database::with_config(new_config()));
+    write_db_later(&mut v).unwrap();
+    assert!(writer::flush(&path).is_err());
+    // a newer state that can be written clears the failure
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    write_db_later(&mut v).unwrap();
+    assert!(writer::flush(&path).is_ok());
+    let _ = fs::remove_dir_all(path.parent().unwrap());
 }
 
 /// Someone else (cloud sync, KeePassXC) changes the file; our next save must keep their entry.
@@ -338,7 +352,7 @@ fn save_merges_external_change() {
     let (p, root) = open_temp(&state, "ext");
     save_for_test(&state, &p, login(&root, "Mine"));
     let path = PathBuf::from(&p);
-    writer::flush(&path);
+    writer::flush(&path).unwrap();
 
     // external edit: read the file, add an entry, write it back without telling us
     let key = make_key(Some("pw"), None, None).unwrap();
@@ -350,7 +364,7 @@ fn save_merges_external_change() {
     fs::write(&path, buf).unwrap();
 
     save_for_test(&state, &p, login(&root, "Later"));
-    writer::flush(&path);
+    writer::flush(&path).unwrap();
     let disk = Database::open(&mut fs::File::open(&path).unwrap(), key).unwrap();
     let titles: Vec<_> = disk.iter_all_entries().filter_map(|e| e.get_title().map(String::from)).collect();
     for t in ["Mine", "Theirs", "Later"] {
@@ -396,7 +410,7 @@ fn background_save_coalesces_and_flushes() {
         v.db.meta.database_name = Some(name.into());
         write_db_later(&mut v).unwrap();
     }
-    writer::flush(&path);
+    writer::flush(&path).unwrap();
     assert!(!writer::busy(&path));
     let reopened = Database::open(&mut fs::File::open(&path).unwrap(), key).unwrap();
     assert_eq!(reopened.meta.database_name.as_deref(), Some("E"), "the newest state is on disk");
@@ -405,7 +419,7 @@ fn background_save_coalesces_and_flushes() {
     write_db_later(&mut v).unwrap();
     v.db.meta.database_name = Some("G".into());
     write_db(&mut v).unwrap();
-    writer::flush(&path);
+    writer::flush(&path).unwrap();
     let reopened = Database::open(&mut fs::File::open(&path).unwrap(), make_key(Some("pw"), None, None).unwrap()).unwrap();
     assert_eq!(reopened.meta.database_name.as_deref(), Some("G"));
     let _ = fs::remove_file(path);

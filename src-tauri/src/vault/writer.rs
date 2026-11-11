@@ -27,6 +27,8 @@ struct Queue {
     pending: HashMap<PathBuf, Job>,
     /// files a thread is writing right now
     busy: HashSet<PathBuf>,
+    /// files whose newest save failed for good (reason): `flush` reports it
+    failed: HashMap<PathBuf, String>,
 }
 
 static QUEUE: Mutex<Option<Queue>> = Mutex::new(None);
@@ -46,6 +48,7 @@ fn with<T>(f: impl FnOnce(&mut Queue) -> T) -> T {
 /// Queue a snapshot of the vault for writing; returns at once.
 pub fn queue(path: &Path, db: &Database, key: &DatabaseKey) {
     let start = with(|q| {
+        q.failed.remove(path); // a newer state is on its way
         q.pending.insert(path.to_path_buf(), Job { db: db.clone(), key: key.clone() });
         q.busy.insert(path.to_path_buf())
     });
@@ -103,6 +106,12 @@ fn run(path: PathBuf) {
             Ok(()) => log::info!("saved in the background ({} ms)", t.elapsed().as_millis()),
             Err(e) => {
                 log::error!("background save failed: {e}");
+                // only while nothing newer is queued; the newer state decides then
+                with(|q| {
+                    if !q.pending.contains_key(&path) {
+                        q.failed.insert(path.clone(), e.clone());
+                    }
+                });
                 if let Some(app) = APP.get() {
                     let _ = app.emit("akp-save-failed", e);
                 }
@@ -116,11 +125,15 @@ pub fn busy(path: &Path) -> bool {
     with(|q| q.busy.contains(path) || q.pending.contains_key(path))
 }
 
-/// Wait until this file is written.
-pub fn flush(path: &Path) {
+/// Wait until this file is written. Err: the newest save failed (a copy may be next to the file).
+pub fn flush(path: &Path) -> R<()> {
     let mut q = QUEUE.lock().unwrap_or_else(|e| e.into_inner());
     while q.as_ref().is_some_and(|q| q.busy.contains(path) || q.pending.contains_key(path)) {
         q = DONE.wait(q).unwrap_or_else(|e| e.into_inner());
+    }
+    match q.as_ref().and_then(|q| q.failed.get(path)) {
+        Some(e) => Err(e.clone()),
+        None => Ok(()),
     }
 }
 
@@ -135,6 +148,7 @@ pub fn flush_all() {
 /// Synchronous writers (`write_db`) wait for a queued older state first, so it can't land
 /// on top of theirs.
 pub(super) fn before_sync_write(path: &Path) -> R<()> {
-    flush(path);
+    let _ = flush(path); // an older failed save is replaced by the write that follows
+    with(|q| q.failed.remove(path));
     Ok(())
 }

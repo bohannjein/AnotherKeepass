@@ -86,7 +86,17 @@ fn save_account(path: &str, a: &Account) {
         let _ = f.parent().map(fs::create_dir_all);
         // the remember token and browser ids are secrets: only this Windows user can read the file
         let plain = serde_json::to_vec(a).unwrap_or_default();
-        let data = crate::hardening::protect(&plain).unwrap_or(plain);
+        let data = match crate::hardening::protect(&plain) {
+            Some(protected) => protected,
+            None => {
+                // No system protection here (Linux): the "remember this device" token would sit in
+                // the file in the clear, and whoever reads it skips the second factor. Leave it out;
+                // the next login asks for the code again.
+                let mut v: Value = serde_json::from_slice(&plain).unwrap_or(Value::Null);
+                v["remember"] = Value::Null;
+                serde_json::to_vec(&v).unwrap_or(plain)
+            }
+        };
         if let Err(e) = write_private(&f, &data) {
             log::warn!("vaultwarden cache: {e}");
         }
