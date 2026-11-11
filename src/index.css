@@ -87,6 +87,11 @@ body {
   transition: background .3s var(--ease), color .3s var(--ease);
 }
 
+/* An app, not a web page: dragging or Ctrl+A must not highlight the whole interface. Text can be
+   selected where people type (fields), and where error text or a text attachment is meant to be copied. */
+body { user-select: none; -webkit-user-select: none; }
+input, textarea, [contenteditable='true'], .form-error, pre { user-select: text; -webkit-user-select: text; }
+
 button, input, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; border: 0; background: none; }
 :focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
@@ -195,6 +200,8 @@ button { cursor: pointer; border: 0; background: none; }
   transition: background .2s var(--ease), border-radius .35s var(--spring);
 }
 .nav-item:hover { background: var(--surface-high); }
+/* rows sit in scrolling lists that clip anything outside them: the focus ring goes inside */
+.nav-item:focus-visible, .item:focus-visible { outline-offset: -3px; }
 .nav-item.active { background: var(--secondary-container); color: var(--on-secondary-container); font-weight: 700; }
 .nav-item .vi {
   width: 36px; height: 36px; display: grid; place-items: center;
@@ -400,7 +407,9 @@ button { cursor: pointer; border: 0; background: none; }
 /* only the trailing check mark is pushed to the right; icons inside tiles stay centred */
 .choice > .ms:last-child { margin-left: auto; }
 .theme-tile { flex-direction: column; align-items: stretch; padding: 12px; gap: 10px; }
-.preview { height: 90px; border-radius: var(--r-s); display: grid; grid-template-columns: 30% 1fr; gap: 6px; padding: 8px; }
+.preview { height: 90px; border-radius: var(--r-s); display: grid; grid-template-columns: 30% 1fr; gap: 6px; padding: 8px; transition: border-radius .4s var(--spring); }
+/* selected tile is rounder (28px, 12px padding): the preview follows with outer minus padding */
+.theme-tile.on .preview { border-radius: 16px; }
 .preview i { border-radius: 8px; display: block; }
 .preview.dark { background: #17130f; } .preview.dark i { background: #2f2922; } .preview.dark i:last-child { background: #723610; }
 .preview.light { background: #fff8f3; border: 1px solid #e9dfd6; } .preview.light i { background: #efe5dc; } .preview.light i:last-child { background: #ffdbc8; }
@@ -1352,6 +1361,10 @@ option::checkmark { display: none; }
 .mini-list b:nth-child(2) { width: 75%; } .mini-list b:nth-child(3) { width: 55%; }
 .mini-btn { position: absolute; right: 9px; bottom: 9px; width: 20px; height: 9px; padding: 0 !important; border-radius: 5px !important; background: var(--ma); }
 .mini-split { display: grid; grid-template-columns: 1fr 1fr; border-radius: var(--r-s); overflow: hidden; }
+/* the preview sits 8px inside its card: its corners are the card's minus that gap (16px card → 10px,
+   selected 28px card → 18px), and follow the card's shape change */
+.look-pick > .mini-app, .look-pick > .mini-split { border-radius: 10px; transition: border-radius .35s var(--spring); }
+.look-pick.on > .mini-app, .look-pick.on > .mini-split { border-radius: 18px; }
 .mini-split .mini-app { border-radius: 0; grid-template-columns: 1fr; }
 .mini-split .mini-app .mini-side { display: none; }
 .own-colors { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 14px; }
