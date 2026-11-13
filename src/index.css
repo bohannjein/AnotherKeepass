@@ -564,8 +564,6 @@ textarea.val.edit { resize: vertical; display: block; }
 .title-edit:hover, .title-edit:focus { outline: none; background: var(--surface-c); }
 .hero > div { min-width: 0; flex: 1; }
 .badge.select { padding-right: 4px; cursor: pointer; }
-.badge.select select { padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
-.badge.select select:focus { outline: none; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .new-menu .avatar.note, .new-menu .avatar.other { background: var(--surface-c); }
 .menu hr { height: 0; margin: 6px 16px; }
@@ -632,16 +630,15 @@ textarea.val.edit { resize: vertical; display: block; }
 }
 .pill .ms { font-size: 14px; }
 .pill.desk { background: var(--tertiary-container); color: var(--on-tertiary-container); }
-.set-select, .set-input, .set-number input {
+.set-input, .set-number input {
   height: 44px; padding: 0 14px;
   border: 1px solid var(--outline); border-radius: var(--r-s);
   background: var(--surface-low); color: var(--on-surface);
   font-size: 14px;
   transition: border-color .2s, border-radius .35s var(--spring);
 }
-.set-select { min-width: 220px; max-width: 320px; cursor: pointer; }
-.set-select:focus, .set-input:focus, .set-number input:focus { outline: none; border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); border-radius: var(--r-m); }
-.set-select:disabled, .set-input:disabled, .set-number input:disabled, .switch:disabled { cursor: not-allowed; }
+.set-input:focus, .set-number input:focus { outline: none; border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); border-radius: var(--r-m); }
+.set-input:disabled, .set-number input:disabled, .switch:disabled { cursor: not-allowed; }
 .set-number { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--on-surface-var); }
 .set-number input { width: 110px; text-align: right; font-variant-numeric: tabular-nums; }
 .set-path { display: inline-flex; align-items: center; gap: 4px; }
@@ -715,7 +712,6 @@ textarea.val.edit { resize: vertical; display: block; }
 }
 .set-row { flex-wrap: wrap; row-gap: 10px; }
 .set-text { flex: 1 1 240px; }
-.set-select { min-width: min(220px, 100%); }
 .set-input { width: min(280px, 100%); }
 .app.rail .nav-item { width: 56px; margin: 0 auto 2px; }
 .app.rail .nav { overflow-x: hidden; scrollbar-width: none; }
@@ -760,7 +756,7 @@ textarea.val.edit { resize: vertical; display: block; }
 .gen-opts { display: grid; gap: 2px; background: var(--surface-c); border-radius: var(--r-l); padding: 6px 16px; }
 .gen-opts .opt { min-height: 48px; gap: 12px; }
 .gen-opts .opt + .opt { border-top: 1px solid var(--outline-var); }
-.gen-opts .set-select { min-width: 0; height: 40px; }
+.gen-opts .select-field { min-width: 0; height: 40px; }
 .sep-chips { display: flex; gap: 6px; }
 .sep-chips .chip { min-width: 36px; justify-content: center; font-family: ui-monospace, monospace; font-size: 15px; }
 .gen-history-toggle { display: flex; justify-content: space-between; align-items: center; padding: 12px 4px; font-weight: 600; border-top: 1px solid var(--outline-var); }
@@ -1174,12 +1170,12 @@ input, textarea { caret-color: var(--primary); }
 .vault-dialog .btn.wide { width: 100%; height: 52px; justify-content: flex-start; padding: 0 var(--inset); gap: 12px; border-radius: var(--r-m); }
 .vault-dialog .btn.wide > .ms, .vault-dialog .keyfile-row .btn > .ms { width: var(--slot); text-align: center; flex-shrink: 0; }
 .vault-dialog .keyfile-row .btn { padding: 0 var(--inset); gap: 12px; }
+/* WebView2 adds its own show-password button; ours is the only one */
+input::-ms-reveal, input::-ms-clear { display: none; }
+
 /* dropdown in a text field */
 .mode-field { cursor: pointer; }
-.mode-field select { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
-.mode-field select:focus { outline: none; }
-.mode-field select::picker-icon { display: none; }
-.mode-field > .ms:last-child { pointer-events: none; color: var(--on-surface-var); margin-right: 6px; }
+.mode-field .select { flex: 1; align-self: stretch; font-size: 16px; font-weight: 600; justify-content: space-between; padding-right: 6px; }
 
 /* ---------- alignment grid (measured) ----------
    Drawer: every leading visual (logo, FAB icon, vault tiles, footer icons) is centred on x = 40.
@@ -1196,21 +1192,39 @@ input, textarea { caret-color: var(--primary); }
 .settings-title { padding-left: 9px; }
 .settings-search { margin: 0 0 12px; padding-left: 12px; }
 
-/* dropdown lists in the app's look instead of the grey Windows list (customizable select, Chromium 135+) */
-select, ::picker(select) { appearance: base-select; }
-select { display: inline-flex; align-items: center; gap: 8px; }
-select::picker-icon { color: var(--on-surface-var); transition: rotate .2s var(--ease); }
-select:open::picker-icon { rotate: 180deg; }
-::picker(select) {
-  margin-top: 4px; padding: 4px;
-  border: 1px solid var(--outline-var); border-radius: var(--r-s);
-  background: var(--surface-high); color: var(--on-surface);
-  box-shadow: 0 8px 24px rgb(0 0 0 / .35);
+/* ---------- dropdown (src/Select.tsx) ---------- */
+.select { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; max-width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.select:disabled { cursor: not-allowed; opacity: .6; }
+.select .select-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.select > .ms:last-child { color: var(--on-surface-var); flex-shrink: 0; }
+.select-field {
+  height: 44px; padding: 0 10px 0 14px; min-width: min(220px, 100%);
+  border: 1px solid var(--outline); border-radius: var(--r-s); background: var(--surface-low); font-size: 14px;
+  transition: border-color .2s, border-radius .35s var(--spring);
 }
-option { padding: 8px 12px; border-radius: var(--r-xs); font-size: 14px; font-weight: 400; background: none; cursor: pointer; }
-option:hover, option:focus-visible { background: var(--surface-highest); outline: none; }
-option:checked { background: var(--primary-container); color: var(--on-primary-container); font-weight: 600; }
-option::checkmark { display: none; }
+.select-field:hover:not(:disabled) { background: color-mix(in srgb, var(--on-surface) 5%, var(--surface-low)); }
+.select-field[aria-expanded='true'], .select-field:focus-visible { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); border-radius: var(--r-m); outline: none; }
+.select-pill {
+  padding: 8px 10px 8px 16px; border-radius: var(--r-full); background: var(--secondary-container); color: var(--on-secondary-container);
+  font-size: 14px; font-weight: 600; transition: border-radius .35s var(--spring), background .2s var(--ease);
+}
+.select-pill:hover:not(:disabled) { background: color-mix(in srgb, var(--on-secondary-container) 10%, var(--secondary-container)); }
+.select-pill[aria-expanded='true'] { border-radius: var(--r-s); }
+.select-pill > .ms:last-child { color: inherit; }
+.select-inline { padding: 0; border: 0; background: none; justify-content: flex-start; min-width: 0; }
+.select-inline:focus-visible { outline-offset: 3px; border-radius: var(--r-xs); }
+.select-scrim { position: fixed; inset: 0; z-index: 60; }
+.select-pop {
+  position: fixed; z-index: 61; overflow-y: auto; padding: 6px; display: grid; gap: 2px; text-align: left; color: var(--on-surface);
+  border-radius: var(--r-m); background: var(--surface-highest); box-shadow: 0 8px 24px rgb(0 0 0 / .35);
+  animation: pop .3s var(--spring); transform-origin: top left;
+}
+.select-opt { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--r-s); font-size: 14px; cursor: pointer; transition: background .15s var(--ease); }
+.select-opt > span:not(.ms) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.select-opt.indent { padding-left: 30px; }
+.select-opt.active { background: color-mix(in srgb, var(--on-surface) 8%, transparent); }
+.select-opt.on { background: var(--secondary-container); color: var(--on-secondary-container); font-weight: 600; border-radius: var(--r-full); }
+.select-opt .ms { font-size: 20px; }
 
 /* ================= color schemes =================
    Terracotta (default) keeps its hand-tuned tokens above. Every other scheme gives a few base
@@ -1281,15 +1295,34 @@ option::checkmark { display: none; }
 }
 :root[data-theme='oled'] .pane { box-shadow: inset 0 0 0 1px var(--outline-var); }
 
-/* unlock: YubiKey slot next to the key file */
+/* YubiKey: slot, check button, explanation (src/YubiKeyField.tsx) */
 .keyfile-row { flex-wrap: wrap; }
-.yubikey-pick { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: var(--on-surface-var); font-size: 13px; }
-.yubikey-pick select {
-  height: 36px; padding: 0 14px; border: 0; border-radius: var(--r-full); cursor: pointer;
-  background: var(--secondary-container); color: var(--on-secondary-container); font: inherit; font-weight: 600;
-  transition: border-radius .35s var(--spring);
-}
-.yubikey-pick select:focus-visible { outline: none; border-radius: var(--r-s); box-shadow: 0 0 0 2px var(--primary); }
+.yk-field { display: grid; gap: 8px; }
+.yk-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.yk-label { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; }
+.vault-dialog .yk-label .ms { width: var(--slot); text-align: center; flex-shrink: 0; color: var(--on-surface-var); }
+.vault-dialog .yk-row { padding: 0 8px 0 calc(var(--inset) - 1px); }
+.vault-dialog .yk-label { gap: 12px; }
+.vault-dialog .yk-hint, .vault-dialog .yk-test { padding-left: calc(var(--inset) - 1px + var(--slot) + 12px); }
+.vault-dialog .yk-help-toggle { margin-left: calc(var(--inset) - 1px + var(--slot) + 12px - 24px); }
+.yk-hint { margin: 0; font-size: 13px; line-height: 1.45; color: var(--on-surface-var); }
+.yk-test { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.yk-status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--on-surface-var); }
+.yk-status.ok { color: var(--primary); }
+.yk-status.error { color: var(--error); }
+.yk-status .ms { font-size: 20px; }
+.yk-help-toggle { display: inline-flex; align-items: center; gap: 6px; justify-self: start; padding: 4px 8px 4px 2px; border-radius: var(--r-s); font-size: 14px; font-weight: 600; color: var(--primary); }
+.yk-help-toggle .ms { transition: transform .35s var(--spring); }
+.yk-help-toggle[aria-expanded='true'] .ms { transform: rotate(90deg); }
+.yk-help { display: grid; gap: 12px; padding: 14px 16px; border-radius: var(--r-m); background: var(--surface-c); font-size: 13.5px; line-height: 1.5; animation: sub-open .35s var(--spring); transform-origin: top; }
+.yk-help ol, .yk-help ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.yk-help a { color: var(--primary); }
+.yk-safe { display: grid; gap: 6px; padding: 12px 14px; border-radius: var(--r-m); background: var(--surface-highest); }
+.yk-safe b { display: inline-flex; align-items: center; gap: 6px; }
+.yk-safe .ms { font-size: 20px; color: var(--primary); }
+.yk-ack { align-items: flex-start; gap: 16px; }
+.yk-ack span { flex: 1; font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .yk-help { animation: none; } }
 
 /* shortcuts dialog: search operators */
 .search-ops { display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; color: var(--on-surface-var); margin: 12px 0 4px; padding: 12px 14px; border-radius: var(--r-m); background: var(--surface-highest); }

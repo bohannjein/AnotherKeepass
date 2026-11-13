@@ -101,6 +101,8 @@ export interface Backend {
   pathsExist(paths: string[]): Promise<boolean[]>;
   lockAll(): Promise<void>;
   changeKey(id: string, password: string, keyfile?: string, yubikey?: string): Promise<void>;
+  /** is a YubiKey plugged in, and does this slot ("1"/"2") answer? Throws "yubikey:…" */
+  yubikeyCheck(slot: string): Promise<{ serial: number; name?: string }>;
   rename(id: string, name: string): Promise<VaultData>;
   vaultSettings(id: string): Promise<VaultSettings>;
   vaultSettingsSet(id: string, settings: VaultSettings): Promise<VaultData>;
@@ -198,6 +200,7 @@ const desktop: Backend = {
   pathsExist: paths => invoke('paths_exist', { paths }),
   lockAll: () => invoke('vault_lock_all'),
   changeKey: (id, password, keyfile, yubikey) => invoke('vault_change_key', { id, password, keyfile, yubikey }),
+  yubikeyCheck: slot => invoke('yubikey_check', { slot }),
   rename: (id, name) => invoke('vault_rename', { id, name }),
   vaultSettings: vault => invoke('vault_settings_get', { vault }),
   vaultSettingsSet: (vault, settings) => invoke('vault_settings_set', { vault, settings }),
@@ -316,6 +319,7 @@ const demo: Backend = {
   async pathsExist(paths) { return paths.map(() => true); },
   async lockAll() { demoVaults.clear(); },
   async changeKey() {},
+  async yubikeyCheck() { throw new Error('yubikey:No challenge-response keys (browser demo)'); },
   async rename(id, name) { const v = get(id); v.data.name = name; return out(v); },
   async vaultSettings(id) {
     const v = get(id);

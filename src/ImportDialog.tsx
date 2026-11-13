@@ -1,5 +1,6 @@
 // Import dialog: pick an export file, preview what was found, choose the target vault.
 // Loaded lazily (with its parsers) only when opened.
+import { Select } from './Select';
 import { useRef, useState } from 'react';
 import type { ImportInput } from './backend';
 import type { Lang, Strings } from './i18n';
@@ -105,9 +106,7 @@ export default function ImportDialog({ t, lang, vaults, vault: initialVault, typ
             </ul>
             {vaults.length > 1 && (
               <label className="opt">{x.into}
-                <select className="set-select" value={vault} onChange={e => setVault(e.target.value)}>
-                  {vaults.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                </select>
+                <Select value={vault} onChange={setVault} ariaLabel={x.into} options={vaults.map(v => ({ value: v.id, label: v.name }))} />
               </label>
             )}
             <label className="opt">{x.newFolder}<input className="switch" type="checkbox" checked={ownFolder} onChange={e => setOwnFolder(e.target.checked)} /></label>

@@ -545,3 +545,33 @@ fn unsaved_copy_is_recovered_on_open() {
     }
     let _ = fs::remove_dir_all(dir);
 }
+
+/// A new key that does not open the file afterwards is taken back: the file is written with the
+/// old key again, and so is the vault in memory.
+#[test]
+fn key_change_that_cannot_be_verified_is_undone() {
+    let state = Vaults::default();
+    let (p, root) = open_temp(&state, "key");
+    save_for_test(&state, &p, login(&root, "Keep"));
+    let path = PathBuf::from(&p);
+    writer::flush(&path).unwrap();
+
+    let new_key = make_key(Some("new-pw"), None, None).unwrap();
+    let err = open::change_key(&state, &p, new_key.clone(), |_, _| Err("verify:test".into())).unwrap_err();
+    assert_eq!(err, "key_unverified");
+    let old = make_key(Some("pw"), None, None).unwrap();
+    assert!(Database::open(&mut fs::File::open(&path).unwrap(), old.clone()).is_ok(), "the old key still opens the file");
+    assert!(Database::open(&mut fs::File::open(&path).unwrap(), new_key.clone()).is_err(), "the new key is not in the file");
+    // memory agrees with the file: the next save keeps the old key
+    save_for_test(&state, &p, login(&root, "After"));
+    writer::flush(&path).unwrap();
+    assert!(Database::open(&mut fs::File::open(&path).unwrap(), old).is_ok());
+
+    // and a key that does open the file is kept
+    open::change_key(&state, &p, new_key.clone(), open::opens_with).unwrap();
+    save_for_test(&state, &p, login(&root, "Later"));
+    writer::flush(&path).unwrap();
+    let disk = Database::open(&mut fs::File::open(&path).unwrap(), new_key).unwrap();
+    assert!(disk.iter_all_entries().any(|e| e.get_title() == Some("Later")));
+    let _ = fs::remove_file(path);
+}

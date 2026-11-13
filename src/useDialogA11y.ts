@@ -61,6 +61,8 @@ export function useDialogA11y() {
       if (!top) return;
       if (e.key === 'Escape') {
         // a dialog that handles Escape itself (the browser access question) says so
+        // an open dropdown list closes first (it handles the key itself, see Select.tsx)
+        if (document.querySelector('[data-popup-open]')) return;
         if (top.scrim.querySelector('[data-own-escape]') || e.defaultPrevented) return;
         e.preventDefault();
         e.stopPropagation(); // the edit form behind a dialog must not react to the same key

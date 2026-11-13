@@ -1,3 +1,4 @@
+import { Select } from './Select';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DEFAULTS, SECTIONS, clamp, mergePrefs, onThisPlatform, type PrefKey, type Prefs, type Setting } from './settings';
@@ -305,13 +306,8 @@ function Row({ s, ts, prefs, disabled, set, patch, onAction, t, ssh, button, qui
       disabled={disabled} onPick={o => set(s.key, o)} />;
   } else if (s.type === 'select') {
     control = (
-      <select id={id} className="set-select" value={value as string} disabled={disabled} onChange={e => set(s.key, e.target.value)}>
-        {s.options.map(o => (
-          <option key={o} value={o}>
-            {s.key === 'lang' ? LANGS.find(l => l.id === o)?.name : ts.options[o as keyof SettingsStrings['options']]}
-          </option>
-        ))}
-      </select>
+      <Select variant="pill" value={value as string} disabled={disabled} onChange={v => set(s.key, v)} ariaLabel={ts.labels[s.key as keyof SettingsStrings['labels']] ?? s.key}
+        options={s.options.map(o => ({ value: o, label: (s.key === 'lang' ? LANGS.find(l => l.id === o)?.name : ts.options[o as keyof SettingsStrings['options']]) ?? o }))} />
     );
   } else if (s.type === 'shortcut') {
     control = <ShortcutField id={id} value={value as string} disabled={disabled} ts={ts} onChange={v => set(s.key, v)} />;

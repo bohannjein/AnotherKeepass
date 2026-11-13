@@ -188,6 +188,37 @@ fn parse_uuid(s: &str) -> R<Uuid> {
     Uuid::parse_str(s).map_err(|_| "not_found".to_string())
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct YubikeyInfo {
+    serial: u32,
+    name: Option<String>,
+}
+
+/// Try the key and slot the way a save uses them: the crate answers the challenge of a database
+/// being written, so a throw-away database saved with this key proves that the slot is set up
+/// for HMAC-SHA1 challenge-response (and, if configured, that the touch happened). Nothing is
+/// written to the key and no file is touched.
+fn check_yubikey(slot: &str) -> R<YubikeyInfo> {
+    if slot != "1" && slot != "2" {
+        return Err("yubikey:slot".into());
+    }
+    let yk = keepass::ChallengeResponseKey::get_yubikey(None).map_err(|e| format!("yubikey:{e}"))?;
+    let info = YubikeyInfo { serial: yk.serial_number, name: yk.name.clone() };
+    let key = DatabaseKey::new().with_challenge_response_key(keepass::ChallengeResponseKey::YubikeyChallenge(yk, slot.to_string()));
+    let mut config = DatabaseConfig::default();
+    config.kdf_config = KdfConfig::Argon2id { iterations: 1, memory: 8 * 1024 * 1024, parallelism: 1, version: argon2::Version::Version13 };
+    Database::with_config(config).save(&mut Vec::new(), key).map_err(|e| format!("yubikey:{e}"))?;
+    Ok(info)
+}
+
+/// "Check YubiKey" in the dialogs: is a key plugged in, and does this slot answer?
+#[tauri::command]
+pub async fn yubikey_check(slot: String) -> R<YubikeyInfo> {
+    // the key answers over USB and may wait for a touch: not on the async runtime
+    tauri::async_runtime::spawn_blocking(move || check_yubikey(&slot)).await.map_err(|e| format!("yubikey:{e}"))?
+}
+
 /// Password, key file and/or YubiKey (HMAC-SHA1 challenge-response, slot "1" or "2", the first
 /// key found). Compatible with KeePassXC: the challenge is the KDF seed of the file, so the key
 /// must be present on every open and every save.

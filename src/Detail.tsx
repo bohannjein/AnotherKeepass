@@ -1,4 +1,5 @@
 // Detail pane of an entry: view and edit fields, TOTP, tags, attachments, history.
+import { Select } from './Select';
 import { lazy, useState, useRef, useEffect, Suspense, useCallback } from 'react';
 import { type Totp, type VaultData, backend } from './backend';
 import { type FieldKind, type Field, type Item, type VaultInfo, type Folder, type Draft, type Attachment } from './model';
@@ -229,7 +230,7 @@ function EditRow({ t, f, prefs, title, onChange, onRemove, onCopy }: {
 }
 
 export function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, onCopyText, loadSecrets, getTotp, onDuplicate, onSave, onDiscard,
-  onTrash, onRestore, onDeleteForever, onTogglePin, onHistoryRestore, onDownload, onPreview, onLoadIcon, onRemoveIcon, onSshChanged, onMessage }: {
+  onTrash, onRestore, onDeleteForever, onTogglePin, onHistoryRestore, onDownload, onPreview, onLoadIcon, onRemoveIcon, onSshChanged, onMessage, onClose }: {
   t: Strings; item: Item; vault: VaultInfo; folders: Folder[]; isNew: boolean; prefs: Prefs;
   onCopyField: (f: Field, what: string) => void; onCopyText: (text: string, what: string) => void;
   loadSecrets: () => Promise<Record<string, string>>; getTotp: (field: string) => Promise<Totp>; onDuplicate: () => void;
@@ -238,6 +239,8 @@ export function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, 
   onHistoryRestore: (index: number) => void; onDownload: (a: Attachment) => void; onPreview: (a: Attachment) => void;
   onLoadIcon?: () => void; onRemoveIcon?: () => void;
   onSshChanged?: (d: VaultData) => void; onMessage: (msg: string, error?: boolean) => void;
+  /** hide the details again (to see the list's overview, e.g. password health) */
+  onClose: () => void;
 }) {
   const [moreMenu, setMoreMenu] = useState(false);
   const fromItem = (): Draft => ({
@@ -281,11 +284,15 @@ export function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, 
     if (ok && !isNew) { secrets.current = null; setDraft(null); }
   };
   const cancel = () => { setMenu(false); if (isNew) onDiscard(); else setDraft(null); };
-  const keys = useRef({ startEdit: () => {}, cancel: () => {}, editing: false, trashed: false });
-  useEffect(() => { keys.current = { startEdit, cancel, editing: !!draft, trashed: !!item.trashed }; });
+  const keys = useRef({ startEdit: () => {}, cancel: () => {}, close: () => {}, editing: false, trashed: false });
+  useEffect(() => { keys.current = { startEdit, cancel, close: onClose, editing: !!draft, trashed: !!item.trashed }; });
   useEffect(() => {
     const edit = () => { if (!keys.current.editing && !keys.current.trashed) keys.current.startEdit(); };
-    const esc = () => { if (keys.current.editing) keys.current.cancel(); };
+    const esc = () => {
+      if (keys.current.editing) return keys.current.cancel();
+      // Escape in the search field only leaves the field
+      if (!(document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement)) keys.current.close();
+    };
     window.addEventListener('akp:edit', edit);
     window.addEventListener('akp:cancel', esc);
     return () => { window.removeEventListener('akp:edit', edit); window.removeEventListener('akp:cancel', esc); };
@@ -316,13 +323,11 @@ export function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, 
             <div className="meta">
               <span className="badge" style={{ background: `var(${v.color})`, color: 'var(--v-on)' }}><Icon n={v.icon} />{v.name}</span>
               {draft ? (
-                <label className="badge select">
+                <span className="badge select">
                   <Icon n="folder" />
-                  <select value={draft.folder} onChange={e => patch({ folder: e.target.value })} aria-label={t.folder}>
-                    <option value="">{t.noFolder}</option>
-                    {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                  </select>
-                </label>
+                  <Select variant="inline" value={draft.folder} onChange={v => patch({ folder: v })} ariaLabel={t.folder}
+                    options={[{ value: '', label: t.noFolder }, ...folders.map(f => ({ value: f.id, label: f.name }))]} />
+                </span>
               ) : folderName && <span className="badge"><Icon n="folder" />{folderName}</span>}
               <span className="badge">{t[item.type]}</span>
               {item.pinned && <span className="badge"><Icon n="push_pin" />{t.pinned}</span>}
@@ -387,6 +392,7 @@ export function Detail({ t, item, vault: v, folders, isNew, prefs, onCopyField, 
                   </>
                 )}
               </span>
+              <button className="icon-btn" aria-label={t.close} title={t.close} onClick={onClose}><Icon n="close" /></button>
             </>
           )}
         </div>

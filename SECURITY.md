@@ -65,8 +65,14 @@ the Store), so this is the version most people run.
 - **The unsigned Windows installer (exe):** until the code signature is in place, Windows
   SmartScreen warns about an unknown publisher. Check the SHA-256 sum on the download page
   or use the Store version.
-- **Linux and YubiKey** are new and have not had a real-world test yet; they are marked as
-  such in the README until they have.
+- **Losing a YubiKey you rely on.** A vault protected by a YubiKey cannot be opened or saved
+  without it. The app never writes to the key, so the secret on it cannot be recovered from
+  here: keep a written copy of the secret or a second key set up with the same secret. The app
+  tries the new key by opening the vault again after a key change, and puts the old key back if
+  that fails.
+- **Linux and YubiKey** are new and have not had a real-world test with hardware yet; they are
+  marked as such in the README until they have. "Check YubiKey" in the dialogs tests a key and
+  slot without changing anything.
 
 ## Third-party code
 

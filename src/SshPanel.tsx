@@ -1,5 +1,6 @@
 // SSH agent card in the entry view (KeeAgent settings, stored as the KeeAgent.settings attachment
 // so KeePassXC and KeeAgent read the same configuration).
+import { Select } from './Select';
 import { useEffect, useState } from 'react';
 import { backend, errorCode, type KeeAgent, type VaultData } from './backend';
 import type { Strings } from './i18n';
@@ -45,10 +46,8 @@ export function SshPanel({ t, vault, id, files, onChanged, onMessage }: {
       {s?.allow && (
         <>
           <label className="opt">{t.sshKey}
-            <select className="set-select" value={s.attachment} onChange={e => set({ attachment: e.target.value })}>
-              {!keys.includes(s.attachment) && <option value={s.attachment}>—</option>}
-              {keys.map(k => <option key={k} value={k}>{k}</option>)}
-            </select>
+            <Select value={s.attachment} onChange={v => set({ attachment: v })} ariaLabel={t.sshKey}
+              options={[...(keys.includes(s.attachment) ? [] : [{ value: s.attachment, label: '—' }]), ...keys.map(k => ({ value: k, label: k }))]} />
           </label>
           <label className="opt">{t.sshAddOpen}<input className="switch" type="checkbox" checked={s.addAtOpen} onChange={e => set({ addAtOpen: e.target.checked })} /></label>
           <label className="opt">{t.sshRemoveLock}<input className="switch" type="checkbox" checked={s.removeAtClose} onChange={e => set({ removeAtClose: e.target.checked })} /></label>

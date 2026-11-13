@@ -1,5 +1,6 @@
 // Password generator dialog (memorable passphrases / random). Loaded on first use:
 // it pulls in the 7776-word EFF list.
+import { Select } from './Select';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { generate, history, randomBits, remember, strengthOf, type GenOpts, type Strength } from './generator';
@@ -59,10 +60,8 @@ export default function Generator({ t, onClose, onCopy, onUse }: {
 
         <div className="gen-opts">
           <label className="opt">{t.genType}
-            <select className="set-select" value={g.mode} onChange={e => update({ ...g, mode: e.target.value as GenState['mode'] })}>
-              <option value="memorable">{t.genMemorable}</option>
-              <option value="random">{t.genRandom}</option>
-            </select>
+            <Select value={g.mode} ariaLabel={t.genType} onChange={v => update({ ...g, mode: v as GenState['mode'] })}
+              options={[{ value: 'memorable', label: t.genMemorable }, { value: 'random', label: t.genRandom }]} />
           </label>
           {g.mode === 'memorable' ? (
             <>

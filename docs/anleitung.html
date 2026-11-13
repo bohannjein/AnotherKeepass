@@ -59,6 +59,7 @@
         <li><a href="#oberflaeche">Oberfläche</a></li>
         <li><a href="#browser">Browser verbinden</a></li>
         <li><a href="#umziehen">Umziehen</a></li>
+        <li><a href="#yubikey">YubiKey</a></li>
         <li><a href="#weitere">SSH, KeeShare, Hello</a></li>
         <li><a href="#kdbx">Daten in KDBX</a></li>
         <li><a href="#bauen">Selbst bauen</a></li>
@@ -161,6 +162,28 @@
         <h3>Vaultwarden</h3>
         <p>Über <strong>Tresor hinzufügen → Vaultwarden</strong> erscheint dein Vaultwarden-Konto als Tresor. Änderungen werden auf dem Server gespeichert; ohne Verbindung lässt sich die letzte Kopie lesen. Der Server muss per https erreichbar sein.</p>
         <p>Mit <strong>Mit Vaultwarden abgleichen…</strong> hältst du eine <code>.kdbx</code>-Datei und ein Konto in beide Richtungen synchron; die neuere Änderung gewinnt.</p>
+      </section>
+
+      <section id="yubikey">
+        <h2>YubiKey einrichten</h2>
+        <p>Ein YubiKey kann zusätzlich zum Master-Passwort verlangt werden. AnotherKeepass nutzt dafür dasselbe Verfahren wie KeePassXC („HMAC-SHA1 Challenge-Response“), die Tresordatei bleibt also in beiden Programmen offen. Die App liest nur die Antwort des Schlüssels. Sie schreibt nie etwas auf den Schlüssel.</p>
+        <h3>1. Den Slot am Schlüssel einrichten (einmalig)</h3>
+        <ol>
+          <li>Installiere den „Yubico Authenticator“ oder den „YubiKey Manager“ von <a href="https://www.yubico.com/support/download/">yubico.com</a>.</li>
+          <li>Öffne dort den <strong>Slot 2</strong>. Slot 1 trägt meist die Werkseinstellung zum Anmelden; ein belegter Slot wird beim Einrichten überschrieben.</li>
+          <li>Wähle <strong>HMAC-SHA1 Challenge-Response</strong> und lass das Geheimnis erzeugen. „Berührung erforderlich“ ist optional: Dann blinkt der Schlüssel bei jedem Öffnen und Speichern und will berührt werden.</li>
+          <li><strong>Notiere das Geheimnis sicher</strong> oder trage es in einen zweiten YubiKey ein (der Manager fragt danach). So hast du einen Ersatz, falls der erste verloren geht.</li>
+        </ol>
+        <h3>2. Einen neuen Tresor mit YubiKey anlegen</h3>
+        <p>Im Anmeldefenster <strong>Neuen Tresor anlegen</strong> wählen, unter <strong>YubiKey</strong> den Slot einstellen und auf <strong>YubiKey prüfen</strong> drücken. Steht dort „gefunden, Slot antwortet“, kann es weitergehen.</p>
+        <h3>3. Einen vorhandenen Tresor nachträglich schützen (oder den YubiKey entfernen)</h3>
+        <p>Tresor öffnen, dann in der Seitenleiste Rechtsklick auf den Tresor → <strong>Master-Passwort ändern</strong> (oder der Schlüssel-Knopf oben in der Liste). Neues Master-Passwort eingeben (das alte darf es auch sein), unter <strong>YubiKey</strong> den Slot wählen, prüfen, die Sicherung bestätigen und speichern. Zum Entfernen den Slot auf „Kein YubiKey“ stellen. Nach der Änderung öffnet die App den Tresor zur Kontrolle noch einmal; klappt das nicht, bleibt der alte Schlüssel erhalten.</p>
+        <h3>Wichtig</h3>
+        <ul>
+          <li>Ohne den YubiKey lässt sich der Tresor nicht öffnen <strong>und nicht speichern</strong>, auch nicht mit richtigem Passwort.</li>
+          <li>Stecke nur einen YubiKey ein, wenn du die Funktion benutzt.</li>
+          <li>Wer den Tresor auf anderen Rechnern öffnet, braucht dort denselben Schlüssel (oder den Zweitschlüssel).</li>
+        </ul>
       </section>
 
       <section id="weitere">

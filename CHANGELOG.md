@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.1
+
+- **YubiKey, explained:** the YubiKey row shows what it is for and has a "Check YubiKey" button
+  (is a key plugged in, does the slot answer, nothing is written to the key) and a fold-out
+  guide for setting up the slot, with a note to keep a backup. Written for hardware this
+  project could not test with: please report what a real key does.
+- **YubiKey for an existing vault:** "Change master password" can now add or remove the YubiKey, not
+  only keep it. Adding asks you to confirm that you checked it and keep a backup. After every key
+  change the vault is opened again with the new key; if that fails the old key goes back, so a
+  change cannot lock you out.
+- **Wrong key hint:** the unlock error names the YubiKey and key file as possible causes.
+- **Dropdowns in the app's look** instead of the grey system list (vault mode, folder, settings,
+  import, key derivation and more), with keyboard use and Escape closing the list first.
+- **Close the details:** an entry's details have a close button (and Escape), and opening
+  Password health shows the overview instead of the last entry.
+- **One show-password button** on the unlock screen (the browser's own one is hidden).
+
 ## 0.4.0
 
 - **Nothing lost after a failed save:** if a save failed for good, the change was kept in

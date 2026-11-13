@@ -1,5 +1,8 @@
 // Open / create / unlock a vault. Used as the lock screen and as the "add vault" dialog.
 // Vaultwarden accounts ("bw:<server>#<email>") log in here too, including the second factor.
+import { Select } from './Select';
+import { YubiKeyField } from './YubiKeyField';
+import { yubikeyError } from './yubikeyError';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
@@ -93,7 +96,7 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
   const explain = (e: unknown) => {
     const code = errorCode(e);
     if (code === 'insecure_url') return t.errInsecure;
-    if (code === 'yubikey') return /No challenge|NoKeys|no.*key/i.test(String(e)) ? t.yubikeyMissing : t.yubikeyFailed;
+    if (code === 'yubikey') return yubikeyError(t, e);
     if (String(e).includes('kdf_insecure')) return t.errKdfInsecure;
     if (String(e).includes('kdf_weakened')) return t.errKdfWeakened;
     if (code === 'offline_no_cache') { const why = String(e).split('offline_no_cache:')[1]?.trim(); return why ? `${t.vwOffline}: ${why}` : t.vwOffline; }
@@ -170,20 +173,19 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
       {missing.length > 0 && <p className="form-note" role="status"><Icon n="info" />{t.missingFiles} {missing.join(', ')}</p>}
 
       {/* what to do: a plain dropdown instead of a row of buttons that does not fit */}
-      <label className="textfield mode-field">
+      <div className="textfield mode-field">
         <Icon n={{ open: 'lock_open', create: 'note_add', server: 'dns' }[mode]} />
-        <select value={mode} aria-label={t.addVault} onChange={e => {
-          const m = e.target.value as Mode;
+        <Select variant="inline" value={mode} ariaLabel={t.addVault} onChange={v => {
+          const m = v as Mode;
           setMode(m); setError('');
           if (m === 'create') setPath('');
           if (m === 'server') setTwoFactor(null);
-        }}>
-          <option value="open">{t.openVault}</option>
-          <option value="create">{t.createVault}</option>
-          {backend.desktop && <option value="server">{t.vwAccount}</option>}
-        </select>
-        <Icon n="expand_more" />
-      </label>
+        }} options={[
+          { value: 'open', label: t.openVault, icon: 'lock_open' },
+          { value: 'create', label: t.createVault, icon: 'note_add' },
+          ...(backend.desktop ? [{ value: 'server', label: t.vwAccount, icon: 'dns' }] : []),
+        ]} />
+      </div>
 
       {mode === 'server' && (
         <>
@@ -279,15 +281,10 @@ export default function VaultDialog({ t, known, missing = [], onMissing, initial
         <div className="keyfile-row">
           <button type="button" className="btn text" onClick={pickKeyfile}><Icon n="key_vertical" />{keyfile ? fileName(keyfile) : t.keyfile}</button>
           {keyfile && <button type="button" className="icon-btn" onClick={() => setKeyfile('')} aria-label={t.remove}><Icon n="close" /></button>}
-          <label className="yubikey-pick" title={t.yubikeyHint}>
-            <Icon n="usb" />
-            <select value={yubikey} onChange={e => setYkPicked({ path, slot: e.target.value })} aria-label={t.yubikey}>
-              <option value="">{t.yubikeyOff}</option>
-              <option value="1">{t.yubikey} · {t.yubikeySlot} 1</option>
-              <option value="2">{t.yubikey} · {t.yubikeySlot} 2</option>
-            </select>
-          </label>
         </div>
+      )}
+      {backend.desktop && mode !== 'server' && (mode === 'create' || (path && !isRemote(path))) && (
+        <YubiKeyField t={t} value={yubikey} onChange={slot => setYkPicked({ path, slot })} />
       )}
 
       {busy && slow && (mode === 'server' || isRemote(path)) && (

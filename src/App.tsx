@@ -1,3 +1,4 @@
+import { Select } from './Select';
 import { lazy, useState, useCallback, useEffect, useRef, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { backend, isDemo, type EntryUsed, type VaultData } from './backend';
@@ -411,6 +412,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
     const v = vaultList.find(x => x.id === id);
     if (v?.locked) { setVaultDialog({ path: id }); return; }
     setVault(id); setFolder(null);
+    if (id === HEALTH && !pending) setSelected(null); // the overview shows where the details were
     if (isNarrow) setRail(true);
   };
 
@@ -709,13 +711,10 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
             <div className="bulk-head"><span className="bulk-count">{chosen.length}</span><b>{t.selected}</b></div>
             <p className="dialog-body">{t.selectionHint}</p>
             <label className="opt">{t.moveTo}
-              <select className="set-select" value="" onChange={e => e.target.value && bulkMove(e.target.value)}>
-                <option value="">—</option>
-                {vaultList.filter(v => !v.locked).map(v => [
-                  <option key={v.id} value={v.id + '|'}>{v.name}</option>,
-                  ...folders.filter(f => f.vault === v.id).map(f => <option key={f.id} value={v.id + '|' + f.id}>{'\u00a0\u00a0' + f.name}</option>),
-                ])}
-              </select>
+              <Select value="" onChange={v => v && bulkMove(v)} ariaLabel={t.moveTo} options={vaultList.filter(v => !v.locked).flatMap(v => [
+                { value: v.id + '|', label: v.name, icon: v.icon },
+                ...folders.filter(f => f.vault === v.id).map(f => ({ value: v.id + '|' + f.id, label: f.name, indent: true })),
+              ])} />
             </label>
             <div className="row">
               <button className="btn tonal" onClick={() => bulkPin(true)}><Icon n="push_pin" />{t.pinItem}</button>
@@ -746,7 +745,8 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
               : Uint8Array.from(atob(await backend.attachmentGet(current.vault, current.id, a.name)), c => c.charCodeAt(0)) })}
             onLoadIcon={backend.desktop && current.fields.some(f => f.raw === 'URL' && f.value) ? () => loadIcons([current]) : undefined}
             onRemoveIcon={current.icon ? () => removeIcon(current) : undefined}
-            onSshChanged={settings.sshEnabled && backend.desktop ? d => onUpdate(d) : undefined} onMessage={notify} />
+            onSshChanged={settings.sshEnabled && backend.desktop ? d => onUpdate(d) : undefined} onMessage={notify}
+            onClose={() => setSelected(null)} />
         ) : (
           vault === HEALTH ? (
             <HealthOverview t={t} total={Object.keys(health).length} counts={healthCounts} breachesChecked={!!breaches} checking={checking}
@@ -815,11 +815,11 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
       )}
       {keyDialog && <KeyDialog t={t} keyfile={known.find(k => k.path === keyDialog)?.keyfile} yubikey={known.find(k => k.path === keyDialog)?.yubikey}
         onClose={() => setKeyDialog(null)}
-        onSubmit={async (pw, keyfile) => {
-          const yubikey = known.find(k => k.path === keyDialog)?.yubikey;
+        onSubmit={async (pw, keyfile, yubikey) => {
           if ((await run(backend.changeKey(keyDialog, pw, keyfile, yubikey))) === undefined) return;
-          // remember the key file for the next unlock (only when the user keeps key files remembered)
-          if (settings.rememberKeyfiles) onKnown(keyDialog, { keyfile });
+          // remember the key file for the next unlock (only when the user keeps key files remembered);
+          // the YubiKey slot is no secret, it is always remembered so the next unlock asks for the key
+          onKnown(keyDialog, { ...(settings.rememberKeyfiles ? { keyfile } : {}), yubikey });
           setKeyDialog(null); notify(t.masterKeyChanged);
         }} />}
       {confirm && <ConfirmDialog t={t} confirm={confirm} onClose={() => setConfirm(null)} />}

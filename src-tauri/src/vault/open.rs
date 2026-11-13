@@ -324,15 +324,41 @@ pub async fn vault_change_key(
     keyfile: Option<String>,
     yubikey: Option<String>,
 ) -> R<()> {
-    let key = make_key(password.as_deref(), keyfile.as_deref(), yubikey.as_deref())?;
-    with_vault(&state, &id, |v| {
+    // the YubiKey answers over USB and may wait for a touch: not on the async runtime
+    let key = tauri::async_runtime::spawn_blocking(move || make_key(password.as_deref(), keyfile.as_deref(), yubikey.as_deref()))
+        .await
+        .map_err(|e| format!("open:{e}"))??;
+    change_key(&state, &id, key, opens_with)
+}
+
+/// Does the file open with this key? (key files and YubiKeys are only trusted once they did)
+pub(super) fn opens_with(path: &Path, key: &DatabaseKey) -> R<()> {
+    let mut f = fs::File::open(path).map_err(|e| format!("io:{e}"))?;
+    Database::open(&mut f, key.clone()).map(|_| ()).map_err(|e| format!("verify:{e}"))
+}
+
+/// Save the vault under a new key. Afterwards the file is opened again with that key; if that
+/// fails, the old key goes back into the file, so a changed key can never lock the user out.
+pub(super) fn change_key(state: &Vaults, id: &str, key: DatabaseKey, verify: impl Fn(&Path, &DatabaseKey) -> R<()>) -> R<()> {
+    with_vault(state, id, |v| {
         let (old_key, old_changed) = (std::mem::replace(&mut v.key, key), v.db.meta.master_key_changed);
         v.db.meta.master_key_changed = Some(Times::now());
-        write_db(v).inspect_err(|_| {
-            // the file still has the old key: so must we, or the next save would lock the user out
+        let undo = |v: &mut OpenVault, old_key: DatabaseKey| {
+            // the file must keep the old key: and so must we, or the next save would lock the user out
             v.key = old_key;
             v.db.meta.master_key_changed = old_changed;
-        })
+        };
+        if let Err(e) = write_db(v) {
+            undo(v, old_key);
+            return Err(e);
+        }
+        if let Err(e) = verify(&v.path, &v.key) {
+            log::error!("new key does not open the file, going back: {e}");
+            undo(v, old_key);
+            write_db(v)?;
+            return Err("key_unverified".into());
+        }
+        Ok(())
     })
 }
 

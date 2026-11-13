@@ -53,6 +53,7 @@ pub fn run() {
             vault::paths_exist,
             vault::vault_lock_all,
             vault::vault_change_key,
+            vault::yubikey_check,
             vault::vault_rename,
             vault::entry_save,
             vault::entry_set_pinned,

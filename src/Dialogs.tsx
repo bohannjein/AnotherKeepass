@@ -1,4 +1,6 @@
 // Small dialogs of the main window: folders, shortcuts, browser requests, key file, vault look.
+import { Select } from './Select';
+import { YubiKeyField } from './YubiKeyField';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
@@ -41,10 +43,8 @@ export function FolderDialog({ t, mode, name: initialName, vault: initialVault, 
         )}
         {mode === 'create' && options.length > 0 && (
           <label className="opt">{t.parentFolder}
-            <select className="set-select" value={parent} onChange={e => setParent(e.target.value)}>
-              <option value="">{vaults.find(v => v.id === vault)?.name ?? '—'}</option>
-              {options.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
+            <Select value={parent} onChange={setParent} ariaLabel={t.parentFolder}
+              options={[{ value: '', label: vaults.find(v => v.id === vault)?.name ?? '—' }, ...options.map(f => ({ value: f.id, label: f.name }))]} />
           </label>
         )}
         <div className="row">
@@ -194,9 +194,14 @@ export function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
 
 /** New master key. The key file (and YubiKey slot) the vault uses now are kept unless changed here:
  *  leaving them out would silently weaken the vault. */
-export function KeyDialog({ t, keyfile: initialKeyfile, yubikey, onClose, onSubmit }: {
-  t: Strings; keyfile?: string; yubikey?: string; onClose: () => void; onSubmit: (pw: string, keyfile?: string) => void;
+export function KeyDialog({ t, keyfile: initialKeyfile, yubikey: initialYubikey = '', onClose, onSubmit }: {
+  t: Strings; keyfile?: string; yubikey?: string; onClose: () => void; onSubmit: (pw: string, keyfile?: string, yubikey?: string) => void;
 }) {
+  const [yubikey, setYubikey] = useState(initialYubikey);
+  const [ack, setAck] = useState(false);
+  // a YubiKey that is new (or another slot) must have been checked and backed up: otherwise the vault could not be saved
+  const adding = !!yubikey && yubikey !== initialYubikey;
+  const removing = !yubikey && !!initialYubikey;
   const [pw, setPw] = useState('');
   const [confirm, setConfirm] = useState('');
   const [keyfile, setKeyfile] = useState(initialKeyfile ?? '');
@@ -208,7 +213,7 @@ export function KeyDialog({ t, keyfile: initialKeyfile, yubikey, onClose, onSubm
   return (
     <div className="scrim" onClick={onClose}>
       <form className="dialog" role="dialog" aria-label={t.changeMasterKey} onClick={e => e.stopPropagation()}
-        onSubmit={e => { e.preventDefault(); if (pw && pw === confirm) onSubmit(pw, keyfile || undefined); }}>
+        onSubmit={e => { e.preventDefault(); if (pw && pw === confirm && (!adding || ack)) onSubmit(pw, keyfile || undefined, yubikey || undefined); }}>
         <h3><Icon n="key" />{t.changeMasterKey}</h3>
         <label className="textfield"><Icon n="key" />
           <input type="password" autoFocus placeholder={t.masterPassword} aria-label={t.masterPassword} value={pw} onChange={e => setPw(e.target.value)} />
@@ -222,12 +227,19 @@ export function KeyDialog({ t, keyfile: initialKeyfile, yubikey, onClose, onSubm
           <div className="keyfile-row">
             <button type="button" className="btn text" onClick={pickKeyfile}><Icon n="key_vertical" />{keyfile ? fileName(keyfile) : t.keyfile}</button>
             {keyfile && <button type="button" className="icon-btn" onClick={() => setKeyfile('')} aria-label={t.remove}><Icon n="close" /></button>}
-            {yubikey && <small className="label"><Icon n="usb" />{t.yubikey} · {t.yubikeySlot} {yubikey}</small>}
           </div>
         )}
+        {backend.desktop && <YubiKeyField t={t} value={yubikey} onChange={v => { setYubikey(v); setAck(false); }} />}
+        {adding && (
+          <>
+            <p className="form-note warn"><Icon n="warning" />{t.ykAddNote}</p>
+            <label className="opt yk-ack"><span>{t.ykAck}</span><input className="switch" type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} /></label>
+          </>
+        )}
+        {removing && <p className="form-note"><Icon n="info" />{t.ykRemoveNote}</p>}
         <div className="row">
           <button type="button" className="btn text" onClick={onClose}>{t.cancel}</button>
-          <button type="submit" className="btn filled" disabled={!pw || pw !== confirm}><Icon n="check" />{t.save}</button>
+          <button type="submit" className="btn filled" disabled={!pw || pw !== confirm || (adding && !ack)}><Icon n="check" />{t.save}</button>
         </div>
       </form>
     </div>

@@ -1,5 +1,6 @@
 // Vault (database) settings: name, description, recycle bin, history size, key derivation.
 // `upgrade` preselects today's recommended KDF (Argon2id, 64 MiB, ~1 s) for weak old files.
+import { Select } from './Select';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { backend, type VaultData, type VaultSettings } from './backend';
@@ -59,11 +60,8 @@ export function VaultSettingsDialog({ t, vault, upgrade, onClose, onSaved }: {
             <span className="label">{t.vsEncryption}</span>
             {s.weak && <p className="form-note warn"><Icon n="warning" />{t.vsWeak}</p>}
             <label className="opt">{t.vsKdf}
-              <select className="set-select" value={s.kdf} onChange={e => set({ kdf: e.target.value as VaultSettings['kdf'], ...(e.target.value === 'aes' ? { iterations: Math.max(s.iterations, 2_000_000) } : { memoryMib: s.memoryMib || 64, parallelism: s.parallelism || 2, iterations: s.kdf === 'aes' ? 10 : s.iterations }) })}>
-                <option value="argon2id">Argon2id ({t.vsRecommended})</option>
-                <option value="argon2d">Argon2d</option>
-                <option value="aes">AES-KDF</option>
-              </select>
+              <Select value={s.kdf} ariaLabel={t.vsKdf} onChange={v => set({ kdf: v as VaultSettings['kdf'], ...(v === 'aes' ? { iterations: Math.max(s.iterations, 2_000_000) } : { memoryMib: s.memoryMib || 64, parallelism: s.parallelism || 2, iterations: s.kdf === 'aes' ? 10 : s.iterations }) })}
+                options={[{ value: 'argon2id', label: `Argon2id (${t.vsRecommended})` }, { value: 'argon2d', label: 'Argon2d' }, { value: 'aes', label: 'AES-KDF' }]} />
             </label>
             {argon && (
               <>
