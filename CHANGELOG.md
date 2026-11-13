@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - **Nothing lost after a failed save:** if a save failed for good, the change was kept in
   `<file>.unsaved.kdbx` but nothing picked it up. Opening the vault now merges that copy back
