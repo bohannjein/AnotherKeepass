@@ -10,12 +10,13 @@ pw=compat-pw
 expect() { grep -qE "$2" <<<"$1" || { echo "missing: $2"; echo "$1"; exit 1; }; }
 
 (cd src-tauri && cargo test --lib compat_write -- --ignored)
-out=$(echo "$pw" | keepassxc-cli show -q -s -t "$dir/ours.kdbx" Work/Mail)
+out=$(echo "$pw" | keepassxc-cli show -q -s "$dir/ours.kdbx" Work/Mail 2>/dev/null)
 expect "$out" '^UserName: bob$'
 expect "$out" '^Password: s3cret-Pa55$'
 expect "$out" '^URL: https://example.org$'
-expect "$out" '^[0-9]{6}$' # the TOTP code
-echo "$pw" | keepassxc-cli show -q -s -a "Card number" "$dir/ours.kdbx" Work/Mail | grep -qx 4111
+# older KeePassXC prints only the code with -t, so ask for it on its own
+expect "$(echo "$pw" | keepassxc-cli show -q -t "$dir/ours.kdbx" Work/Mail 2>/dev/null)" '^[0-9]{6}$'
+echo "$pw" | keepassxc-cli show -q -s -a "Card number" "$dir/ours.kdbx" Work/Mail 2>/dev/null | grep -qx 4111
 
 printf '%s\n%s\n' "$pw" "$pw" | keepassxc-cli db-create -q -p "$dir/theirs.kdbx"
 echo "$pw" | keepassxc-cli add -q -u alice -g "$dir/theirs.kdbx" Mail
