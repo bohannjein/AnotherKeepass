@@ -424,3 +424,123 @@ fn background_save_coalesces_and_flushes() {
     assert_eq!(reopened.meta.database_name.as_deref(), Some("G"));
     let _ = fs::remove_file(path);
 }
+
+/// The file on disk became unreadable for us (damaged by a sync client, another password): a
+/// save never overwrites it. Our state goes to a copy next to it and `flush` reports the failure.
+#[test]
+fn unreadable_file_is_never_overwritten() {
+    let dir = std::env::temp_dir().join(format!("akp-conflict-{}", Uuid::new_v4()));
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("v.kdbx");
+    let mut db = Database::with_config(new_config());
+    db.meta.database_name = Some("Ours".into());
+    let mut v = OpenVault::new_for_test(path.clone(), db);
+    write_db(&mut v).unwrap();
+
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    fs::write(&path, b"not a database").unwrap();
+    v.db.meta.database_name = Some("Ours, changed".into());
+    write_db_later(&mut v).unwrap();
+    let err = writer::flush(&path).unwrap_err();
+    assert!(err.starts_with("conflict:"), "{err}");
+    assert_eq!(fs::read(&path).unwrap(), b"not a database", "the foreign file is untouched");
+
+    let rescue = path.with_extension("unsaved.kdbx");
+    let saved = Database::open(&mut fs::File::open(&rescue).unwrap(), v.key.clone()).unwrap();
+    assert_eq!(saved.meta.database_name.as_deref(), Some("Ours, changed"), "our change is in the copy");
+    let _ = fs::remove_dir_all(dir);
+}
+
+/// Saving goes through a temp file that is renamed over the vault. After many saves, and after
+/// a failed one, nothing but the vault (and the rescue copy) is left in the folder.
+#[test]
+fn saves_leave_no_temp_files() {
+    let dir = std::env::temp_dir().join(format!("akp-tmp-{}", Uuid::new_v4()));
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("v.kdbx");
+    let mut v = OpenVault::new_for_test(path.clone(), Database::with_config(new_config()));
+    write_db(&mut v).unwrap();
+    for i in 0..10 {
+        v.db.meta.database_name = Some(format!("n{i}"));
+        write_db_later(&mut v).unwrap();
+        if i % 3 == 0 {
+            writer::flush(&path).unwrap();
+        }
+    }
+    writer::flush(&path).unwrap();
+    let names = |dir: &Path| {
+        let mut n: Vec<String> = fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        n.sort();
+        n
+    };
+    assert_eq!(names(&dir), ["v.kdbx"]);
+    let reopened = Database::open(&mut fs::File::open(&path).unwrap(), v.key.clone()).unwrap();
+    assert_eq!(reopened.meta.database_name.as_deref(), Some("n9"));
+
+    // a save that fails (conflict with an unreadable file) cleans up as well
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    fs::write(&path, b"x").unwrap();
+    write_db_later(&mut v).unwrap();
+    assert!(writer::flush(&path).is_err());
+    assert_eq!(names(&dir), ["v.kdbx", "v.unsaved.kdbx"]);
+    let _ = fs::remove_dir_all(dir);
+}
+
+/// A crash or power cut in the middle of a save leaves a partial temp file next to the vault.
+/// The vault itself is still the last complete version, and later saves work as usual.
+#[test]
+fn leftover_temp_file_does_no_harm() {
+    let dir = std::env::temp_dir().join(format!("akp-crash-{}", Uuid::new_v4()));
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("v.kdbx");
+    let mut db = Database::with_config(new_config());
+    db.meta.database_name = Some("complete".into());
+    let mut v = OpenVault::new_for_test(path.clone(), db);
+    write_db(&mut v).unwrap();
+    let whole = fs::read(&path).unwrap();
+    fs::write(path.with_extension("0123abcd.tmp"), &whole[..whole.len() / 2]).unwrap();
+
+    let reopened = Database::open(&mut fs::File::open(&path).unwrap(), v.key.clone()).unwrap();
+    assert_eq!(reopened.meta.database_name.as_deref(), Some("complete"));
+    v.db.meta.database_name = Some("next".into());
+    write_db_later(&mut v).unwrap();
+    writer::flush(&path).unwrap();
+    let reopened = Database::open(&mut fs::File::open(&path).unwrap(), v.key.clone()).unwrap();
+    assert_eq!(reopened.meta.database_name.as_deref(), Some("next"));
+    let _ = fs::remove_dir_all(dir);
+}
+
+/// A failed save left `<file>.unsaved.kdbx`. Opening the vault again merges it back in and
+/// removes the copy; a copy with another key is left alone.
+#[test]
+fn unsaved_copy_is_recovered_on_open() {
+    let dir = std::env::temp_dir().join(format!("akp-recover-{}", Uuid::new_v4()));
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("v.kdbx");
+    let rescue = path.with_extension("unsaved.kdbx");
+    let mut db = Database::with_config(new_config());
+    db.root_mut().add_entry().set_unprotected("Title", "On disk");
+    let mut v = OpenVault::new_for_test(path.clone(), db);
+    write_db(&mut v).unwrap();
+
+    // a copy we cannot read stays, and nothing changes
+    let other = make_key(Some("other"), None, None).unwrap();
+    write_plain(&rescue, &v.db, other).unwrap();
+    assert!(!recover_unsaved(&mut v));
+    assert!(rescue.is_file());
+
+    // the state that could not be saved: one more entry
+    let mut lost = v.db.clone();
+    lost.root_mut().add_entry().set_unprotected("Title", "Not saved");
+    write_plain(&rescue, &lost, v.key.clone()).unwrap();
+    let db = Database::open(&mut fs::File::open(&path).unwrap(), v.key.clone()).unwrap();
+    let mut reopened = OpenVault::new_for_test(path.clone(), db);
+    assert!(recover_unsaved(&mut reopened));
+    assert!(!rescue.exists(), "the copy is removed once it is merged");
+    let disk = Database::open(&mut fs::File::open(&path).unwrap(), v.key.clone()).unwrap();
+    let titles: Vec<_> = disk.iter_all_entries().filter_map(|e| e.get_title().map(String::from)).collect();
+    for t in ["On disk", "Not saved"] {
+        assert!(titles.iter().any(|x| x == t), "{t} missing in {titles:?}");
+    }
+    let _ = fs::remove_dir_all(dir);
+}

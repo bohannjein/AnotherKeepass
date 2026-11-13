@@ -64,17 +64,10 @@ KeePassXC-Browser extension works through an installed `keepassxc-proxy`. KeePas
 must not run at the same time. Without KeePassXC, enable "Update native messaging manifests"
 and the exe registers itself as proxy.
 
-KeePassXC compatibility (needs `keepassxc-cli`, run by hand):
+KeePassXC compatibility in both directions (needs `keepassxc-cli`; CI runs it on Linux):
 
 ```bash
-# 1. we write, KeePassXC reads
-AKP_COMPAT_DIR=/tmp/akp cargo test --lib compat_write -- --ignored
-echo compat-pw | keepassxc-cli show -s -t /tmp/akp/ours.kdbx Work/Mail
-# 2. KeePassXC writes, we edit, KeePassXC reads
-keepassxc-cli db-create -p /tmp/akp/theirs.kdbx            # password: compat-pw
-keepassxc-cli add -u alice -p /tmp/akp/theirs.kdbx Mail
-AKP_COMPAT_DIR=/tmp/akp cargo test --lib compat_edit -- --ignored
-echo compat-pw | keepassxc-cli show -s /tmp/akp/theirs.kdbx "Mail edited"
+bash scripts/compat.sh
 ```
 
 ## How data maps to KDBX
@@ -122,9 +115,8 @@ Priority order; these are real gaps.
 4. **Linux:** either test it (CI on the branch, then browser integration and Auto-Type on a
    real Linux system; the new socket permission code has only been compiled in CI) or label
    it a preview in 1.0.
-5. **Failed save on lock:** locking proceeds and the change stays in `<file>.unsaved.kdbx`.
-   Check that the app notices this file on the next open and offers to merge it; add that if
-   it is missing.
+5. **Failed save on lock:** done. Locking proceeds, the change stays in `<file>.unsaved.kdbx`,
+   and the next open merges that copy back in and removes it.
 6. **Release hygiene:** commit the open changes, add the fixes to the CHANGELOG, point
    `origin` at `johann-beinsen`, bring the branch into `main`, bump the version.
 

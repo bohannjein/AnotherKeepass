@@ -42,7 +42,7 @@ jobs:
       - name: system libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev keepassxc
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -54,3 +54,5 @@ jobs:
         run: |
           cargo clippy --all-targets -- -D warnings
           cargo test --lib
+      - name: KeePassXC reads our files and we read theirs
+        run: bash scripts/compat.sh

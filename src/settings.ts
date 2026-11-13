@@ -25,7 +25,7 @@ export const DEFAULTS = {
   expiryDays: 7,
   // General · files
   autoReload: true,
-  backupBeforeSave: false,
+  backupBeforeSave: true,
   backupPath: '{DB_FILENAME}.old.kdbx',
   // General · entries
   confirmTrash: true,

@@ -20,6 +20,8 @@ export function useDesktopEvents({ t, settings, notify, open, vault, items, desk
   useEffect(() => backend.on<BrowserAsk>('akp-browser-ask', a => setAsk(a)), [setAsk]);
   useEffect(() => backend.on<string>('akp-sync-problem', e => notify(`${t.syncProblem}: ${e}`, true)), [t.syncProblem, notify]);
   useEffect(() => backend.on('akp-vault-reloaded', () => notify(t.vaultReloaded)), [t.vaultReloaded, notify]);
+  // a copy left by a failed save was merged back in when the vault opened
+  useEffect(() => backend.on('akp-unsaved-recovered', () => notify(t.unsavedRecovered)), [t.unsavedRecovered, notify]);
   // saving runs in the background (Rust); a failed save still has to reach the user
   useEffect(() => backend.on<string>('akp-save-failed', e => notify(`${t.saveError}: ${e}`, true)), [t.saveError, notify]);
 

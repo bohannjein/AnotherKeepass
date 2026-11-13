@@ -324,6 +324,36 @@ fn write_file(path: &Path, db: &Database, key: DatabaseKey) -> R<()> {
     Ok(())
 }
 
+/// A save that failed for good left our state in `<file>.unsaved.kdbx` (see `writer`). On the
+/// next open it is merged back in (the newer version of an entry wins), saved, and the copy is
+/// removed. A copy we cannot read (another key) stays where it is. true = something was recovered.
+fn recover_unsaved(v: &mut OpenVault) -> bool {
+    let rescue = v.path.with_extension("unsaved.kdbx");
+    if !rescue.is_file() {
+        return false;
+    }
+    let before = v.db.clone();
+    let result = (|| -> R<()> {
+        let mut f = fs::File::open(&rescue).map_err(|e| format!("io:{e}"))?;
+        let saved = Database::open(&mut f, v.key.clone()).map_err(|e| format!("open:{e}"))?;
+        v.db.merge(&saved).map_err(|e| format!("merge:{e:?}"))?;
+        stamp(&v.path);
+        write_db(v)
+    })();
+    match result {
+        Ok(()) => {
+            let _ = fs::remove_file(&rescue);
+            log::info!("recovered the changes of a failed save");
+            true
+        }
+        Err(e) => {
+            v.db = before;
+            log::warn!("copy of a failed save not recovered ({e}): {}", rescue.display());
+            false
+        }
+    }
+}
+
 /// Our last stamp of the file differs from its modification time now.
 fn changed_on_disk(path: &Path) -> bool {
     let seen = watch::STAMPS.lock().ok().and_then(|s| s.as_ref().and_then(|s| s.get(path).copied()));

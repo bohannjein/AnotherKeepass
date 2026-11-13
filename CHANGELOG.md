@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Nothing lost after a failed save:** if a save failed for good, the change was kept in
+  `<file>.unsaved.kdbx` but nothing picked it up. Opening the vault now merges that copy back
+  in, saves and removes it, and says so.
+- **Backup before saving is on by default** for new installations: the previous version of the
+  file stays next to the vault as `<name>.old.kdbx`. Switch it off under Settings > Entries >
+  Advanced.
+- **Tests:** saving is covered for an unreadable file on disk, leftover temp files and a
+  crash in the middle of a write; CI checks every push against KeePassXC in both directions.
+
 ## 0.3.7
 
 - **Vaultwarden SSO:** accounts can sign in through single sign-on (Vaultwarden 1.35+). The

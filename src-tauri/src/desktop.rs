@@ -150,7 +150,7 @@ impl Default for DesktopPrefs {
             b_update_manifests: true,
             b_custom_proxy: false,
             b_proxy_path: String::new(),
-            backup_before_save: false,
+            backup_before_save: true,
             backup_path: "{DB_FILENAME}.old.kdbx".into(),
         }
     }

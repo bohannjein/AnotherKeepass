@@ -192,6 +192,10 @@ pub(super) async fn open_with(
         }
     }
     let mut v = OpenVault { path: PathBuf::from(&path), db, key, remote: None };
+    if recover_unsaved(&mut v) {
+        use tauri::Emitter;
+        let _ = app.emit("akp-unsaved-recovered", ());
+    }
     if shared {
         write_db(&mut v)?; // KeeShare import changed the folder
     }
