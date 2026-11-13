@@ -310,6 +310,7 @@ fn save_for_test(state: &Vaults, vault: &str, item: ItemInput) -> String {
         Ok(())
     })
     .unwrap();
+    writer::flush(Path::new(vault)).unwrap(); // the file follows in the background
     out
 }
 
