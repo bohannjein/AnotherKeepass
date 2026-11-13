@@ -94,7 +94,7 @@ export function BrowserAskDialog({ t, ask, vaultName, onAnswer }: {
   const deny = () => onAnswer(null);
   return createPortal(
     <div className="scrim">
-      <div className="dialog browser-ask" role="alertdialog" aria-label={t.brAccessTitle}
+      <div className="dialog browser-ask" role="alertdialog" data-own-escape aria-label={t.brAccessTitle}
         onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); deny(); } }}>
         {ask.kind === 'associate' && (
           <form onSubmit={e => { e.preventDefault(); if (name.trim()) onAnswer({ name: name.trim() }); }} className="browser-ask-form">

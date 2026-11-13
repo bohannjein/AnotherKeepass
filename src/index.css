@@ -434,7 +434,10 @@ button { cursor: pointer; border: 0; background: none; }
 :root[data-theme='light'] .textfield.bad { background: color-mix(in srgb, var(--error) 6%, transparent); }
 .textfield.bad > .ms:first-child { color: var(--error) !important; }
 @keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
-@media (prefers-reduced-motion: reduce) { .textfield.bad { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .textfield.bad { animation: none; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
 .files { display: flex; gap: 6px; flex-wrap: wrap; }
 
 .snackbar {

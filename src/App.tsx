@@ -32,6 +32,7 @@ import { useSnack } from './useSnack';
 import { useItemActions, type Confirm } from './useItemActions';
 import { useHealth } from './useHealth';
 import { useDesktopEvents } from './useDesktopEvents';
+import { useDialogA11y } from './useDialogA11y';
 import { ConfirmDialog, SyncDialog, ShortcutsDialog, BrowserAskDialog, VaultLookDialog, FolderDialog, KeyDialog } from './Dialogs';
 
 // rarely needed views load on first use (keeps startup lean)
@@ -235,6 +236,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
   const [showKeys, setShowKeys] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const { notify, snackbar } = useSnack();
+  useDialogA11y();
   const lockNow = useCallback(async () => { if (!(await onLock())) notify(t.lockFailed, true); }, [onLock, notify, t.lockFailed]);
   const [page, setPage] = useState<'vault' | 'settings'>('vault');
   // the line above the footer only when the menu list actually scrolls
@@ -660,7 +662,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
             {ISSUES.filter(k => k !== 'breached' || breaches).map(k => {
               const n = Object.keys(health).filter(id => issuesOf(id).includes(k)).length;
               return n > 0 && (
-                <button key={k} className={'chip issue-chip ' + k + (issue === k ? ' on' : '')} onClick={() => setIssue(x => x === k ? null : k)}>
+                <button key={k} className={'chip issue-chip ' + k + (issue === k ? ' on' : '')} aria-pressed={issue === k} onClick={() => setIssue(x => x === k ? null : k)}>
                   <Icon n={issue === k ? 'check' : ISSUE_ICON[k]} />{issueName(k)} · {n}
                 </button>
               );
@@ -681,7 +683,7 @@ function Vaults({ t, settings, onSettings, onKnown, open, known, onOpened, onUpd
         {scopeTags.length > 0 && (
           <div className="tag-filter" role="toolbar" aria-label={t.tags}>
             {scopeTags.map(tg => (
-              <button key={tg} className={'chip' + (tag === tg ? ' on' : '')} onClick={() => setTag(x => x === tg ? null : tg)}>
+              <button key={tg} className={'chip' + (tag === tg ? ' on' : '')} aria-pressed={tag === tg} onClick={() => setTag(x => x === tg ? null : tg)}>
                 <Icon n="sell" />{tg}
               </button>
             ))}

@@ -8,7 +8,13 @@
 - **Backup before saving is on by default** for new installations: the previous version of the
   file stays next to the vault as `<name>.old.kdbx`. Switch it off under Settings > Entries >
   Advanced.
-- **Tests:** saving is covered for an unreadable file on disk, leftover temp files and a
+- **Keyboard and screen reader:** Escape closes the dialog on top (the generator did not
+  react to it, and the edit form behind it reacted instead); Tab stays inside a dialog and
+  focus returns afterwards; dialogs and switches announce themselves as such; filter chips say
+  whether they are on; animations stop when the system asks for reduced motion.
+- **SECURITY.md:** how to report a problem, what the app protects and what it does not.
+- **Tests:** contrast of all color schemes (WCAG AA), the four languages having the same keys
+  and placeholders; saving is covered for an unreadable file on disk, leftover temp files and a
   crash in the middle of a write; CI checks every push against KeePassXC in both directions.
 
 ## 0.3.7
